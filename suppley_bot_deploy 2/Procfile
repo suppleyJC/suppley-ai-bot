@@ -1,0 +1,2 @@
+worker: python3 suppley_telegram_bot_final.py
+
