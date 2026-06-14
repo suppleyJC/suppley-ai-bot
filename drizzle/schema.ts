@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, json, decimal } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, json, decimal, index } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -1313,3 +1313,207 @@ export const inboundMessages = mysqlTable("inbound_messages", {
 
 export type InboundMessage = typeof inboundMessages.$inferSelect;
 export type InsertInboundMessage = typeof inboundMessages.$inferInsert;
+
+// ============================================================
+// MOTOR V2 SCHEMAS — Operações, Demandas e Timeline
+// ============================================================
+
+/**
+ * SCHEMA — Entidade OPERAÇÃO (espinha dorsal) + DEMANDA + linha do tempo.
+ *
+ * Estágios: demand → source → analyze → execute → finance → closed | lost
+ * GO/NO-GO é a decisão de primeira classe entre analyze e execute.
+ */
+
+/** Demanda: o que o cliente precisa. Pode gerar uma ou várias operações. */
+export const demandas = mysqlTable(
+  "demandas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    clienteNome: varchar("clienteNome", { length: 255 }),
+    productId: int("productId"),
+    descricao: text("descricao").notNull(),
+    ncmProvavel: varchar("ncmProvavel", { length: 10 }),
+    quantidade: int("quantidade"),
+    unidade: varchar("unidade", { length: 20 }).default("UN"),
+    paisDestino: varchar("paisDestino", { length: 60 }).default("Brasil"),
+    estadoDestino: varchar("estadoDestino", { length: 2 }).default("SC"),
+    precoAlvoBrlCents: int("precoAlvoBrlCents"),
+    prazoDesejado: timestamp("prazoDesejado"),
+    status: mysqlEnum("status", ["aberta", "em_operacao", "atendida", "descartada"])
+      .default("aberta").notNull(),
+    criadaEm: timestamp("criadaEm").defaultNow().notNull(),
+    atualizadaEm: timestamp("atualizadaEm").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({ byUser: index("idx_demandas_user").on(t.userId) })
+);
+export type Demanda = typeof demandas.$inferSelect;
+export type InsertDemanda = typeof demandas.$inferInsert;
+
+/** Operação: fio condutor que percorre os 5 estágios. */
+export const operacoes = mysqlTable(
+  "operacoes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    codigo: varchar("codigo", { length: 20 }).notNull(),
+    titulo: varchar("titulo", { length: 255 }).notNull(),
+
+    demandaId: int("demandaId"),
+    clienteNome: varchar("clienteNome", { length: 255 }),
+    fornecedorId: int("fornecedorId"),
+    fornecedorNome: varchar("fornecedorNome", { length: 255 }),
+    cotacaoVencedoraId: int("cotacaoVencedoraId"),
+    calculoId: int("calculoId"),
+
+    estagioAtual: mysqlEnum("estagioAtual",
+      ["demand", "source", "analyze", "execute", "finance", "closed", "lost"])
+      .default("demand").notNull(),
+    status: mysqlEnum("status",
+      ["ativa", "pausada", "go", "no_go", "concluida", "perdida"])
+      .default("ativa").notNull(),
+
+    regimeTributario: mysqlEnum("regimeTributario",
+      ["lucro_real", "lucro_presumido", "simples_nacional"]),
+    origemPais: varchar("origemPais", { length: 60 }),
+    valorEstimadoBrlCents: int("valorEstimadoBrlCents"),
+    margemEstimadaBp: int("margemEstimadaBp"),
+
+    decisaoGoNoGo: json("decisaoGoNoGo"),
+
+    criadaEm: timestamp("criadaEm").defaultNow().notNull(),
+    atualizadaEm: timestamp("atualizadaEm").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    byUser: index("idx_operacoes_user").on(t.userId),
+    byStage: index("idx_operacoes_stage").on(t.estagioAtual),
+    byCodigo: index("idx_operacoes_codigo").on(t.codigo),
+  })
+);
+export type Operacao = typeof operacoes.$inferSelect;
+export type InsertOperacao = typeof operacoes.$inferInsert;
+
+/** Linha do tempo imutável: cada ação relevante vira um evento. */
+export const operacaoEventos = mysqlTable(
+  "operacao_eventos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    operacaoId: int("operacaoId").notNull(),
+    tipo: mysqlEnum("tipo", [
+      "demanda_criada", "operacao_criada", "rfq_enviada", "cotacao_recebida",
+      "cotacao_extraida", "calculo_executado", "go_decidido", "no_go_decidido",
+      "di_registrada", "cambio_fechado", "mensagem", "nota_interna", "alerta_ia",
+      "estagio_avancado",
+    ]).notNull(),
+    estagio: mysqlEnum("estagio",
+      ["demand", "source", "analyze", "execute", "finance", "closed", "lost"]).notNull(),
+    refTipo: varchar("refTipo", { length: 40 }),
+    refId: int("refId"),
+    autor: mysqlEnum("autor", ["usuario", "excambia", "sistema"]).default("usuario").notNull(),
+    titulo: varchar("titulo", { length: 255 }),
+    payload: json("payload"),
+    criadoEm: timestamp("criadoEm").defaultNow().notNull(),
+  },
+  (t) => ({ byOperacao: index("idx_eventos_operacao").on(t.operacaoId) })
+);
+export type OperacaoEvento = typeof operacaoEventos.$inferSelect;
+export type InsertOperacaoEvento = typeof operacaoEventos.$inferInsert;
+
+/** Passagem por estágio + gate (critério de avanço). */
+export const operacaoEstagios = mysqlTable(
+  "operacao_estagios",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    operacaoId: int("operacaoId").notNull(),
+    estagio: mysqlEnum("estagio",
+      ["demand", "source", "analyze", "execute", "finance"]).notNull(),
+    entrouEm: timestamp("entrouEm").defaultNow().notNull(),
+    saiuEm: timestamp("saiuEm"),
+    gateCumprido: int("gateCumprido").default(0).notNull(),
+    gateChecklist: json("gateChecklist"),
+  },
+  (t) => ({ byOperacao: index("idx_estagios_operacao").on(t.operacaoId) })
+);
+export type OperacaoEstagio = typeof operacaoEstagios.$inferSelect;
+
+// ============================================================
+// MOTOR V2 SCHEMAS — Market Intelligence (Comex Stat)
+// ============================================================
+
+/**
+ * Referência de mercado por NCM + país de origem + período.
+ * Tabela MATERIALIZADA pelo ETL a partir da Comex Stat (dados oficiais).
+ */
+export const marketReferenceNcm = mysqlTable(
+  "market_reference_ncm",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ncmCode: varchar("ncmCode", { length: 8 }).notNull(),
+    flow: varchar("flow", { length: 6 }).notNull(),
+    countryCode: varchar("countryCode", { length: 8 }),
+    countryName: varchar("countryName", { length: 120 }),
+    economicBlock: varchar("economicBlock", { length: 80 }),
+    periodFrom: varchar("periodFrom", { length: 7 }).notNull(),
+    periodTo: varchar("periodTo", { length: 7 }).notNull(),
+
+    totalFobUsd: bigint("totalFobUsd", { mode: "number" }).default(0).notNull(),
+    totalCifUsd: bigint("totalCifUsd", { mode: "number" }).default(0).notNull(),
+    totalFreightUsd: bigint("totalFreightUsd", { mode: "number" }).default(0).notNull(),
+    totalNetKg: bigint("totalNetKg", { mode: "number" }).default(0).notNull(),
+    totalStatQty: bigint("totalStatQty", { mode: "number" }).default(0).notNull(),
+
+    avgFobPerKgUsd: decimal("avgFobPerKgUsd", { precision: 14, scale: 4 }),
+    avgCifPerKgUsd: decimal("avgCifPerKgUsd", { precision: 14, scale: 4 }),
+    freightSharePct: decimal("freightSharePct", { precision: 6, scale: 2 }),
+    originSharePct: decimal("originSharePct", { precision: 6, scale: 2 }),
+
+    recordCount: int("recordCount").default(0).notNull(),
+    isOutlierFiltered: int("isOutlierFiltered").default(0).notNull(),
+    source: varchar("source", { length: 40 }).default("comexstat").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    uniqKey: index("uq_market_ref").on(t.ncmCode, t.flow, t.countryCode, t.periodFrom, t.periodTo),
+    ncmIdx: index("idx_market_ref_ncm").on(t.ncmCode),
+  })
+);
+export type MarketReferenceNcm = typeof marketReferenceNcm.$inferSelect;
+export type InsertMarketReferenceNcm = typeof marketReferenceNcm.$inferInsert;
+
+/**
+ * Snapshot mensal por NCM — série temporal para tendência e sazonalidade.
+ */
+export const marketTrendNcm = mysqlTable(
+  "market_trend_ncm",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ncmCode: varchar("ncmCode", { length: 8 }).notNull(),
+    flow: varchar("flow", { length: 6 }).notNull(),
+    yearMonth: varchar("yearMonth", { length: 7 }).notNull(),
+    totalFobUsd: bigint("totalFobUsd", { mode: "number" }).default(0).notNull(),
+    totalNetKg: bigint("totalNetKg", { mode: "number" }).default(0).notNull(),
+    avgFobPerKgUsd: decimal("avgFobPerKgUsd", { precision: 14, scale: 4 }),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    uniqKey: index("uq_market_trend").on(t.ncmCode, t.flow, t.yearMonth),
+    ncmIdx: index("idx_market_trend_ncm").on(t.ncmCode),
+  })
+);
+export type MarketTrendNcm = typeof marketTrendNcm.$inferSelect;
+export type InsertMarketTrendNcm = typeof marketTrendNcm.$inferInsert;
+
+/** Controle de execuções do ETL (idempotência e auditoria). */
+export const etlRuns = mysqlTable("etl_runs", {
+  id: int("id").autoincrement().primaryKey(),
+  job: varchar("job", { length: 60 }).notNull(),
+  periodFrom: varchar("periodFrom", { length: 7 }),
+  periodTo: varchar("periodTo", { length: 7 }),
+  status: varchar("status", { length: 20 }).notNull(),
+  rowsProcessed: int("rowsProcessed").default(0).notNull(),
+  message: varchar("message", { length: 500 }),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  finishedAt: timestamp("finishedAt"),
+});
+export type EtlRun = typeof etlRuns.$inferSelect;
