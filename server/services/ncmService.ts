@@ -1,0 +1,779 @@
+/**
+ * NCM Service - Otimizado para Performance
+ * 
+ * Melhorias implementadas:
+ * - Cache em memória com LRU (500 entradas, TTL 24h)
+ * - Cache de busca (search) com TTL de 5 minutos
+ * - Batch suggestion para múltiplos produtos em paralelo
+ * - Busca otimizada com índice em ncmCode (prefix match prioritário)
+ * - Fallback robusto quando IA não responde
+ */
+
+import { getDb } from "../db";
+import { ncmTaxRates } from "../../drizzle/schema";
+import { eq, like, sql, or } from "drizzle-orm";
+import { invokeLLM } from "../_core/llm";
+import * as fs from "fs";
+import * as path from "path";
+
+// ============================================================
+// CACHE - LRU com TTL
+// ============================================================
+
+interface CacheEntry<T> {
+  result: T;
+  timestamp: number;
+}
+
+class LRUCache<T> {
+  private cache = new Map<string, CacheEntry<T>>();
+  private readonly maxSize: number;
+  private readonly ttlMs: number;
+
+  constructor(maxSize: number, ttlMs: number) {
+    this.maxSize = maxSize;
+    this.ttlMs = ttlMs;
+  }
+
+  get(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.timestamp > this.ttlMs) {
+      this.cache.delete(key);
+      return null;
+    }
+    // Move to end (most recently used)
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    return entry.result;
+  }
+
+  set(key: string, result: T): void {
+    // Remove oldest if at capacity
+    if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey) this.cache.delete(firstKey);
+    }
+    this.cache.set(key, { result, timestamp: Date.now() });
+  }
+
+  has(key: string): boolean {
+    return this.get(key) !== null;
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  get size(): number {
+    return this.cache.size;
+  }
+}
+
+// Cache de sugestões IA (24h, 500 entradas)
+const suggestionCache = new LRUCache<NCMOptimizationResult>(500, 24 * 60 * 60 * 1000);
+
+// Cache de buscas (5 min, 200 entradas)
+const searchCache = new LRUCache<any[]>(200, 5 * 60 * 1000);
+
+// Cache de NCM por código (1h, 1000 entradas)
+const ncmByCodeCache = new LRUCache<any>(1000, 60 * 60 * 1000);
+
+// ============================================================
+// TIPOS
+// ============================================================
+
+interface SiscomexNCM {
+  Codigo: string;
+  Descricao: string;
+  Data_Inicio: string;
+  Data_Fim: string;
+  Tipo_Ato_Ini: string;
+  Numero_Ato_Ini: string;
+  Ano_Ato_Ini: string;
+}
+
+interface SiscomexData {
+  Data_Ultima_Atualizacao_NCM: string;
+  Ato: string;
+  Nomenclaturas: SiscomexNCM[];
+}
+
+export interface NCMSuggestion {
+  ncmCode: string;
+  description: string;
+  iiRate: number;
+  ipiRate: number;
+  pisRate: number;
+  cofinsRate: number;
+  confidence: number;
+  reason: string;
+  taxSavingsPotential?: number;
+  alternativeClassification?: string;
+}
+
+export interface NCMOptimizationResult {
+  suggestedNCM: NCMSuggestion;
+  alternatives: NCMSuggestion[];
+  optimizationTips: string[];
+  legalBasis: string[];
+  riskLevel: "low" | "medium" | "high";
+}
+
+// ============================================================
+// ALÍQUOTAS PADRÃO POR CAPÍTULO
+// ============================================================
+
+const DEFAULT_II_RATES: Record<string, number> = {
+  "01": 400, "02": 1000, "03": 1000, "04": 1600, "05": 600,
+  "06": 600, "07": 1000, "08": 1000, "09": 1000, "10": 800,
+  "11": 1200, "12": 800, "13": 1400, "14": 800, "15": 1000,
+  "16": 1600, "17": 1600, "18": 1400, "19": 1600, "20": 1600,
+  "21": 1600, "22": 2000, "23": 800, "24": 2000, "25": 400,
+  "26": 400, "27": 0, "28": 1200, "29": 1200, "30": 800,
+  "31": 600, "32": 1400, "33": 1800, "34": 1400, "35": 1400,
+  "36": 1800, "37": 1400, "38": 1400, "39": 1400, "40": 1400,
+  "41": 1000, "42": 2000, "43": 2000, "44": 1000, "45": 1200,
+  "46": 1800, "47": 600, "48": 1400, "49": 0, "50": 1400,
+  "51": 1200, "52": 1800, "53": 1200, "54": 1800, "55": 1800,
+  "56": 1800, "57": 3500, "58": 2600, "59": 1800, "60": 1800,
+  "61": 3500, "62": 3500, "63": 3500, "64": 3500, "65": 2000,
+  "66": 2000, "67": 2000, "68": 1000, "69": 1200, "70": 1200,
+  "71": 1800, "72": 1200, "73": 1400, "74": 1000, "75": 800,
+  "76": 1200, "78": 1000, "79": 1000, "80": 1000, "81": 800,
+  "82": 1800, "83": 1800, "84": 1400, "85": 1600, "86": 1400,
+  "87": 3500, "88": 0, "89": 1400, "90": 1400, "91": 2000,
+  "92": 2000, "93": 2000, "94": 1800, "95": 2000, "96": 1800,
+  "97": 400, "98": 0, "99": 0,
+};
+
+const DEFAULT_IPI_RATES: Record<string, number> = {
+  "22": 2000,
+  "24": 3000,
+  "33": 1200,
+  "87": 2500,
+  "71": 1500,
+};
+
+// ============================================================
+// IMPORTAÇÃO DO SISCOMEX
+// ============================================================
+
+export async function importNCMsFromSiscomex(filePath?: string): Promise<{
+  success: boolean;
+  imported: number;
+  updated: number;
+  errors: string[];
+}> {
+  const db = await getDb();
+  if (!db) {
+    return { success: false, imported: 0, updated: 0, errors: ["Database not available"] };
+  }
+
+  const errors: string[] = [];
+  let imported = 0;
+  let updated = 0;
+
+  try {
+    const defaultPath = path.join(process.cwd(), "data", "ncm_siscomex.json");
+    const jsonPath = filePath || defaultPath;
+
+    if (!fs.existsSync(jsonPath)) {
+      return { success: false, imported: 0, updated: 0, errors: ["NCM file not found"] };
+    }
+
+    const fileContent = fs.readFileSync(jsonPath, "utf-8");
+    const data: SiscomexData = JSON.parse(fileContent);
+
+    const fullNCMs = data.Nomenclaturas.filter(n => {
+      const code = n.Codigo.replace(/\./g, "");
+      return code.length === 8;
+    });
+
+    console.log(`[NCM Import] Processing ${fullNCMs.length} NCMs...`);
+
+    const batchSize = 100;
+    for (let i = 0; i < fullNCMs.length; i += batchSize) {
+      const batch = fullNCMs.slice(i, i + batchSize);
+
+      for (const ncm of batch) {
+        try {
+          const ncmCode = ncm.Codigo.replace(/\./g, "");
+          const chapter = ncmCode.substring(0, 2);
+
+          const existing = await db
+            .select()
+            .from(ncmTaxRates)
+            .where(eq(ncmTaxRates.ncmCode, ncmCode))
+            .limit(1);
+
+          const iiRate = DEFAULT_II_RATES[chapter] || 1400;
+          const ipiRate = DEFAULT_IPI_RATES[chapter] || 0;
+
+          if (existing.length > 0) {
+            if (existing[0].description !== ncm.Descricao) {
+              await db
+                .update(ncmTaxRates)
+                .set({ description: ncm.Descricao })
+                .where(eq(ncmTaxRates.ncmCode, ncmCode));
+              updated++;
+            }
+          } else {
+            await db.insert(ncmTaxRates).values({
+              ncmCode,
+              description: ncm.Descricao,
+              iiRate,
+              ipiRate,
+              pisRate: 210, // 2.1% (atualizado 2026)
+              cofinsRate: 1025, // 10.25% (atualizado 2026)
+              mercosulIiRate: 0,
+              notes: "Importado do Siscomex",
+            });
+            imported++;
+          }
+        } catch (err) {
+          errors.push(`Error processing NCM ${ncm.Codigo}: ${err}`);
+        }
+      }
+
+      if ((i + batchSize) % 1000 === 0) {
+        console.log(`[NCM Import] Processed ${Math.min(i + batchSize, fullNCMs.length)}/${fullNCMs.length}`);
+      }
+    }
+
+    // Limpar caches após importação
+    searchCache.clear();
+    ncmByCodeCache.clear();
+
+    return { success: true, imported, updated, errors };
+  } catch (error) {
+    return {
+      success: false,
+      imported,
+      updated,
+      errors: [error instanceof Error ? error.message : String(error)],
+    };
+  }
+}
+
+// ============================================================
+// BUSCA DE NCM - Otimizada com cache
+// ============================================================
+
+/**
+ * Busca NCMs por código ou descrição (com cache de 5 min)
+ */
+export async function searchNCMs(query: string, limit: number = 20): Promise<any[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const cleanQuery = query.replace(/\./g, "").trim();
+  if (!cleanQuery) return [];
+
+  // Check cache
+  const cacheKey = `search:${cleanQuery}:${limit}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached) return cached;
+
+  try {
+    // Busca otimizada: priorizar match por código (usa índice)
+    const isNumeric = /^\d+$/.test(cleanQuery);
+
+    let results: any[];
+    if (isNumeric) {
+      // Busca por código NCM (usa índice, muito rápido)
+      results = await db
+        .select()
+        .from(ncmTaxRates)
+        .where(like(ncmTaxRates.ncmCode, `${cleanQuery}%`))
+        .limit(limit);
+    } else {
+      // Busca por descrição (LIKE %text%)
+      // Limitar a 20 resultados para evitar full table scan lento
+      results = await db
+        .select()
+        .from(ncmTaxRates)
+        .where(
+          or(
+            like(ncmTaxRates.ncmCode, `${cleanQuery}%`),
+            like(ncmTaxRates.description, `%${cleanQuery}%`)
+          )
+        )
+        .limit(Math.min(limit, 20));
+    }
+
+    searchCache.set(cacheKey, results);
+    return results;
+  } catch (error) {
+    console.error("[NCM] Error searching NCMs:", error);
+    return [];
+  }
+}
+
+/**
+ * Obtém NCM por código (com cache de 1h)
+ */
+export async function getNCMByCode(ncmCode: string): Promise<any | null> {
+  const cleanCode = ncmCode.replace(/\./g, "");
+  if (!cleanCode) return null;
+
+  // Check cache
+  const cached = ncmByCodeCache.get(cleanCode);
+  if (cached) return cached;
+
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    const results = await db
+      .select()
+      .from(ncmTaxRates)
+      .where(eq(ncmTaxRates.ncmCode, cleanCode))
+      .limit(1);
+
+    const result = results[0] || null;
+    if (result) {
+      ncmByCodeCache.set(cleanCode, result);
+    }
+    return result;
+  } catch (error) {
+    console.error("[NCM] Error getting NCM:", error);
+    return null;
+  }
+}
+
+// ============================================================
+// SUGESTÃO DE NCM COM IA - Otimizada
+// ============================================================
+
+/**
+ * Sugere NCM com base no nome do produto usando IA
+ * Usa cache de 24h e fallback robusto
+ */
+export async function suggestNCMWithAI(
+  productName: string,
+  productDescription?: string
+): Promise<NCMOptimizationResult> {
+  const normalizedName = productName.toLowerCase().trim();
+  const normalizedDesc = (productDescription || "").toLowerCase().trim();
+  const cacheKey = `${normalizedName}|${normalizedDesc}`;
+
+  // Check cache
+  const cached = suggestionCache.get(cacheKey);
+  if (cached) {
+    console.log(`[NCM] Cache hit for: ${productName}`);
+    return cached;
+  }
+
+  // Buscar NCMs similares (usa cache de search)
+  const similarNCMs = await searchNCMs(productName, 30);
+
+  // Preparar contexto limitado para a IA (top 15 para reduzir tokens)
+  const ncmContext = similarNCMs.slice(0, 15).map(n =>
+    `${n.ncmCode}: ${n.description} (II: ${(n.iiRate / 100).toFixed(1)}%)`
+  ).join("\n");
+
+  const prompt = `Você é um especialista em classificação fiscal de mercadorias (NCM) no Brasil.
+
+PRODUTO A CLASSIFICAR:
+Nome: ${productName}
+${productDescription ? `Descrição: ${productDescription}` : ""}
+
+NCMs DISPONÍVEIS NO SISTEMA:
+${ncmContext || "Nenhum NCM similar encontrado no banco de dados."}
+
+TAREFA:
+1. Identifique a NCM mais adequada para este produto
+2. Sugira até 2 classificações alternativas com menor carga tributária
+3. Avalie o risco de cada classificação
+4. Cite base legal quando possível
+
+Responda em JSON com o formato especificado.`;
+
+  try {
+    const response = await invokeLLM({
+      messages: [
+        { role: "system", content: "Você é um especialista em classificação fiscal NCM. Responda sempre em JSON válido. Seja conciso." },
+        { role: "user", content: prompt },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "ncm_suggestion",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              suggestedNCM: {
+                type: "object",
+                properties: {
+                  ncmCode: { type: "string" },
+                  description: { type: "string" },
+                  iiRate: { type: "number" },
+                  confidence: { type: "number" },
+                  reason: { type: "string" },
+                },
+                required: ["ncmCode", "description", "iiRate", "confidence", "reason"],
+                additionalProperties: false,
+              },
+              alternatives: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    ncmCode: { type: "string" },
+                    description: { type: "string" },
+                    iiRate: { type: "number" },
+                    confidence: { type: "number" },
+                    reason: { type: "string" },
+                    taxSavingsPotential: { type: "number" },
+                    alternativeClassification: { type: "string" },
+                  },
+                  required: ["ncmCode", "description", "iiRate", "confidence", "reason"],
+                  additionalProperties: false,
+                },
+              },
+              optimizationTips: {
+                type: "array",
+                items: { type: "string" },
+              },
+              legalBasis: {
+                type: "array",
+                items: { type: "string" },
+              },
+              riskLevel: {
+                type: "string",
+                enum: ["low", "medium", "high"],
+              },
+            },
+            required: ["suggestedNCM", "alternatives", "optimizationTips", "legalBasis", "riskLevel"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (content && typeof content === "string") {
+      const result: NCMOptimizationResult = JSON.parse(content);
+
+      // Enriquecer com dados do banco em paralelo (não sequencial)
+      const allCodes = [
+        result.suggestedNCM.ncmCode,
+        ...result.alternatives.map(a => a.ncmCode),
+      ];
+      const dbResults = await Promise.all(allCodes.map(code => getNCMByCode(code)));
+
+      // Enriquecer sugestão principal
+      const mainDb = dbResults[0];
+      if (mainDb) {
+        result.suggestedNCM.ipiRate = mainDb.ipiRate;
+        result.suggestedNCM.pisRate = mainDb.pisRate;
+        result.suggestedNCM.cofinsRate = mainDb.cofinsRate;
+      } else {
+        result.suggestedNCM.ipiRate = 0;
+        result.suggestedNCM.pisRate = 210;
+        result.suggestedNCM.cofinsRate = 1025;
+      }
+
+      // Enriquecer alternativas
+      for (let i = 0; i < result.alternatives.length; i++) {
+        const altDb = dbResults[i + 1];
+        if (altDb) {
+          result.alternatives[i].ipiRate = altDb.ipiRate;
+          result.alternatives[i].pisRate = altDb.pisRate;
+          result.alternatives[i].cofinsRate = altDb.cofinsRate;
+        } else {
+          result.alternatives[i].ipiRate = 0;
+          result.alternatives[i].pisRate = 210;
+          result.alternatives[i].cofinsRate = 1025;
+        }
+      }
+
+      // Cache resultado
+      suggestionCache.set(cacheKey, result);
+      return result;
+    }
+  } catch (error) {
+    console.error("[NCM] Error suggesting NCM with AI:", error);
+  }
+
+  // Fallback: retornar melhor match do banco
+  return buildFallbackResult(similarNCMs);
+}
+
+/**
+ * Sugestão em batch - processa múltiplos produtos em paralelo
+ * Limita concorrência para não sobrecarregar a API de IA
+ */
+export async function suggestNCMBatch(
+  products: Array<{ name: string; description?: string }>
+): Promise<Map<string, NCMOptimizationResult>> {
+  const results = new Map<string, NCMOptimizationResult>();
+  const MAX_CONCURRENT = 3; // Máximo de chamadas IA simultâneas
+
+  // Separar em cached e não-cached
+  const uncached: Array<{ name: string; description?: string; key: string }> = [];
+
+  for (const product of products) {
+    const key = `${product.name.toLowerCase().trim()}|${(product.description || "").toLowerCase().trim()}`;
+    const cached = suggestionCache.get(key);
+    if (cached) {
+      results.set(product.name, cached);
+    } else {
+      uncached.push({ ...product, key });
+    }
+  }
+
+  console.log(`[NCM Batch] ${results.size} cached, ${uncached.length} to process`);
+
+  // Processar não-cached com concorrência limitada
+  for (let i = 0; i < uncached.length; i += MAX_CONCURRENT) {
+    const batch = uncached.slice(i, i + MAX_CONCURRENT);
+    const batchResults = await Promise.allSettled(
+      batch.map(p => suggestNCMWithAI(p.name, p.description))
+    );
+
+    for (let j = 0; j < batch.length; j++) {
+      const result = batchResults[j];
+      if (result.status === "fulfilled") {
+        results.set(batch[j].name, result.value);
+      } else {
+        console.error(`[NCM Batch] Failed for ${batch[j].name}:`, result.reason);
+        // Usar fallback
+        const fallback = buildFallbackResult([]);
+        results.set(batch[j].name, fallback);
+      }
+    }
+  }
+
+  return results;
+}
+
+// ============================================================
+// COMPARAÇÃO E ESTATÍSTICAS
+// ============================================================
+
+/**
+ * Compara alíquotas entre NCMs
+ */
+export async function compareNCMRates(ncmCodes: string[]): Promise<{
+  ncms: any[];
+  cheapest: string;
+  mostExpensive: string;
+  potentialSavings: number;
+}> {
+  // Buscar todos em paralelo
+  const ncmsRaw = await Promise.all(ncmCodes.map(code => getNCMByCode(code)));
+  const ncms = ncmsRaw
+    .filter(Boolean)
+    .map(ncm => ({
+      ...ncm,
+      totalRate: ncm.iiRate + ncm.ipiRate + ncm.pisRate + ncm.cofinsRate,
+    }));
+
+  ncms.sort((a, b) => a.totalRate - b.totalRate);
+
+  const cheapest = ncms[0]?.ncmCode || "";
+  const mostExpensive = ncms[ncms.length - 1]?.ncmCode || "";
+  const potentialSavings = ncms.length > 1
+    ? ncms[ncms.length - 1].totalRate - ncms[0].totalRate
+    : 0;
+
+  return { ncms, cheapest, mostExpensive, potentialSavings };
+}
+
+/**
+ * Obtém estatísticas do banco de NCMs
+ */
+export async function getNCMStats(): Promise<{
+  totalNCMs: number;
+  lastUpdate: string;
+  byChapter: Record<string, number>;
+  cacheStats: { suggestions: number; searches: number; codes: number };
+}> {
+  const db = await getDb();
+  if (!db) {
+    return {
+      totalNCMs: 0,
+      lastUpdate: "N/A",
+      byChapter: {},
+      cacheStats: { suggestions: 0, searches: 0, codes: 0 },
+    };
+  }
+
+  try {
+    // Contar total sem carregar todos os registros
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(ncmTaxRates);
+
+    const totalNCMs = Number(countResult[0]?.count || 0);
+
+    return {
+      totalNCMs,
+      lastUpdate: new Date().toISOString(),
+      byChapter: {},
+      cacheStats: {
+        suggestions: suggestionCache.size,
+        searches: searchCache.size,
+        codes: ncmByCodeCache.size,
+      },
+    };
+  } catch (error) {
+    return {
+      totalNCMs: 0,
+      lastUpdate: "N/A",
+      byChapter: {},
+      cacheStats: { suggestions: 0, searches: 0, codes: 0 },
+    };
+  }
+}
+
+/**
+ * Limpa todos os caches (útil após importação ou atualização)
+ */
+export function clearNCMCaches(): void {
+  suggestionCache.clear();
+  searchCache.clear();
+  ncmByCodeCache.clear();
+  console.log("[NCM] All caches cleared");
+}
+
+// ============================================================
+// FUNÇÕES AUXILIARES
+// ============================================================
+
+function buildFallbackResult(similarNCMs: any[]): NCMOptimizationResult {
+  const bestMatch = similarNCMs[0];
+  return {
+    suggestedNCM: {
+      ncmCode: bestMatch?.ncmCode || "00000000",
+      description: bestMatch?.description || "NCM não encontrado",
+      iiRate: bestMatch?.iiRate || 1400,
+      ipiRate: bestMatch?.ipiRate || 0,
+      pisRate: bestMatch?.pisRate || 210,
+      cofinsRate: bestMatch?.cofinsRate || 1025,
+      confidence: bestMatch ? 50 : 0,
+      reason: bestMatch
+        ? "Melhor correspondência encontrada no banco de dados"
+        : "Nenhuma correspondência encontrada. Consulte um despachante.",
+    },
+    alternatives: similarNCMs.slice(1, 3).map(n => ({
+      ncmCode: n.ncmCode,
+      description: n.description,
+      iiRate: n.iiRate,
+      ipiRate: n.ipiRate,
+      pisRate: n.pisRate,
+      cofinsRate: n.cofinsRate,
+      confidence: 30,
+      reason: "Alternativa baseada em similaridade de descrição",
+    })),
+    optimizationTips: ["Consulte um despachante aduaneiro para validar a classificação"],
+    legalBasis: [],
+    riskLevel: "medium",
+  };
+}
+
+
+/**
+ * Importa NCMs a partir de conteúdo de arquivo (JSON ou CSV)
+ */
+export async function importNCMsFromFile(
+  fileContent: string,
+  fileType: "json" | "csv"
+): Promise<{ success: boolean; imported: number; updated: number; errors: string[] }> {
+  const db = await getDb();
+  if (!db) {
+    return { success: false, imported: 0, updated: 0, errors: ["Database not available"] };
+  }
+
+  const errors: string[] = [];
+  let imported = 0;
+  let updated = 0;
+
+  try {
+    let ncms: Array<{ code: string; description: string }> = [];
+
+    if (fileType === "json") {
+      const data = JSON.parse(fileContent);
+      if (data.Nomenclaturas) {
+        // Formato Siscomex
+        ncms = data.Nomenclaturas
+          .filter((n: any) => n.Codigo.replace(/\./g, "").length === 8)
+          .map((n: any) => ({ code: n.Codigo.replace(/\./g, ""), description: n.Descricao }));
+      } else if (Array.isArray(data)) {
+        ncms = data.map((n: any) => ({
+          code: (n.ncmCode || n.code || n.Codigo || "").replace(/\./g, ""),
+          description: n.description || n.Descricao || "",
+        }));
+      }
+    } else if (fileType === "csv") {
+      const lines = fileContent.split("\n").filter(l => l.trim());
+      // Skip header
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split(",");
+        if (parts.length >= 2) {
+          ncms.push({
+            code: parts[0].replace(/[.\s"]/g, ""),
+            description: parts.slice(1).join(",").replace(/"/g, "").trim(),
+          });
+        }
+      }
+    }
+
+    // Filtrar apenas códigos válidos (8 dígitos)
+    ncms = ncms.filter(n => /^\d{8}$/.test(n.code));
+
+    for (const ncm of ncms) {
+      try {
+        const chapter = ncm.code.substring(0, 2);
+        const existing = await db
+          .select()
+          .from(ncmTaxRates)
+          .where(eq(ncmTaxRates.ncmCode, ncm.code))
+          .limit(1);
+
+        const iiRate = DEFAULT_II_RATES[chapter] || 1400;
+        const ipiRate = DEFAULT_IPI_RATES[chapter] || 0;
+
+        if (existing.length > 0) {
+          if (existing[0].description !== ncm.description && ncm.description) {
+            await db
+              .update(ncmTaxRates)
+              .set({ description: ncm.description })
+              .where(eq(ncmTaxRates.ncmCode, ncm.code));
+            updated++;
+          }
+        } else {
+          await db.insert(ncmTaxRates).values({
+            ncmCode: ncm.code,
+            description: ncm.description,
+            iiRate,
+            ipiRate,
+            pisRate: 210,
+            cofinsRate: 1025,
+            mercosulIiRate: 0,
+            notes: `Importado via upload (${fileType})`,
+          });
+          imported++;
+        }
+      } catch (err) {
+        errors.push(`Error processing NCM ${ncm.code}: ${err}`);
+      }
+    }
+
+    // Limpar caches
+    searchCache.clear();
+    ncmByCodeCache.clear();
+
+    return { success: true, imported, updated, errors };
+  } catch (error) {
+    return {
+      success: false,
+      imported,
+      updated,
+      errors: [error instanceof Error ? error.message : String(error)],
+    };
+  }
+}

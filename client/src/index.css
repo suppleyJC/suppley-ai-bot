@@ -1,0 +1,652 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  
+  /* Excambia Official Brand Colors */
+  --color-excambia-roxo-escuro: oklch(0.25 0.15 290);
+  --color-excambia-purpura: oklch(0.45 0.22 295);
+  --color-excambia-turquesa: oklch(0.82 0.15 175);
+  
+  /* Typography - Rajdhani for headings, Inter for body */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Rajdhani', 'Orbitron', sans-serif;
+  --font-heading: 'Orbitron', sans-serif;
+}
+
+:root {
+  /* Excambia Official Colors */
+  --primary: oklch(0.45 0.22 295);
+  --primary-foreground: oklch(0.98 0 0);
+  --sidebar-primary: oklch(0.50 0.20 295);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  
+  /* Turquesa for accents */
+  --chart-1: oklch(0.82 0.15 175);
+  --chart-2: oklch(0.72 0.14 175);
+  --chart-3: oklch(0.55 0.18 295);
+  --chart-4: oklch(0.45 0.22 295);
+  --chart-5: oklch(0.25 0.15 290);
+  
+  --radius: 1rem;
+  
+  /* Light theme */
+  --background: oklch(0.985 0.002 290);
+  --foreground: oklch(0.18 0.04 290);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.04 290);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.04 290);
+  --secondary: oklch(0.97 0.008 290);
+  --secondary-foreground: oklch(0.35 0.15 295);
+  --muted: oklch(0.96 0.008 290);
+  --muted-foreground: oklch(0.45 0.04 290);
+  --accent: oklch(0.82 0.15 175);
+  --accent-foreground: oklch(0.12 0.05 175);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.92 0.015 290);
+  --input: oklch(0.94 0.01 290);
+  --ring: oklch(0.45 0.22 295);
+  
+  /* Excambia Sidebar - Roxo Claro (mesmo tom do hero header) */
+  --sidebar: oklch(0.45 0.18 295);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.52 0.16 295);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
+  --sidebar-border: oklch(0.50 0.14 295);
+  --sidebar-ring: oklch(0.82 0.15 175);
+}
+
+.dark {
+  --primary: oklch(0.55 0.20 295);
+  --primary-foreground: oklch(0.98 0 0);
+  --sidebar-primary: oklch(0.60 0.18 295);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --background: oklch(0.16 0.04 290);
+  --foreground: oklch(0.94 0.01 290);
+  --card: oklch(0.20 0.05 290);
+  --card-foreground: oklch(0.94 0.01 290);
+  --popover: oklch(0.20 0.05 290);
+  --popover-foreground: oklch(0.94 0.01 290);
+  --secondary: oklch(0.25 0.06 290);
+  --secondary-foreground: oklch(0.88 0.02 290);
+  --muted: oklch(0.28 0.05 290);
+  --muted-foreground: oklch(0.68 0.03 290);
+  --accent: oklch(0.75 0.14 175);
+  --accent-foreground: oklch(0.98 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.32 0.06 290);
+  --input: oklch(0.28 0.05 290);
+  --ring: oklch(0.55 0.20 295);
+  --chart-1: oklch(0.82 0.15 175);
+  --chart-2: oklch(0.72 0.14 175);
+  --chart-3: oklch(0.55 0.18 295);
+  --chart-4: oklch(0.45 0.22 295);
+  --chart-5: oklch(0.25 0.15 290);
+  --sidebar: oklch(0.18 0.10 290);
+  --sidebar-foreground: oklch(0.94 0.01 290);
+  --sidebar-accent: oklch(0.25 0.08 290);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
+  --sidebar-border: oklch(0.28 0.06 290);
+  --sidebar-ring: oklch(0.82 0.15 175);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    letter-spacing: -0.01em;
+  }
+  
+  /* Futuristic Typography - Orbitron for headings */
+  h1, h2, h3, h4 {
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  
+  h1 {
+    @apply text-3xl md:text-4xl lg:text-5xl font-bold;
+    line-height: 1.1;
+  }
+  
+  h2 {
+    @apply text-2xl md:text-3xl font-bold;
+    line-height: 1.2;
+  }
+  
+  h3 {
+    @apply text-xl md:text-2xl font-semibold;
+    line-height: 1.25;
+  }
+  
+  h4 {
+    @apply text-lg md:text-xl font-semibold;
+    line-height: 1.3;
+  }
+  
+  /* Hide number input spinners */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+}
+
+@layer components {
+  /* ========================================
+     EXCAMBIA DISRUPTIVE DESIGN SYSTEM
+     Based on Golden Ratio (1.618)
+     ======================================== */
+  
+  /* Animated gradient background */
+  .bg-gradient-animated {
+    background: linear-gradient(-45deg, #311260, #682ABA, #28E7C5, #682ABA);
+    background-size: 400% 400%;
+    animation: gradient-shift 15s ease infinite;
+  }
+  
+  @keyframes gradient-shift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  
+  /* Glass morphism card */
+  .card-glass {
+    @apply rounded-2xl p-6;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(104, 42, 186, 0.1);
+    box-shadow: 0 8px 32px rgba(49, 18, 96, 0.08);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .card-glass:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 48px rgba(49, 18, 96, 0.12);
+    border-color: rgba(40, 231, 197, 0.3);
+  }
+  
+  /* Modern stat card with glow */
+  .stat-card {
+    @apply bg-card rounded-2xl border border-border/50 p-6 relative overflow-hidden;
+    box-shadow: 0 4px 20px rgba(49, 18, 96, 0.06);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #682ABA, #28E7C5);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  .stat-card:hover {
+    transform: translateY(-6px) scale(1.01);
+    box-shadow: 0 12px 40px rgba(104, 42, 186, 0.15);
+  }
+  
+  .stat-card:hover::before {
+    opacity: 1;
+  }
+  
+  /* Icon containers with gradient */
+  .stat-icon {
+    @apply w-14 h-14 rounded-2xl flex items-center justify-center mb-4;
+    background: linear-gradient(135deg, rgba(104, 42, 186, 0.12) 0%, rgba(40, 231, 197, 0.12) 100%);
+    transition: all 0.3s ease;
+  }
+  
+  .stat-card:hover .stat-icon {
+    transform: scale(1.1) rotate(5deg);
+    background: linear-gradient(135deg, rgba(104, 42, 186, 0.2) 0%, rgba(40, 231, 197, 0.2) 100%);
+  }
+  
+  .stat-icon-purple {
+    background: linear-gradient(135deg, #682ABA25 0%, #682ABA10 100%);
+    color: #682ABA;
+  }
+  
+  .stat-icon-turquesa {
+    background: linear-gradient(135deg, #28E7C530 0%, #28E7C515 100%);
+    color: #0d5d4d;
+  }
+  
+  .stat-value {
+    @apply text-4xl font-bold text-foreground tracking-tight;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+  }
+  
+  .stat-label {
+    @apply text-sm text-muted-foreground mt-1 font-medium tracking-wide uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+  }
+  
+  /* Turquesa highlight card */
+  .highlight-card {
+    background: linear-gradient(135deg, #28E7C5 0%, #20c9ab 100%);
+    @apply rounded-2xl p-6 text-[#0d3d35] relative overflow-hidden;
+    box-shadow: 0 8px 30px rgba(40, 231, 197, 0.3);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .highlight-card::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%);
+    transition: transform 0.5s ease;
+  }
+  
+  .highlight-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 16px 50px rgba(40, 231, 197, 0.4);
+  }
+  
+  .highlight-card:hover::after {
+    transform: translate(-20%, 20%);
+  }
+  
+  /* Purple gradient card */
+  .highlight-card-purple {
+    background: linear-gradient(135deg, #682ABA 0%, #8B4FD0 100%);
+    @apply rounded-2xl p-6 text-white relative overflow-hidden;
+    box-shadow: 0 8px 30px rgba(104, 42, 186, 0.3);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .highlight-card-purple:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 16px 50px rgba(104, 42, 186, 0.4);
+  }
+  
+  /* Hero section with gradient */
+  .hero-gradient {
+    background: linear-gradient(135deg, #682ABA 0%, #8B4FD0 50%, #311260 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .hero-gradient::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.5;
+  }
+  
+  /* Floating animation */
+  .float-animation {
+    animation: float 6s ease-in-out infinite;
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+  
+  /* Pulse glow effect */
+  .pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+  
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(40, 231, 197, 0.3); }
+    50% { box-shadow: 0 0 40px rgba(40, 231, 197, 0.6); }
+  }
+  
+  /* Form section with accent */
+  .form-section {
+    @apply bg-card rounded-2xl border border-border/50 p-8 space-y-6 relative;
+    box-shadow: 0 4px 20px rgba(49, 18, 96, 0.04);
+  }
+  
+  .form-section-title {
+    @apply text-lg font-semibold text-foreground mb-6 flex items-center gap-3;
+    font-family: 'Rajdhani', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  .form-section-title::before {
+    content: '';
+    @apply w-1 h-6 rounded-full;
+    background: linear-gradient(180deg, #682ABA 0%, #28E7C5 100%);
+  }
+  
+  /* Status badges with animation */
+  .badge-success {
+    background: linear-gradient(135deg, #28E7C525 0%, #28E7C515 100%);
+    color: #0d5d4d;
+    @apply px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider;
+    transition: all 0.3s ease;
+  }
+  
+  .badge-success:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(40, 231, 197, 0.3);
+  }
+  
+  .badge-warning {
+    @apply bg-amber-100 text-amber-800 px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider;
+  }
+  
+  .badge-danger {
+    @apply bg-red-100 text-red-800 px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider;
+  }
+  
+  .badge-info {
+    background: linear-gradient(135deg, #682ABA18 0%, #682ABA08 100%);
+    color: #682ABA;
+    @apply px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider;
+  }
+  
+  /* Interactive button with ripple */
+  .btn-excambia {
+    @apply relative overflow-hidden px-6 py-3 rounded-xl font-semibold;
+    background: linear-gradient(135deg, #28E7C5 0%, #20c9ab 100%);
+    color: #0d3d35;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: 'Rajdhani', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  .btn-excambia:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(40, 231, 197, 0.4);
+  }
+  
+  .btn-excambia:active {
+    transform: translateY(0);
+  }
+  
+  .btn-excambia-purple {
+    @apply relative overflow-hidden px-6 py-3 rounded-xl font-semibold text-white;
+    background: linear-gradient(135deg, #682ABA 0%, #8B4FD0 100%);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: 'Rajdhani', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  .btn-excambia-purple:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(104, 42, 186, 0.4);
+  }
+  
+  /* Table with modern styling */
+  .table-modern {
+    @apply w-full;
+  }
+  
+  .table-modern thead {
+    @apply bg-muted/50;
+  }
+  
+  .table-modern th {
+    @apply px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider;
+    font-family: 'Rajdhani', sans-serif;
+  }
+  
+  .table-modern td {
+    @apply px-4 py-4 text-sm;
+    transition: background-color 0.2s ease;
+  }
+  
+  .table-modern tbody tr {
+    @apply border-b border-border/50;
+    transition: all 0.2s ease;
+  }
+  
+  .table-modern tbody tr:hover {
+    @apply bg-muted/30;
+  }
+  
+  /* Progress bar with gradient */
+  .progress-excambia {
+    @apply h-2 rounded-full bg-muted overflow-hidden;
+  }
+  
+  .progress-excambia-bar {
+    @apply h-full rounded-full;
+    background: linear-gradient(90deg, #682ABA 0%, #28E7C5 100%);
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Sidebar link with hover effect */
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-sidebar-foreground/80 transition-all duration-300;
+  }
+  
+  .sidebar-link:hover {
+    @apply bg-sidebar-accent text-sidebar-accent-foreground;
+    transform: translateX(4px);
+  }
+  
+  .sidebar-link.active {
+    @apply bg-sidebar-accent text-sidebar-accent-foreground;
+    box-shadow: inset 3px 0 0 #28E7C5;
+  }
+  
+  /* Input with focus animation */
+  .input-modern {
+    @apply w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .input-modern:focus {
+    @apply outline-none border-primary ring-2 ring-primary/20;
+    transform: translateY(-1px);
+  }
+  
+  /* Skeleton loading animation */
+  .skeleton {
+    @apply bg-muted rounded-lg;
+    animation: skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  @keyframes skeleton-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  
+  /* Page transition */
+  .page-enter {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  
+  .page-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Tooltip with animation */
+  .tooltip-modern {
+    @apply absolute z-50 px-3 py-2 text-xs font-medium text-white bg-foreground rounded-lg shadow-lg;
+    animation: tooltip-fade-in 0.2s ease;
+  }
+  
+  @keyframes tooltip-fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  /* Orbit decoration (like Excambia logo) */
+  .orbit-decoration {
+    position: absolute;
+    border: 2px solid rgba(40, 231, 197, 0.3);
+    border-radius: 50%;
+    animation: orbit-rotate 20s linear infinite;
+  }
+  
+  @keyframes orbit-rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+}
+
+@layer utilities {
+  /* Golden ratio spacing */
+  .space-golden {
+    --golden: 1.618;
+  }
+  
+  .gap-golden-sm { gap: calc(0.5rem * 1.618); }
+  .gap-golden { gap: calc(1rem * 1.618); }
+  .gap-golden-lg { gap: calc(1.5rem * 1.618); }
+  
+  .p-golden-sm { padding: calc(0.5rem * 1.618); }
+  .p-golden { padding: calc(1rem * 1.618); }
+  .p-golden-lg { padding: calc(1.5rem * 1.618); }
+  
+  /* Text gradient */
+  .text-gradient {
+    background: linear-gradient(135deg, #682ABA 0%, #28E7C5 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .text-gradient-reverse {
+    background: linear-gradient(135deg, #28E7C5 0%, #682ABA 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  /* Glow effects */
+  .glow-turquesa {
+    box-shadow: 0 0 20px rgba(40, 231, 197, 0.4);
+  }
+  
+  .glow-purple {
+    box-shadow: 0 0 20px rgba(104, 42, 186, 0.4);
+  }
+  
+  /* Smooth transitions */
+  .transition-smooth {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Custom scrollbar */
+  .scrollbar-custom::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .scrollbar-custom::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-custom::-webkit-scrollbar-thumb {
+    background: rgba(104, 42, 186, 0.3);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-custom::-webkit-scrollbar-thumb:hover {
+    background: rgba(104, 42, 186, 0.5);
+  }
+  
+  /* Container customization */
+  .container {
+    @apply mx-auto px-4 sm:px-6 lg:px-8;
+    max-width: 1400px;
+  }
+  
+  /* Flex defaults */
+  .flex {
+    min-width: 0;
+    min-height: 0;
+  }
+}

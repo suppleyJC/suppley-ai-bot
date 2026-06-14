@@ -1,0 +1,66 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# Build output
+dist/
+.next/
+out/
+build/
+
+# Development
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.turbo/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Cache
+.turbo
+.eslintcache
+.prettiercache
+
+# IDE
+*.sublime-project
+*.sublime-workspace
+
+# Manus platform artifacts (no longer needed)
+.manus/
+
+# Playwright test artifacts
+test-results/
+playwright-report/
+
+# Drizzle kit temp files
+.drizzle/
+
+# Database files (if using SQLite in development)
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db

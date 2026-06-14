@@ -1,0 +1,1 @@
+ALTER TABLE `users` MODIFY COLUMN `loginMethod` enum('email','oauth','apple','google','manus') NOT NULL DEFAULT 'email';
