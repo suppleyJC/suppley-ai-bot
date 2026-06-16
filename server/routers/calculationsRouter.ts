@@ -3,6 +3,7 @@ import { z } from "zod";
 import * as db from "../db";
 import { TRPCError } from "@trpc/server";
 import { performImportCalculation, saveImportCalculation, getCalculationSummary } from "../services/importCalculationService";
+import { calculateWithMotorV2 } from "../services/motor-v2-adapter";
 import { generateViabilityAnalysis } from "../services/aiAnalysisService";
 import { extractQuotationFromPdfDirect, normalizeExtractedProducts } from "../services/quotationExtractorService";
 import { generateExcelReport } from "../services/excelReportService";
@@ -44,23 +45,39 @@ calculate: protectedProcedure
     save: z.boolean().default(false),
   }))
   .mutation(async ({ ctx, input }) => {
-    const result = await performImportCalculation({
-      userId: ctx.user.id,
-      ...input,
-    });
-    
+    let result;
+    let usingMotorV2 = false;
+
+    try {
+      // Tentar Motor V2 primeiro (certificado, mais preciso)
+      result = await calculateWithMotorV2({
+        userId: ctx.user.id,
+        ...input,
+      });
+      usingMotorV2 = true;
+      console.log("[Calculate] Motor V2 calculation successful");
+    } catch (error) {
+      // Fallback ao legado se Motor V2 falhar
+      console.warn("[Calculate] Motor V2 failed, falling back to legacy engine:", error);
+      result = await performImportCalculation({
+        userId: ctx.user.id,
+        ...input,
+      });
+    }
+
     let calculationId: number | undefined;
     if (input.save) {
       const savedId = await saveImportCalculation({ userId: ctx.user.id, ...input }, result);
       calculationId = savedId ?? undefined;
     }
-    
+
     const summary = getCalculationSummary(result);
-    
+
     return {
       ...result,
       calculationId,
       summary,
+      _motorV2: usingMotorV2, // Indica qual motor foi usado (debug)
     };
   }),
 
