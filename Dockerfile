@@ -1,58 +1,54 @@
-# Build stage
+# Multi-stage build para segurança + tamanho mínimo
+
+# Stage 1: Build
 FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm@10
+# Copiar arquivos de dependências
+COPY pnpm-lock.yaml package.json ./
 
-# Copy dependency files
-COPY package.json pnpm-lock.yaml ./
+# Instalar pnpm + dependências
+RUN npm install -g pnpm && \
+    pnpm install --frozen-lockfile --prod
 
-# Install all dependencies (including dev)
-RUN pnpm install --frozen-lockfile
-
-# Copy source code
+# Copiar código
 COPY . .
 
-# Build application
+# Build (incluindo frontend Vite)
 RUN pnpm build
 
-# Production stage
+# Stage 2: Runtime (mínimo)
 FROM node:18-alpine
 
 WORKDIR /app
 
-LABEL maintainer="SUPPLEY AI Bot"
-LABEL description="Independent AI-powered supply chain optimization system"
+# Instalar dumb-init para gerenciamento de signals
+RUN apk add --no-cache dumb-init curl
 
-# Install pnpm in production image
-RUN npm install -g pnpm@10
-
-# Copy package.json for production dependencies
-COPY package.json pnpm-lock.yaml ./
-
-# Install only production dependencies
-RUN pnpm install --frozen-lockfile --production
-
-# Copy built application from builder stage
+# Copiar apenas o necessário do builder
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/drizzle ./drizzle
+COPY --from=builder /app/package.json ./
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
-USER nodejs
+# Variáveis de ambiente padrão
+ENV NODE_ENV=production \
+    PORT=3000
 
-# Expose port
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
+# User não-root por segurança
+RUN addgroup -g 1000 app && \
+    adduser -D -u 1000 -G app app && \
+    chown -R app:app /app
+
+USER app
+
 EXPOSE 3000
 
-# Health check to monitor container health
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})" || exit 1
-
-# Set default environment
-ENV NODE_ENV=production
-ENV PORT=3000
-
-# Start application
+# Usar dumb-init para gerenciar signals corretamente
+ENTRYPOINT ["/usr/sbin/dumb-init", "--"]
 CMD ["node", "dist/index.js"]
