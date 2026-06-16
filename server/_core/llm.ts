@@ -209,60 +209,10 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
-
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+  if (!ENV.anthropicApiKey) {
+    throw new Error("ANTHROPIC_API_KEY is not configured");
   }
-};
-
-const normalizeResponseFormat = ({
-  responseFormat,
-  response_format,
-  outputSchema,
-  output_schema,
-}: {
-  responseFormat?: ResponseFormat;
-  response_format?: ResponseFormat;
-  outputSchema?: OutputSchema;
-  output_schema?: OutputSchema;
-}):
-  | { type: "json_schema"; json_schema: JsonSchema }
-  | { type: "text" }
-  | { type: "json_object" }
-  | undefined => {
-  const explicitFormat = responseFormat || response_format;
-  if (explicitFormat) {
-    if (
-      explicitFormat.type === "json_schema" &&
-      !explicitFormat.json_schema?.schema
-    ) {
-      throw new Error(
-        "responseFormat json_schema requires a defined schema object"
-      );
-    }
-    return explicitFormat;
-  }
-
-  const schema = outputSchema || output_schema;
-  if (!schema) return undefined;
-
-  if (!schema.name || !schema.schema) {
-    throw new Error("outputSchema requires both name and schema");
-  }
-
-  return {
-    type: "json_schema",
-    json_schema: {
-      name: schema.name,
-      schema: schema.schema,
-      ...(typeof schema.strict === "boolean" ? { strict: schema.strict } : {}),
-    },
-  };
 };
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
@@ -273,19 +223,36 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     tools,
     toolChoice,
     tool_choice,
-    outputSchema,
-    output_schema,
-    responseFormat,
-    response_format,
+    maxTokens,
+    max_tokens,
   } = params;
 
+  const messageList = messages.map(normalizeMessage);
+
+  // Preparar tools para API do Anthropic (formato diferente)
+  const toolList = tools?.map((tool) => ({
+    name: tool.function.name,
+    description: tool.function.description || "Tool",
+    input_schema: tool.function.parameters || { type: "object", properties: {} },
+  })) || undefined;
+
+  // Preparar payload para Anthropic
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
-    messages: messages.map(normalizeMessage),
+    model: "claude-opus-4-8",
+    max_tokens: max_tokens || maxTokens || 4096,
+    messages: messageList,
   };
 
-  if (tools && tools.length > 0) {
-    payload.tools = tools;
+  // Adicionar system message se houver
+  const systemMessage = messageList.find((m: any) => m.role === "system");
+  if (systemMessage) {
+    payload.system = (systemMessage as any).content;
+    // Remover system message da lista de messages (Anthropic não aceita como message)
+    payload.messages = messageList.filter((m: any) => m.role !== "system");
+  }
+
+  if (toolList && toolList.length > 0) {
+    payload.tools = toolList;
   }
 
   const normalizedToolChoice = normalizeToolChoice(
@@ -293,30 +260,24 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     tools
   );
   if (normalizedToolChoice) {
-    payload.tool_choice = normalizedToolChoice;
+    if (normalizedToolChoice === "auto" || normalizedToolChoice === "none") {
+      payload.tool_choice = normalizedToolChoice;
+    } else {
+      // Anthropic usa formato diferente para forçar uma tool específica
+      payload.tool_choice = {
+        type: "tool",
+        name: (normalizedToolChoice as any).function.name,
+      };
+    }
   }
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
-  }
-
-  const normalizedResponseFormat = normalizeResponseFormat({
-    responseFormat,
-    response_format,
-    outputSchema,
-    output_schema,
-  });
-
-  if (normalizedResponseFormat) {
-    payload.response_format = normalizedResponseFormat;
-  }
-
-  const response = await fetch(resolveApiUrl(), {
+  // Chamar API Anthropic
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      "x-api-key": ENV.anthropicApiKey!,
+      "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify(payload),
   });
@@ -328,5 +289,45 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     );
   }
 
-  return (await response.json()) as InvokeResult;
+  const result = await response.json() as any;
+
+  // Converter resposta Anthropic para formato genérico InvokeResult
+  const toolCalls = result.content
+    ?.filter((block: any) => block.type === "tool_use")
+    .map((block: any) => ({
+      id: block.id,
+      type: "function" as const,
+      function: {
+        name: block.name,
+        arguments: JSON.stringify(block.input),
+      },
+    })) || [];
+
+  const textContent = result.content
+    ?.find((block: any) => block.type === "text")
+    ?.text || "";
+
+  return {
+    id: result.id,
+    created: Math.floor(Date.now() / 1000),
+    model: result.model,
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: textContent,
+          ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
+        },
+        finish_reason: result.stop_reason === "tool_use" ? "tool_calls" : result.stop_reason,
+      },
+    ],
+    usage: result.usage
+      ? {
+          prompt_tokens: result.usage.input_tokens,
+          completion_tokens: result.usage.output_tokens,
+          total_tokens: result.usage.input_tokens + result.usage.output_tokens,
+        }
+      : undefined,
+  };
 }
