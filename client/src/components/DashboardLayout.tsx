@@ -28,18 +28,23 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/", section: "principal" },
-  { icon: Workflow, label: "Painel de Operações", path: "/operacoes", section: "principal" },
-  { icon: Calculator, label: "Novo Cálculo", path: "/calculate", section: "principal" },
-  { icon: FileText, label: "Análise das Oportunidades", path: "/quotations", section: "principal" },
-  { icon: History, label: "Histórico de Cálculos", path: "/calculations", section: "gestao" },
-  { icon: Sparkles, label: "Excambia", path: "/excambia", section: "gestao" },
-  { icon: Scale, label: "Reforma Tributária", path: "/reform", section: "gestao" },
-  { icon: MessageSquare, label: "Mensagens", path: "/messaging", section: "gestao" },
+  // INTELIGÊNCIA
+  { icon: Sparkles, label: "Excambia", path: "/excambia", section: "inteligencia" },
+
+  // OPERAÇÕES
+  { icon: LayoutDashboard, label: "Dashboard", path: "/", section: "operacoes" },
+  { icon: Workflow, label: "Painel de Operações", path: "/operacoes", section: "operacoes" },
+  { icon: Calculator, label: "Novo Cálculo", path: "/calculate", section: "operacoes" },
+  { icon: FileText, label: "Análise das Oportunidades", path: "/quotations", section: "operacoes" },
+  { icon: History, label: "Histórico de Cálculos", path: "/calculations", section: "operacoes" },
+
+  // CADASTROS
   { icon: Factory, label: "Indústrias", path: "/industries", section: "cadastros" },
   { icon: Building2, label: "Fornecedores", path: "/suppliers", section: "cadastros" },
   { icon: Package, label: "Produtos", path: "/products", section: "cadastros" },
   { icon: ClipboardList, label: "RFQ", path: "/rfq", section: "cadastros" },
+
+  // SISTEMA
   { icon: Settings, label: "Configurações", path: "/settings", section: "sistema" },
 ];
 
@@ -177,16 +182,16 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0 pt-4">
-            {/* Menu Principal */}
+            {/* Inteligência */}
             <div className="px-4 mb-2">
               {!isCollapsed && (
                 <span className="text-[10px] font-semibold text-[#28E7C5] uppercase tracking-wider">
-                  Principal
+                  Inteligência
                 </span>
               )}
             </div>
             <SidebarMenu className="px-2 py-1">
-              {menuItems.filter(i => i.section === "principal").map(item => {
+              {menuItems.filter(i => i.section === "inteligencia").map(item => {
                 const isActive = location === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>
@@ -213,16 +218,16 @@ function DashboardLayoutContent({
               })}
             </SidebarMenu>
 
-            {/* Gestão */}
+            {/* Operações */}
             <div className="px-4 mt-6 mb-2">
               {!isCollapsed && (
                 <span className="text-[10px] font-semibold text-[#28E7C5] uppercase tracking-wider">
-                  Gestão
+                  Operações
                 </span>
               )}
             </div>
             <SidebarMenu className="px-2 py-1">
-              {menuItems.filter(i => i.section === "gestao").map(item => {
+              {menuItems.filter(i => i.section === "operacoes").map(item => {
                 const isActive = location === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>
