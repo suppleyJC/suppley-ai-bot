@@ -1,5 +1,5 @@
 import { getExchangeRate } from "./exchangeService";
-import { calculateImportTaxes, calculateSellingPrice, isMercosulCountry, TaxCalculationResult, calculateSaleTaxes, calculateTargetPriceAnalysis, calculateFinancialCosts, calculateTTD409, type TaxRegime, type SaleTaxes, type TargetPriceAnalysis } from "./taxCalculationService";
+import { calculateImportTaxes, calculateSellingPrice, isMercosulCountry, TaxCalculationResult, calculateSaleTaxes, calculateTargetPriceAnalysis, calculateFinancialCosts, calculateTTD409, calculateCustomsValueAdjustments, calculateAdjustedCustomsValue, type TaxRegime, type SaleTaxes, type TargetPriceAnalysis } from "./taxCalculationService";
 import { createImportCalculation, getCompanySettings } from "../db";
 import { InsertImportCalculation } from "../../drizzle/schema";
 
@@ -40,6 +40,11 @@ export interface ImportCalculationInput {
   spreadPercent?: number; // Spread cambial (basis points, e.g., 200 = 2%)
   iofRate?: number; // IOF rate (basis points, default 193 = 1,93%)
 
+  // Customs value adjustments (ajustes de valor aduaneiro)
+  royaltiesBrl?: number; // Royalties / Licenças (adicionado ao valor aduaneiro)
+  assistsBrl?: number; // Assists / Insumos fornecidos
+  commissionsBrl?: number; // Comissões de compra
+
   // Target price for analysis (optional)
   targetPriceBrl?: number;
 }
@@ -76,6 +81,12 @@ export interface ImportCalculationOutput {
   // Financial costs
   spreadBrl: number; // Spread cambial
   iofBrl: number; // IOF
+
+  // Customs value adjustments
+  royaltiesBrl: number; // Royalties / Licenças
+  assistsBrl: number; // Assists / Insumos fornecidos
+  commissionsBrl: number; // Comissões de compra
+  adjustedCustomsValueBrl: number; // CIF + ajustes (base para impostos)
 
   // Final values
   totalCostBrl: number;
@@ -177,9 +188,23 @@ export async function performImportCalculation(
   const spreadBrl = financialCosts.spreadCents / 100;
   const iofBrl = financialCosts.iofCents / 100;
 
+  // Calculate customs value adjustments
+  const royaltiesBrl = input.royaltiesBrl ?? 0;
+  const assistsBrl = input.assistsBrl ?? 0;
+  const commissionsBrl = input.commissionsBrl ?? 0;
+  const customsAdjustments = calculateCustomsValueAdjustments({
+    royaltiesCents: Math.round(royaltiesBrl * 100),
+    assistsCents: Math.round(assistsBrl * 100),
+    commissionsCents: Math.round(commissionsBrl * 100),
+  });
+  const adjustedCustomsValueBrl = calculateAdjustedCustomsValue(
+    Math.round(cifBrl * 100),
+    customsAdjustments
+  ) / 100;
+
   // Calculate total cost
   const totalTaxesBrl = taxes.values.totalTaxesCents / 100;
-  const totalCostBrl = cifBrl + totalTaxesBrl + customsBrokerBrl + storageBrl + otherCostsBrl + spreadBrl + iofBrl;
+  const totalCostBrl = adjustedCustomsValueBrl + totalTaxesBrl + customsBrokerBrl + storageBrl + otherCostsBrl + spreadBrl + iofBrl;
   const unitCostBrl = totalCostBrl / input.quantity;
   
   // Calculate suggested price
@@ -248,6 +273,11 @@ export async function performImportCalculation(
     spreadBrl,
     iofBrl,
 
+    royaltiesBrl,
+    assistsBrl,
+    commissionsBrl,
+    adjustedCustomsValueBrl,
+
     totalCostBrl,
     unitCostBrl,
 
@@ -313,6 +343,10 @@ export async function saveImportCalculation(
 
     iofCents: Math.round(result.iofBrl * 100),
     spreadCents: Math.round(result.spreadBrl * 100),
+
+    royaltiesCents: Math.round(result.royaltiesBrl * 100),
+    assistsCents: Math.round(result.assistsBrl * 100),
+    commissionsCents: Math.round(result.commissionsBrl * 100),
 
     totalCostCents: Math.round(result.totalCostBrl * 100),
     unitCostCents: Math.round(result.unitCostBrl * 100),

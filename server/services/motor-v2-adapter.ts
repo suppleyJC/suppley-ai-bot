@@ -125,6 +125,11 @@ export async function calculateWithMotorV2(
     spreadBrl: 0, // Motor V2 legacy: no financial cost tracking
     iofBrl: 0,
 
+    royaltiesBrl: 0, // Motor V2 legacy: no customs value adjustments
+    assistsBrl: 0,
+    commissionsBrl: 0,
+    adjustedCustomsValueBrl: item.customsValueBrl,
+
     totalCostBrl,
     unitCostBrl: totalCostBrl / input.quantity,
 

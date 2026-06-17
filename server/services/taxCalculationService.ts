@@ -126,6 +126,16 @@ export interface FinancialCostsResult {
   totalFinancialCostsCents: number;
 }
 
+export interface CustomsValueAdjustmentsInput {
+  royaltiesCents?: number; // Royalties / Licenças (valor adicional que compõe valor aduaneiro)
+  assistsCents?: number; // Assists / Insumos fornecidos pelo importador
+  commissionsCents?: number; // Comissões de compra
+}
+
+export interface CustomsValueAdjustmentsResult {
+  totalAdjustmentsCents: number; // Total que deve ser adicionado ao valor aduaneiro
+}
+
 // ============================================================
 // CÁLCULO DE IMPOSTOS NA IMPORTAÇÃO
 // ============================================================
@@ -820,4 +830,46 @@ export function calculateTTD409(input: TTD409Input): TTD409Result {
     icmsDiferidoCents,
     observations,
   };
+}
+
+// ============================================================
+// AJUSTES DE VALOR ADUANEIRO
+// ============================================================
+
+/**
+ * Calcula ajustes de valor aduaneiro (royalties, assists, comissões)
+ *
+ * Conforme Lei 8.846/1994 e Decreto 6.759/2009:
+ * - Royalties: valor adicional para licenças, marcas, patentes
+ * - Assists: insumos fornecidos pelo importador
+ * - Comissões: comissões de compra/negociação
+ *
+ * Estes valores são ADICIONADOS ao valor aduaneiro (CIF) para fins de
+ * cálculo de impostos de importação.
+ */
+export function calculateCustomsValueAdjustments(
+  input: CustomsValueAdjustmentsInput
+): CustomsValueAdjustmentsResult {
+  const {
+    royaltiesCents = 0,
+    assistsCents = 0,
+    commissionsCents = 0,
+  } = input;
+
+  const totalAdjustmentsCents = royaltiesCents + assistsCents + commissionsCents;
+
+  return {
+    totalAdjustmentsCents,
+  };
+}
+
+/**
+ * Calcula valor aduaneiro ajustado (CIF + adjustments)
+ * Este é o valor base para cálculo de impostos de importação
+ */
+export function calculateAdjustedCustomsValue(
+  cifCents: number,
+  adjustments: CustomsValueAdjustmentsResult
+): number {
+  return cifCents + adjustments.totalAdjustmentsCents;
 }

@@ -167,6 +167,11 @@ export const importCalculations = mysqlTable("import_calculations", {
   iofCents: bigint("iofCents", { mode: "number" }).default(0).notNull(),
   spreadCents: bigint("spreadCents", { mode: "number" }).default(0).notNull(),
 
+  // Customs value adjustments (valor aduaneiro)
+  royaltiesCents: bigint("royaltiesCents", { mode: "number" }).default(0).notNull(), // Royalties / Licenças
+  assistsCents: bigint("assistsCents", { mode: "number" }).default(0).notNull(), // Assists / Insumos fornecidos
+  commissionsCents: bigint("commissionsCents", { mode: "number" }).default(0).notNull(), // Comissões de compra
+
   // Final values
   totalCostCents: bigint("totalCostCents", { mode: "number" }).notNull(),
   unitCostCents: bigint("unitCostCents", { mode: "number" }).notNull(),
@@ -515,7 +520,12 @@ export const quotations = mysqlTable("quotations", {
   // Financial costs
   iofCents: bigint("iofCents", { mode: "number" }).default(0).notNull(), // IOF (Imposto sobre Operações Financeiras)
   spreadCents: bigint("spreadCents", { mode: "number" }).default(0).notNull(), // Spread cambial
-  
+
+  // Customs value adjustments (valor aduaneiro)
+  royaltiesCents: bigint("royaltiesCents", { mode: "number" }).default(0).notNull(), // Royalties / Licenças
+  assistsCents: bigint("assistsCents", { mode: "number" }).default(0).notNull(), // Assists / Insumos fornecidos
+  commissionsCents: bigint("commissionsCents", { mode: "number" }).default(0).notNull(), // Comissões de compra
+
   // Totals (calculated from items)
   totalFobCents: bigint("totalFobCents", { mode: "number" }).default(0).notNull(),
   totalCifCents: bigint("totalCifCents", { mode: "number" }).default(0).notNull(),
