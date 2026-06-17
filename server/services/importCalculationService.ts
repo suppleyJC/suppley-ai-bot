@@ -1,5 +1,5 @@
 import { getExchangeRate } from "./exchangeService";
-import { calculateImportTaxes, calculateSellingPrice, isMercosulCountry, TaxCalculationResult, calculateSaleTaxes, calculateTargetPriceAnalysis, type TaxRegime, type SaleTaxes, type TargetPriceAnalysis } from "./taxCalculationService";
+import { calculateImportTaxes, calculateSellingPrice, isMercosulCountry, TaxCalculationResult, calculateSaleTaxes, calculateTargetPriceAnalysis, calculateFinancialCosts, calculateTTD409, type TaxRegime, type SaleTaxes, type TargetPriceAnalysis } from "./taxCalculationService";
 import { createImportCalculation, getCompanySettings } from "../db";
 import { InsertImportCalculation } from "../../drizzle/schema";
 
@@ -7,31 +7,39 @@ export interface ImportCalculationInput {
   userId: number;
   productId?: number;
   supplierId?: number;
-  
+
   // Product info
   productName: string;
   ncmCode: string;
   quantity: number;
   unit?: string;
-  
+
   // Origin info
   originCountry: string;
   destinationState?: string;
-  
+
   // Values
   fobValue: number; // FOB value in original currency
   fobCurrency: string;
   freight?: number; // Freight cost in original currency
   insurance?: number; // Insurance cost in original currency
-  
+
   // Additional costs (in BRL)
   customsBrokerBrl?: number;
   storageBrl?: number;
   otherCostsBrl?: number;
-  
+
   // Markup
   markupPercent?: number; // In basis points (30% = 3000)
-  
+
+  // TTD 409 (Santa Catarina)
+  isTTD409?: boolean; // Apply TTD 409 benefits
+  ttdMonthsSinceGrant?: number; // Months since grant start
+
+  // Financial costs
+  spreadPercent?: number; // Spread cambial (basis points, e.g., 200 = 2%)
+  iofRate?: number; // IOF rate (basis points, default 193 = 1,93%)
+
   // Target price for analysis (optional)
   targetPriceBrl?: number;
 }
@@ -40,50 +48,58 @@ export interface ImportCalculationOutput {
   // Exchange rate info
   exchangeRate: number;
   exchangeSource: string;
-  
+
   // Values in original currency
   fobOriginal: number;
   freightOriginal: number;
   insuranceOriginal: number;
   cifOriginal: number;
-  
+
   // Values in BRL
   fobBrl: number;
   freightBrl: number;
   insuranceBrl: number;
   cifBrl: number;
-  
+
   // Tax calculation
   taxes: TaxCalculationResult;
-  
+
   // Additional costs
   customsBrokerBrl: number;
   storageBrl: number;
   otherCostsBrl: number;
-  
+
+  // TTD SC (ICMS diferido/antecipado)
+  icmsAntecipadoBrl: number;
+  icmsDiferidoBrl: number;
+
+  // Financial costs
+  spreadBrl: number; // Spread cambial
+  iofBrl: number; // IOF
+
   // Final values
   totalCostBrl: number;
   unitCostBrl: number;
-  
+
   // Pricing
   markupPercent: number;
   suggestedPriceBrl: number;
   suggestedUnitPriceBrl: number;
-  
+
   // Profitability
   grossProfitBrl: number;
   grossMarginPercent: number;
-  
+
   // Flags
   isMercosul: boolean;
-  
+
   // Tax Regime Info
   taxRegime: TaxRegime;
   saleTaxes: SaleTaxes;
-  
+
   // Target Price Analysis (if target price provided)
   targetAnalysis?: TargetPriceAnalysis;
-  
+
   // Saved calculation ID (if saved)
   calculationId?: number;
 }
@@ -136,11 +152,34 @@ export async function performImportCalculation(
     isMercosul,
     freightCents: freightBrlCents,
     numItems: 1,
+    ttdPhase: input.isTTD409 ? (input.ttdMonthsSinceGrant ?? 0 < 36 * 12 ? "primeiros_36m" : "apos_36m") : undefined,
   });
-  
+
+  // Calculate TTD 409 (Santa Catarina) - if eligible
+  let icmsAntecipadoBrl = 0;
+  let icmsDiferidoBrl = 0;
+  if (input.isTTD409 && destinationState.toUpperCase() === "SC") {
+    const ttd409Result = calculateTTD409({
+      cifValueCents: cifCents,
+      months: input.ttdMonthsSinceGrant,
+    });
+    icmsAntecipadoBrl = ttd409Result.icmsAntecipadoCents / 100;
+    icmsDiferidoBrl = ttd409Result.icmsDiferidoCents / 100;
+  }
+
+  // Calculate financial costs (IOF + Spread)
+  const financialCosts = calculateFinancialCosts({
+    fobValueOriginalCurrency: fobOriginal * 100, // Convert to cents
+    exchangeRate: Math.round(exchangeRate * 1000000), // * 1.000.000 for precision
+    spreadPercent: input.spreadPercent,
+    iofRate: input.iofRate,
+  });
+  const spreadBrl = financialCosts.spreadCents / 100;
+  const iofBrl = financialCosts.iofCents / 100;
+
   // Calculate total cost
   const totalTaxesBrl = taxes.values.totalTaxesCents / 100;
-  const totalCostBrl = cifBrl + totalTaxesBrl + customsBrokerBrl + storageBrl + otherCostsBrl;
+  const totalCostBrl = cifBrl + totalTaxesBrl + customsBrokerBrl + storageBrl + otherCostsBrl + spreadBrl + iofBrl;
   const unitCostBrl = totalCostBrl / input.quantity;
   
   // Calculate suggested price
@@ -186,35 +225,41 @@ export async function performImportCalculation(
   return {
     exchangeRate,
     exchangeSource,
-    
+
     fobOriginal,
     freightOriginal,
     insuranceOriginal,
     cifOriginal,
-    
+
     fobBrl,
     freightBrl,
     insuranceBrl,
     cifBrl,
-    
+
     taxes,
-    
+
     customsBrokerBrl,
     storageBrl,
     otherCostsBrl,
-    
+
+    icmsAntecipadoBrl,
+    icmsDiferidoBrl,
+
+    spreadBrl,
+    iofBrl,
+
     totalCostBrl,
     unitCostBrl,
-    
+
     markupPercent,
     suggestedPriceBrl,
     suggestedUnitPriceBrl,
-    
+
     grossProfitBrl,
     grossMarginPercent,
-    
+
     isMercosul,
-    
+
     taxRegime,
     saleTaxes,
     targetAnalysis,
@@ -262,13 +307,19 @@ export async function saveImportCalculation(
     customsBrokerCents: Math.round(result.customsBrokerBrl * 100),
     storageCents: Math.round(result.storageBrl * 100),
     otherCostsCents: Math.round(result.otherCostsBrl * 100),
-    
+
+    icmsAntecipadoCents: Math.round(result.icmsAntecipadoBrl * 100),
+    icmsDiferidoCents: Math.round(result.icmsDiferidoBrl * 100),
+
+    iofCents: Math.round(result.iofBrl * 100),
+    spreadCents: Math.round(result.spreadBrl * 100),
+
     totalCostCents: Math.round(result.totalCostBrl * 100),
     unitCostCents: Math.round(result.unitCostBrl * 100),
-    
+
     markupPercent: result.markupPercent,
     suggestedPriceCents: Math.round(result.suggestedPriceBrl * 100),
-    
+
     status: "completed",
   };
   
@@ -317,11 +368,14 @@ export function getCalculationSummary(result: ImportCalculationOutput) {
       { label: "PIS", value: result.taxes.values.pisValueCents / 100, percent: (result.taxes.values.pisValueCents / 100 / result.totalCostBrl) * 100 },
       { label: "COFINS", value: result.taxes.values.cofinsValueCents / 100, percent: (result.taxes.values.cofinsValueCents / 100 / result.totalCostBrl) * 100 },
       { label: "ICMS", value: result.taxes.values.icmsValueCents / 100, percent: (result.taxes.values.icmsValueCents / 100 / result.totalCostBrl) * 100 },
+      { label: "ICMS Antecipado", value: result.icmsAntecipadoBrl, percent: (result.icmsAntecipadoBrl / result.totalCostBrl) * 100 },
+      { label: "IOF", value: result.iofBrl, percent: (result.iofBrl / result.totalCostBrl) * 100 },
+      { label: "Spread", value: result.spreadBrl, percent: (result.spreadBrl / result.totalCostBrl) * 100 },
       { label: "Despachante", value: result.customsBrokerBrl, percent: (result.customsBrokerBrl / result.totalCostBrl) * 100 },
       { label: "Armazenagem", value: result.storageBrl, percent: (result.storageBrl / result.totalCostBrl) * 100 },
       { label: "Outros", value: result.otherCostsBrl, percent: (result.otherCostsBrl / result.totalCostBrl) * 100 },
     ].filter(c => c.value > 0),
-    
+
     // Key metrics
     metrics: {
       totalCost: result.totalCostBrl,
@@ -330,6 +384,8 @@ export function getCalculationSummary(result: ImportCalculationOutput) {
       grossProfit: result.grossProfitBrl,
       grossMargin: result.grossMarginPercent,
       taxBurden: (result.taxes.values.totalTaxesCents / 100 / result.cifBrl) * 100,
+      icmsAntecipadoTTD409: result.icmsAntecipadoBrl,
+      icmsDiferidoTTD409: result.icmsDiferidoBrl,
     },
   };
 }

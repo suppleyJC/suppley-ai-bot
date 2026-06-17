@@ -158,7 +158,15 @@ export const importCalculations = mysqlTable("import_calculations", {
   customsBrokerCents: bigint("customsBrokerCents", { mode: "number" }).default(0).notNull(),
   storageCents: bigint("storageCents", { mode: "number" }).default(0).notNull(),
   otherCostsCents: bigint("otherCostsCents", { mode: "number" }).default(0).notNull(),
-  
+
+  // TTD SC - ICMS diferido/antecipado
+  icmsAntecipadoCents: bigint("icmsAntecipadoCents", { mode: "number" }).default(0).notNull(),
+  icmsDiferidoCents: bigint("icmsDiferidoCents", { mode: "number" }).default(0).notNull(),
+
+  // Financial costs
+  iofCents: bigint("iofCents", { mode: "number" }).default(0).notNull(),
+  spreadCents: bigint("spreadCents", { mode: "number" }).default(0).notNull(),
+
   // Final values
   totalCostCents: bigint("totalCostCents", { mode: "number" }).notNull(),
   unitCostCents: bigint("unitCostCents", { mode: "number" }).notNull(),
@@ -499,6 +507,14 @@ export const quotations = mysqlTable("quotations", {
   customsBrokerCents: bigint("customsBrokerCents", { mode: "number" }).default(0).notNull(),
   storageCents: bigint("storageCents", { mode: "number" }).default(0).notNull(),
   otherCostsCents: bigint("otherCostsCents", { mode: "number" }).default(0).notNull(),
+
+  // TTD SC - ICMS diferido/antecipado (Tratamento Tributário Diferenciado)
+  icmsAntecipadoCents: bigint("icmsAntecipadoCents", { mode: "number" }).default(0).notNull(), // ICMS antecipado SCT (1% ou 2,6%)
+  icmsDiferidoCents: bigint("icmsDiferidoCents", { mode: "number" }).default(0).notNull(), // ICMS diferido (suspensão até saída do estado)
+
+  // Financial costs
+  iofCents: bigint("iofCents", { mode: "number" }).default(0).notNull(), // IOF (Imposto sobre Operações Financeiras)
+  spreadCents: bigint("spreadCents", { mode: "number" }).default(0).notNull(), // Spread cambial
   
   // Totals (calculated from items)
   totalFobCents: bigint("totalFobCents", { mode: "number" }).default(0).notNull(),

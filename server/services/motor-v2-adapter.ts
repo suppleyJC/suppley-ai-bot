@@ -120,6 +120,11 @@ export async function calculateWithMotorV2(
     storageBrl: input.storageBrl || 0,
     otherCostsBrl: input.otherCostsBrl || 0,
 
+    icmsAntecipadoBrl: 0, // Motor V2 legacy: no TTD support
+    icmsDiferidoBrl: 0,
+    spreadBrl: 0, // Motor V2 legacy: no financial cost tracking
+    iofBrl: 0,
+
     totalCostBrl,
     unitCostBrl: totalCostBrl / input.quantity,
 

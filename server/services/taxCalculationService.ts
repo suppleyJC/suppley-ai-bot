@@ -113,6 +113,19 @@ export interface TaxCalculationResult {
   isMercosulPreferential: boolean;
 }
 
+export interface FinancialCostsInput {
+  fobValueOriginalCurrency: number; // Valor FOB em moeda original (centavos)
+  exchangeRate: number; // Taxa de câmbio utilizada (* 1.000.000)
+  spreadPercent?: number; // Spread cambial em basis points (e.g., 200 = 2%)
+  iofRate?: number; // Taxa de IOF em basis points (padrão: 193 = 1,93%)
+}
+
+export interface FinancialCostsResult {
+  spreadCents: number; // Spread cambial cobrado
+  iofCents: number; // IOF sobre a operação cambial
+  totalFinancialCostsCents: number;
+}
+
 // ============================================================
 // CÁLCULO DE IMPOSTOS NA IMPORTAÇÃO
 // ============================================================
@@ -687,7 +700,7 @@ export function calculateSimplesEffectiveRate(
 /**
  * Calcula DIFAL (Diferencial de Alíquota) para vendas interestaduais
  * Aplicável quando vende produto importado para outro estado
- * 
+ *
  * DIFAL = (Alíquota Interna Destino - Alíquota Interestadual) × Base
  * Para produtos importados: interestadual = 4% (Res. Senado 13/2012)
  */
@@ -704,5 +717,107 @@ export function calculateDIFAL(
     difal: Math.max(0, difal),
     aliquotaInterna,
     aliquotaInterestadual,
+  };
+}
+
+// ============================================================
+// CUSTOS FINANCEIROS
+// ============================================================
+
+/**
+ * Calcula custos financeiros: IOF + Spread cambial
+ *
+ * IOF (Imposto sobre Operações Financeiras):
+ * - Operações cambiais: até 1,93% (valor do dia, pode variar)
+ * - Calculado sobre o valor em moeda estrangeira convertido
+ *
+ * Spread Cambial:
+ * - Diferença entre taxa interbancária e taxa praticada pelo banco
+ * - Típico: 0,5% a 2% sobre a operação
+ */
+export function calculateFinancialCosts(input: FinancialCostsInput): FinancialCostsResult {
+  const {
+    fobValueOriginalCurrency,
+    exchangeRate,
+    spreadPercent = 200, // Default: 2%
+    iofRate = 193, // Default: 1,93%
+  } = input;
+
+  // Conversão para BRL para cálculo de IOF
+  const valueInBrl = Math.round((fobValueOriginalCurrency * exchangeRate) / 1000000);
+
+  // IOF: calculado sobre o valor em BRL
+  const iofCents = Math.round((valueInBrl * iofRate) / 10000);
+
+  // Spread cambial: calculado sobre o valor em BRL
+  const spreadCents = Math.round((valueInBrl * spreadPercent) / 10000);
+
+  return {
+    spreadCents,
+    iofCents,
+    totalFinancialCostsCents: iofCents + spreadCents,
+  };
+}
+
+// ============================================================
+// TTD 409 SANTA CATARINA
+// ============================================================
+
+/**
+ * Calcula ICMS antecipado e diferido para TTD 409 (Santa Catarina)
+ *
+ * TTD 409/SC permite:
+ * - ICMS antecipado menor nos primeiros 36 meses (2,6%) ou após (1%)
+ * - ICMS diferido: suspensão até saída do estado (vantagem de fluxo de caixa)
+ *
+ * Tratamento Tributário Diferenciado para empresas em industrialização
+ * Benefício válido para importação com destino a industrialização/transformação
+ */
+export interface TTD409Input {
+  cifValueCents: number; // Valor CIF em BRL
+  months?: number; // Meses desde a concessão (default: 0 = primeiros 36 meses)
+}
+
+export interface TTD409Result {
+  isTTD409Eligible: boolean;
+  phase: "primeiros_36m" | "apos_36m";
+  icmsAntecipadoRate: number; // Alíquota do ICMS antecipado (basis points)
+  icmsAntecipadoCents: number; // Valor do ICMS antecipado
+  icmsDiferidoCents: number; // Valor que será diferido (ICMS cheio - antecipado)
+  observations: string[];
+}
+
+export function calculateTTD409(input: TTD409Input): TTD409Result {
+  const { cifValueCents, months = 0 } = input;
+
+  const phase = months < 36 * 12 ? "primeiros_36m" : "apos_36m";
+  const icmsAntecipadoRate = phase === "primeiros_36m"
+    ? ICMS_ANTECIPADO_SC_PRIMEIROS_36M
+    : ICMS_ANTECIPADO_SC_APOS_36M;
+
+  // ICMS antecipado é calculado sobre a base (CIF + II + IPI + PIS + COFINS)
+  // Assumindo uma média estimada para efeito de planejamento
+  // Em caso real, usar valores calculados pela importCalculation
+  const icmsAntecipadoCents = Math.round((cifValueCents * icmsAntecipadoRate) / 10000);
+
+  // ICMS diferido é a diferença entre ICMS cheio (17%) e antecipado
+  const icmsCheioBp = 1700;
+  const icmsDiferidoBp = icmsCheioBp - icmsAntecipadoRate;
+  const icmsDiferidoCents = Math.round((cifValueCents * icmsDiferidoBp) / 10000);
+
+  const observations = [
+    `Fase: ${phase === "primeiros_36m" ? "Primeiros 36 meses (2,6%)" : "Após 36 meses (1%)"}`,
+    "ICMS antecipado sujeito a verificação de benefício ativo",
+    "Diferido é suspensão até saída/consumo de mercadoria do estado",
+    "Produto deve estar vinculado a ato concessório válido"
+  ];
+
+  return {
+    isTTD409Eligible: true, // Validar conforme ato concessório
+    phase,
+    icmsAntecipadoRate,
+    icmsAntecipadoCents,
+    icmsDiferidoCents,
+    observations,
   };
 }
