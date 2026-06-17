@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Calculator, Building2, Package, Settings, History, FileText, ChevronRight, Sparkles, Scale, ClipboardList, Factory, MessageSquare } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Calculator, Building2, Package, Settings, History, FileText, ChevronRight, Sparkles, Scale, ClipboardList, Factory, MessageSquare, Workflow } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -29,6 +29,7 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/", section: "principal" },
+  { icon: Workflow, label: "Painel de Operações", path: "/operacoes", section: "principal" },
   { icon: Calculator, label: "Novo Cálculo", path: "/calculate", section: "principal" },
   { icon: FileText, label: "Análise das Oportunidades", path: "/quotations", section: "principal" },
   { icon: History, label: "Histórico de Cálculos", path: "/calculations", section: "gestao" },

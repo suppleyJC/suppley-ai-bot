@@ -1,0 +1,196 @@
+/**
+ * Operacoes — Painel de Operações (rota /operacoes).
+ *
+ * Kanban por estágio da esteira, consumindo o router que JÁ EXISTE:
+ *   trpc.operations.list  → lista as operações do usuário
+ *   trpc.operations.create → cria uma nova operação (Nova importação)
+ *
+ * Cada card linka para a esteira individual em /operacao/:id.
+ * Registro de rota (wouter) em App.tsx:
+ *   import Operacoes from "@/pages/Operacoes";
+ *   <Route path="/operacoes" component={Operacoes} />
+ */
+import React from "react";
+import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
+import {
+  ClipboardList, Users, FileBarChart, Ship, CircleDollarSign,
+  Plus, Loader2, ArrowRight,
+} from "lucide-react";
+import { toast } from "sonner";
+
+type Estagio = "demand" | "source" | "analyze" | "execute" | "finance" | "closed" | "lost";
+
+const COLUNAS: { key: Estagio; label: string; Icon: React.ComponentType<any> }[] = [
+  { key: "demand",  label: "Demanda",      Icon: ClipboardList },
+  { key: "source",  label: "Fornecedores", Icon: Users },
+  { key: "analyze", label: "Viabilidade",  Icon: FileBarChart },
+  { key: "execute", label: "Operação",     Icon: Ship },
+  { key: "finance", label: "Câmbio",       Icon: CircleDollarSign },
+];
+
+const STATUS_LABEL: Record<string, { txt: string; cls: string }> = {
+  ativa:     { txt: "Ativa",     cls: "bg-violet-50 text-violet-700" },
+  go:        { txt: "GO",        cls: "bg-teal-50 text-teal-700" },
+  no_go:     { txt: "NO-GO",     cls: "bg-red-50 text-red-700" },
+  concluida: { txt: "Concluída", cls: "bg-teal-50 text-teal-700" },
+  perdida:   { txt: "Perdida",   cls: "bg-slate-100 text-slate-500" },
+  pausada:   { txt: "Pausada",   cls: "bg-amber-50 text-amber-700" },
+};
+
+function fmtBRL(cents?: number | null) {
+  if (cents == null) return "—";
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+interface OperacaoRow {
+  id: number;
+  codigo: string;
+  titulo: string;
+  estagioAtual: Estagio;
+  status: string;
+  clienteNome?: string | null;
+  fornecedorNome?: string | null;
+  valorEstimadoBrl?: number | null;
+  margemEstimada?: number | null;
+}
+
+export default function Operacoes() {
+  const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
+  const { data, isLoading, error } = trpc.operations.list.useQuery();
+
+  const create = trpc.operations.create.useMutation({
+    onSuccess: (op) => {
+      utils.operations.list.invalidate();
+      if (op?.id) navigate(`/operacao/${op.id}`);
+    },
+    onError: (e) => toast.error(e.message || "Erro ao criar operação"),
+  });
+
+  const operacoes = (data ?? []) as OperacaoRow[];
+  const ativas = operacoes.filter((o) => !["closed", "lost"].includes(o.estagioAtual));
+  const encerradas = operacoes.filter((o) => ["closed", "lost"].includes(o.estagioAtual));
+
+  function handleNova() {
+    const titulo = window.prompt("Título da nova operação (ex.: Importação de válvulas — China):");
+    if (!titulo?.trim()) return;
+    create.mutate({ titulo: titulo.trim() });
+  }
+
+  return (
+    <div className="mx-auto max-w-7xl">
+      {/* cabeçalho */}
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Painel de Operações</h1>
+          <p className="text-sm text-slate-500">
+            {ativas.length} ativa{ativas.length === 1 ? "" : "s"} · {encerradas.length} finalizada{encerradas.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        <button
+          onClick={handleNova}
+          disabled={create.isPending}
+          className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-60"
+        >
+          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          Nova operação
+        </button>
+      </header>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 p-10 text-sm text-slate-400">
+          <Loader2 className="h-4 w-4 animate-spin" /> Carregando operações…
+        </div>
+      ) : error ? (
+        <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-sm text-red-600">
+          Não foi possível carregar as operações.
+        </div>
+      ) : operacoes.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-12 text-center">
+          <ClipboardList className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+          <h3 className="text-sm font-semibold text-slate-700">Nenhuma operação ainda</h3>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-slate-400">
+            Crie a primeira operação para acompanhar toda a esteira — da demanda ao câmbio.
+          </p>
+          <button
+            onClick={handleNova}
+            disabled={create.isPending}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+          >
+            <Plus className="h-4 w-4" /> Criar primeira operação
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* KANBAN — 5 colunas da esteira */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {COLUNAS.map((col) => {
+              const itens = ativas.filter((o) => o.estagioAtual === col.key);
+              const Icon = col.Icon;
+              return (
+                <div key={col.key} className="flex flex-col rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+                  <div className="mb-3 flex items-center gap-2 px-1">
+                    <Icon className="h-4 w-4 text-violet-600" />
+                    <span className="text-sm font-semibold text-slate-700">{col.label}</span>
+                    <span className="ml-auto rounded-full bg-slate-200 px-2 text-xs font-semibold text-slate-500">
+                      {itens.length}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {itens.length === 0 ? (
+                      <p className="px-1 py-4 text-center text-xs text-slate-300">—</p>
+                    ) : (
+                      itens.map((o) => <OperacaoCard key={o.id} op={o} onClick={() => navigate(`/operacao/${o.id}`)} />)
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ENCERRADAS */}
+          {encerradas.length > 0 && (
+            <section className="mt-8">
+              <h2 className="mb-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                Encerradas
+              </h2>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {encerradas.map((o) => (
+                  <OperacaoCard key={o.id} op={o} onClick={() => navigate(`/operacao/${o.id}`)} />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function OperacaoCard({ op, onClick }: { op: OperacaoRow; onClick: () => void }) {
+  const st = STATUS_LABEL[op.status] ?? { txt: op.status, cls: "bg-slate-100 text-slate-500" };
+  return (
+    <button
+      onClick={onClick}
+      className="group w-full rounded-xl border border-slate-200 bg-white p-3 text-left transition-all hover:border-violet-300 hover:shadow-sm"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-mono text-[10px] text-slate-400">{op.codigo}</p>
+        <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${st.cls}`}>{st.txt}</span>
+      </div>
+      <p className="mt-1 line-clamp-2 text-sm font-semibold text-slate-800">{op.titulo}</p>
+      {(op.clienteNome || op.fornecedorNome) && (
+        <p className="mt-0.5 truncate text-xs text-slate-400">
+          {[op.clienteNome, op.fornecedorNome].filter(Boolean).join(" · ")}
+        </p>
+      )}
+      <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
+        <span className="text-xs font-semibold text-slate-600">{fmtBRL(op.valorEstimadoBrl)}</span>
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-violet-600 opacity-0 transition-opacity group-hover:opacity-100">
+          Abrir <ArrowRight className="h-3 w-3" />
+        </span>
+      </div>
+    </button>
+  );
+}

@@ -32,6 +32,7 @@ import RfqDetail from "./pages/RfqDetail";
 import Industries from "./pages/Industries";
 import IndustryDetail from "./pages/IndustryDetail";
 import Messaging from "./pages/Messaging";
+import Operacoes from "./pages/Operacoes";
 import OperacaoDetail from "./pages/OperacaoDetail";
 
 function AuthenticatedRoutes() {
@@ -56,6 +57,7 @@ function AuthenticatedRoutes() {
         <Route path="/rfq/new" component={RfqCreate} />
         <Route path="/rfq/:id" component={RfqDetail} />
         <Route path="/messaging" component={Messaging} />
+        <Route path="/operacoes" component={Operacoes} />
         <Route path="/operacao/:id" component={OperacaoDetail} />
         <Route path="/reform" component={ReformDashboard} />
         <Route path="/404" component={NotFound} />
