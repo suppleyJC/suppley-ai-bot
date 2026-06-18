@@ -30,6 +30,8 @@ export type Message = {
   content: MessageContent | MessageContent[];
   name?: string;
   tool_call_id?: string;
+  /** Presente em mensagens do assistente que pediram ferramentas (function calling). */
+  tool_calls?: ToolCall[];
 };
 
 export type Tool = {
@@ -227,7 +229,69 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     max_tokens,
   } = params;
 
-  const messageList = messages.map(normalizeMessage);
+  // Texto plano de um conteúdo qualquer (usado para system e tool_result)
+  const asPlainText = (content: MessageContent | MessageContent[]): string =>
+    ensureArray(content)
+      .map((part) => (typeof part === "string" ? part : part.type === "text" ? part.text : JSON.stringify(part)))
+      .join("\n");
+
+  // Anthropic só aceita roles 'user' e 'assistant'. Convertemos o fluxo de
+  // function calling (estilo OpenAI) para o formato de blocos da Anthropic:
+  //  - assistant que pediu tools  -> content[] com blocos tool_use
+  //  - mensagem 'tool'/'function' -> role 'user' com bloco tool_result
+  const anthropicMessages: Array<Record<string, unknown>> = [];
+  let systemPrompt: string | undefined;
+
+  for (const message of messages) {
+    if (message.role === "system") {
+      systemPrompt = asPlainText(message.content);
+      continue;
+    }
+
+    if (message.role === "tool" || message.role === "function") {
+      anthropicMessages.push({
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: message.tool_call_id,
+            content: asPlainText(message.content),
+          },
+        ],
+      });
+      continue;
+    }
+
+    if (message.role === "assistant" && message.tool_calls && message.tool_calls.length > 0) {
+      const blocks: Array<Record<string, unknown>> = [];
+      const text = asPlainText(message.content);
+      if (text.trim().length > 0) {
+        blocks.push({ type: "text", text });
+      }
+      for (const call of message.tool_calls) {
+        let input: unknown = {};
+        try {
+          input = JSON.parse(call.function.arguments || "{}");
+        } catch {
+          input = {};
+        }
+        blocks.push({
+          type: "tool_use",
+          id: call.id,
+          name: call.function.name,
+          input,
+        });
+      }
+      anthropicMessages.push({ role: "assistant", content: blocks });
+      continue;
+    }
+
+    const normalized = normalizeMessage(message);
+    anthropicMessages.push({
+      role: normalized.role,
+      content: (normalized as { content: unknown }).content,
+    });
+  }
 
   // Preparar tools para API do Anthropic (formato diferente)
   const toolList = tools?.map((tool) => ({
@@ -240,15 +304,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   const payload: Record<string, unknown> = {
     model: "claude-opus-4-8",
     max_tokens: max_tokens || maxTokens || 4096,
-    messages: messageList,
+    messages: anthropicMessages,
   };
 
-  // Adicionar system message se houver
-  const systemMessage = messageList.find((m: any) => m.role === "system");
-  if (systemMessage) {
-    payload.system = (systemMessage as any).content;
-    // Remover system message da lista de messages (Anthropic não aceita como message)
-    payload.messages = messageList.filter((m: any) => m.role !== "system");
+  if (systemPrompt) {
+    payload.system = systemPrompt;
   }
 
   if (toolList && toolList.length > 0) {

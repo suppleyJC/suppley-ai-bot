@@ -151,20 +151,27 @@ Como posso ajudá-lo hoje?`,
   // Save message mutation
   const saveMessageMutation = trpc.excambia.saveChatMessage.useMutation();
 
-  // Chat mutation
-  const chatMutation = trpc.excambia.chat.useMutation({
+  // Chat mutation — orquestrador agêntico da Excambia (function calling + motor certificado)
+  const chatMutation = trpc.excambia.agentChat.useMutation({
     onMutate: () => setIsTyping(true),
     onSuccess: (data) => {
+      // Transparência: indica quando o motor certificado (ou outra tool) foi acionado
+      const tools = data.toolsUsed ?? [];
+      const toolNote = tools.length > 0
+        ? `\n\n_⚙️ Ferramentas acionadas: ${tools.join(", ")}_`
+        : "";
+      const content = (data.reply || "") + toolNote;
+
       const assistantMessage = {
         role: "assistant" as const,
-        content: data.response,
+        content,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
       // Save assistant response to database
       saveMessageMutation.mutate({
         role: "assistant",
-        content: data.response,
+        content,
       });
     },
     onError: (error) => {
@@ -263,7 +270,6 @@ Como posso ajudá-lo hoje?`,
         role: m.role,
         content: m.content,
       })),
-      includeHistory: true,
     });
   };
 

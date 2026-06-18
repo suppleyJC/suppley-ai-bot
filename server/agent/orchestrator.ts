@@ -88,10 +88,13 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
       return { reply, toolsUsed, toolResults };
     }
 
-    // Anexa a mensagem do assistente (que pediu tools) ao histórico
+    // Anexa a mensagem do assistente (que pediu tools) ao histórico.
+    // IMPORTANTE: precisa carregar os tool_calls para a Anthropic conseguir
+    // casar cada tool_result com seu tool_use no próximo turno.
     conversation.push({
       role: "assistant",
       content: typeof choice?.content === "string" ? choice.content : "",
+      tool_calls: toolCalls,
     } as Message);
 
     // Executa cada tool pedida e devolve o resultado ao modelo
