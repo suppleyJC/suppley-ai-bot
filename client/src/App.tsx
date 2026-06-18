@@ -39,7 +39,7 @@ function AuthenticatedRoutes() {
   return (
     <DashboardLayout>
       <Switch>
-        <Route path="/" component={Dashboard} />
+        <Route path="/" component={Operacoes} />
         <Route path="/calculate" component={CalculateMultiple} />
         <Route path="/calculate-single" component={Calculate} />
         <Route path="/calculations" component={Calculations} />

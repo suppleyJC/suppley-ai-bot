@@ -30,22 +30,15 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 const menuItems = [
   // INTELIGÊNCIA
   { icon: Sparkles, label: "Excambia", path: "/excambia", section: "inteligencia" },
+  { icon: Sparkles, label: "Inteligência de mercado", path: "/excambia/market", section: "inteligencia" },
 
   // OPERAÇÕES
-  { icon: LayoutDashboard, label: "Dashboard", path: "/", section: "operacoes" },
-  { icon: Workflow, label: "Painel de Operações", path: "/operacoes", section: "operacoes" },
-  { icon: Calculator, label: "Novo Cálculo", path: "/calculate", section: "operacoes" },
-  { icon: FileText, label: "Análise das Oportunidades", path: "/quotations", section: "operacoes" },
-  { icon: History, label: "Histórico de Cálculos", path: "/calculations", section: "operacoes" },
+  { icon: Workflow, label: "Painel de operações", path: "/operacoes", section: "operacoes" },
 
-  // CADASTROS
-  { icon: Factory, label: "Indústrias", path: "/industries", section: "cadastros" },
-  { icon: Building2, label: "Fornecedores", path: "/suppliers", section: "cadastros" },
-  { icon: Package, label: "Produtos", path: "/products", section: "cadastros" },
-  { icon: ClipboardList, label: "RFQ", path: "/rfq", section: "cadastros" },
-
-  // SISTEMA
-  { icon: Settings, label: "Configurações", path: "/settings", section: "sistema" },
+  // BASE (Cadastros)
+  { icon: Factory, label: "Indústrias / Clientes", path: "/industries", section: "base" },
+  { icon: Building2, label: "Fornecedores", path: "/suppliers", section: "base" },
+  { icon: Package, label: "Produtos / Insumos", path: "/products", section: "base" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -174,7 +167,7 @@ function DashboardLayoutContent({
                   />
                   <div className="flex flex-col">
                     <span className="logo-text-white text-lg leading-tight">SUPPLEY</span>
-                    <span className="text-[10px] text-sidebar-foreground/60 font-medium tracking-wider uppercase">Calc</span>
+                    <span className="text-[10px] text-sidebar-foreground/60 font-medium tracking-wider uppercase">Comércio Exterior</span>
                   </div>
                 </div>
               ) : null}
@@ -254,16 +247,16 @@ function DashboardLayoutContent({
               })}
             </SidebarMenu>
 
-            {/* Cadastros */}
+            {/* Base */}
             <div className="px-4 mt-6 mb-2 shrink-0">
               {!isCollapsed && (
                 <span className="text-[10px] font-semibold text-[#28E7C5] uppercase tracking-wider">
-                  Cadastros
+                  Base
                 </span>
               )}
             </div>
             <SidebarMenu className="px-2 py-1 shrink-0">
-              {menuItems.filter(i => i.section === "cadastros").map(item => {
+              {menuItems.filter(i => i.section === "base").map(item => {
                 const isActive = location === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>
@@ -288,44 +281,7 @@ function DashboardLayoutContent({
                   </SidebarMenuItem>
                 );
               })}
-            </SidebarMenu>
-
-            {/* Sistema */}
-            <div className="px-4 mt-6 mb-2 shrink-0">
-              {!isCollapsed && (
-                <span className="text-[10px] font-semibold text-[#28E7C5] uppercase tracking-wider">
-                  Sistema
-                </span>
-              )}
-            </div>
-            <SidebarMenu className="px-2 py-1 shrink-0">
-              {menuItems.filter(i => i.section === "sistema").map(item => {
-                const isActive = location === item.path;
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className={`h-11 transition-all font-medium rounded-xl ${
-                        isActive 
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground" 
-                          : "hover:bg-sidebar-accent/50"
-                      }`}
-                    >
-                      <item.icon
-                        className={`h-5 w-5 ${isActive ? "text-[#28E7C5]" : "text-sidebar-foreground/70"}`}
-                      />
-                      <span>{item.label}</span>
-                      {isActive && !isCollapsed && (
-                        <ChevronRight className="ml-auto h-4 w-4 text-[#28E7C5]" />
-                      )}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarContent>
+            </SidebarMenu>          </SidebarContent>
 
           <SidebarFooter className="p-4 border-t border-sidebar-border/50">
             <DropdownMenu>
@@ -347,6 +303,13 @@ function DashboardLayoutContent({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => setLocation("/settings")}
+                  className="cursor-pointer"
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Configurações</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
