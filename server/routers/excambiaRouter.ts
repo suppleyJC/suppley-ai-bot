@@ -4,8 +4,29 @@ import * as db from "../db";
 import { TRPCError } from "@trpc/server";
 import * as excambiaService from "../services/excambiaAgentService";
 import * as openaiService from "../services/openaiService";
+import { runExcambia } from "../agent/orchestrator";
 
 export const excambiaRouter = router({
+// Chat agêntico — orquestrador com function calling (motor certificado via tools)
+agentChat: protectedProcedure
+  .input(z.object({
+    messages: z.array(z.object({
+      role: z.enum(["user", "assistant", "system"]),
+      content: z.string(),
+    })),
+    operacaoId: z.number().optional(),
+    estagio: z.string().optional(),
+  }))
+  .mutation(async ({ ctx, input }) => {
+    const out = await runExcambia({
+      userId: ctx.user.id,
+      operacaoId: input.operacaoId,
+      estagio: input.estagio,
+      messages: input.messages,
+    });
+    return { reply: out.reply, toolsUsed: out.toolsUsed, toolResults: out.toolResults };
+  }),
+
 // Chat with Excambia
 chat: protectedProcedure
   .input(z.object({

@@ -98,7 +98,8 @@ async function callOpenAIDirect(
 }
 
 /**
- * Chama o LLM usando a API key do usuário ou fallback para Manus Forge
+ * Chama o LLM usando a API key própria do usuário (OpenAI) ou,
+ * por padrão, a IA do sistema (Anthropic/Claude via invokeLLM).
  */
 export async function invokeLLMWithUserKey(
   userId: number,
@@ -118,8 +119,8 @@ export async function invokeLLMWithUserKey(
     return callOpenAIDirect(userApiKey, messages, options);
   }
 
-  // Fallback para Manus Forge API
-  console.log("[OpenAI] Falling back to Manus Forge API");
+  // Padrão: IA do sistema (Anthropic/Claude)
+  console.log("[Excambia] Usando IA do sistema (Claude)");
   const response = await invokeLLM({
     messages: messages.map((m) => ({
       role: m.role,
@@ -130,7 +131,7 @@ export async function invokeLLMWithUserKey(
   const content = response.choices?.[0]?.message?.content;
   return {
     content: typeof content === "string" ? content : "",
-    model: "manus-forge",
+    model: "claude-opus-4-8",
     usage: response.usage,
   };
 }
