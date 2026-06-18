@@ -183,14 +183,14 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0 pt-4">
             {/* Inteligência */}
-            <div className="px-4 mb-2">
+            <div className="px-4 mb-2 shrink-0">
               {!isCollapsed && (
                 <span className="text-[10px] font-semibold text-[#28E7C5] uppercase tracking-wider">
                   Inteligência
                 </span>
               )}
             </div>
-            <SidebarMenu className="px-2 py-1">
+            <SidebarMenu className="px-2 py-1 shrink-0">
               {menuItems.filter(i => i.section === "inteligencia").map(item => {
                 const isActive = location === item.path;
                 return (
@@ -219,14 +219,14 @@ function DashboardLayoutContent({
             </SidebarMenu>
 
             {/* Operações */}
-            <div className="px-4 mt-6 mb-2">
+            <div className="px-4 mt-6 mb-2 shrink-0">
               {!isCollapsed && (
                 <span className="text-[10px] font-semibold text-[#28E7C5] uppercase tracking-wider">
                   Operações
                 </span>
               )}
             </div>
-            <SidebarMenu className="px-2 py-1">
+            <SidebarMenu className="px-2 py-1 shrink-0">
               {menuItems.filter(i => i.section === "operacoes").map(item => {
                 const isActive = location === item.path;
                 return (
@@ -255,14 +255,14 @@ function DashboardLayoutContent({
             </SidebarMenu>
 
             {/* Cadastros */}
-            <div className="px-4 mt-6 mb-2">
+            <div className="px-4 mt-6 mb-2 shrink-0">
               {!isCollapsed && (
                 <span className="text-[10px] font-semibold text-[#28E7C5] uppercase tracking-wider">
                   Cadastros
                 </span>
               )}
             </div>
-            <SidebarMenu className="px-2 py-1">
+            <SidebarMenu className="px-2 py-1 shrink-0">
               {menuItems.filter(i => i.section === "cadastros").map(item => {
                 const isActive = location === item.path;
                 return (
@@ -291,14 +291,14 @@ function DashboardLayoutContent({
             </SidebarMenu>
 
             {/* Sistema */}
-            <div className="px-4 mt-6 mb-2">
+            <div className="px-4 mt-6 mb-2 shrink-0">
               {!isCollapsed && (
                 <span className="text-[10px] font-semibold text-[#28E7C5] uppercase tracking-wider">
                   Sistema
                 </span>
               )}
             </div>
-            <SidebarMenu className="px-2 py-1">
+            <SidebarMenu className="px-2 py-1 shrink-0">
               {menuItems.filter(i => i.section === "sistema").map(item => {
                 const isActive = location === item.path;
                 return (
