@@ -313,17 +313,18 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   if (toolList && toolList.length > 0) {
     payload.tools = toolList;
-  }
 
-  const normalizedToolChoice = normalizeToolChoice(
-    toolChoice || tool_choice,
-    tools
-  );
-  if (normalizedToolChoice) {
-    if (normalizedToolChoice === "auto" || normalizedToolChoice === "none") {
-      payload.tool_choice = normalizedToolChoice;
-    } else {
-      // Anthropic usa formato diferente para forçar uma tool específica
+    // Anthropic exige tool_choice sempre como objeto (nunca string)
+    const normalizedToolChoice = normalizeToolChoice(
+      toolChoice || tool_choice,
+      tools
+    );
+    if (normalizedToolChoice === "auto") {
+      payload.tool_choice = { type: "auto" };
+    } else if (normalizedToolChoice === "none") {
+      payload.tool_choice = { type: "none" };
+    } else if (normalizedToolChoice) {
+      // forçar tool específica
       payload.tool_choice = {
         type: "tool",
         name: (normalizedToolChoice as any).function.name,
