@@ -5,16 +5,17 @@
  * Sem dependências novas além das já usadas no projeto (lucide-react, tailwind).
  *
  * Estágios internos (schema): demand → source → analyze → execute → finance → closed | lost
- * Rótulos na UI (decisão de produto): Demanda · Fornecedores · Viabilidade · Operação · Câmbio
+ * Rótulos na UI: ver client/src/lib/stageLabels.ts (fonte única).
+ * Câmbio saiu de coluna; `finance` agora é "Nacionalização / Entrega".
  */
 import React from "react";
 import {
-  ClipboardList, Users, FileBarChart, Ship, CircleDollarSign,
+  Users, FileBarChart, CircleDollarSign,
   Check, Sparkles, Truck, FileText, StickyNote, AlertTriangle, Clock,
 } from "lucide-react";
+import { STAGE_ORDER, STAGE_META, STAGE_ORDER_FULL, type Estagio } from "@/lib/stageLabels";
 
 /* ---------- tipos espelhando o serviço ---------- */
-type Estagio = "demand" | "source" | "analyze" | "execute" | "finance" | "closed" | "lost";
 type Autor = "usuario" | "excambia" | "sistema";
 
 export interface OperacaoEvento {
@@ -48,15 +49,13 @@ export interface OperacaoTimelineProps {
   onDecideGoNoGo?: (d: "go" | "no_go") => void;
 }
 
-/* ---------- mapeamento estágio → rótulo PT + ícone ---------- */
-const ESTEIRA: { key: Estagio; label: string; Icon: React.ComponentType<any> }[] = [
-  { key: "demand",  label: "Demanda",      Icon: ClipboardList },
-  { key: "source",  label: "Fornecedores", Icon: Users },
-  { key: "analyze", label: "Viabilidade",  Icon: FileBarChart },
-  { key: "execute", label: "Operação",     Icon: Ship },
-  { key: "finance", label: "Câmbio",       Icon: CircleDollarSign },
-];
-const ORDEM: Estagio[] = ["demand", "source", "analyze", "execute", "finance", "closed", "lost"];
+/* ---------- esteira: derivada do mapa único de rótulos ---------- */
+const ESTEIRA = STAGE_ORDER.map((key) => ({
+  key,
+  label: STAGE_META[key].label,
+  Icon: STAGE_META[key].Icon,
+}));
+const ORDEM = STAGE_ORDER_FULL;
 
 /* ---------- ícone e cor por TIPO de evento ---------- */
 function eventoVisual(tipo: string): { Icon: React.ComponentType<any>; tint: string } {

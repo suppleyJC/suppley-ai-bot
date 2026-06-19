@@ -13,21 +13,15 @@
 import React from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import {
-  ClipboardList, Users, FileBarChart, Ship, CircleDollarSign,
-  Plus, Loader2, ArrowRight,
-} from "lucide-react";
+import { ClipboardList, Plus, Loader2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import { STAGE_ORDER, STAGE_META, type Estagio } from "@/lib/stageLabels";
 
-type Estagio = "demand" | "source" | "analyze" | "execute" | "finance" | "closed" | "lost";
-
-const COLUNAS: { key: Estagio; label: string; Icon: React.ComponentType<any> }[] = [
-  { key: "demand",  label: "Demanda",      Icon: ClipboardList },
-  { key: "source",  label: "Fornecedores", Icon: Users },
-  { key: "analyze", label: "Viabilidade",  Icon: FileBarChart },
-  { key: "execute", label: "Operação",     Icon: Ship },
-  { key: "finance", label: "Câmbio",       Icon: CircleDollarSign },
-];
+const COLUNAS = STAGE_ORDER.map((key) => ({
+  key,
+  label: STAGE_META[key].label,
+  Icon: STAGE_META[key].Icon,
+}));
 
 const STATUS_LABEL: Record<string, { txt: string; cls: string }> = {
   ativa:     { txt: "Ativa",     cls: "bg-violet-50 text-violet-700" },
@@ -111,7 +105,7 @@ export default function Operacoes() {
           <ClipboardList className="mx-auto mb-3 h-10 w-10 text-slate-300" />
           <h3 className="text-sm font-semibold text-slate-700">Nenhuma operação ainda</h3>
           <p className="mx-auto mt-1 max-w-sm text-sm text-slate-400">
-            Crie a primeira operação para acompanhar toda a esteira — da demanda ao câmbio.
+            Crie a primeira operação para acompanhar toda a esteira — da demanda à entrega.
           </p>
           <button
             onClick={handleNova}
