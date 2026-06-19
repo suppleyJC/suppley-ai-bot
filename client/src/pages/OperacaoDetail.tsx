@@ -14,6 +14,7 @@ import React from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import OperacaoTimeline from "@/components/OperacaoTimeline";
+import OperacaoMarcos from "@/components/OperacaoMarcos";
 import OperacaoAnexos from "@/components/OperacaoAnexos";
 import OperacaoFinanceiro from "@/components/OperacaoFinanceiro";
 import { ArrowLeft, CalendarClock, Globe2 } from "lucide-react";
@@ -66,6 +67,7 @@ export default function OperacaoDetail() {
   }
 
   const { operacao, eventos } = data;
+  const marcos = (data as any).marcos ?? [];
   const anexos = (data as any).anexos ?? [];
   const financeiro = (data as any).financeiro ?? [];
   const st = STATUS_LABEL[operacao.status] ?? { txt: operacao.status, cls: "bg-slate-100 text-slate-500" };
@@ -159,6 +161,10 @@ export default function OperacaoDetail() {
           </div>
         </div>
       </header>
+
+      <div className="mb-6">
+        <OperacaoMarcos operacaoId={operacao.id} marcos={marcos} onChange={invalidate} />
+      </div>
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <OperacaoAnexos operacaoId={operacao.id} anexos={anexos} onChange={invalidate} />

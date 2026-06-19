@@ -13,7 +13,7 @@
 import { and, desc, eq, like, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import {
-  operacoes, operacaoEventos, operacaoEstagios, operacaoAnexos, operacaoFinanceiro, demandas,
+  operacoes, operacaoEventos, operacaoEstagios, operacaoAnexos, operacaoFinanceiro, operacaoMarcos, demandas,
   quotations, importCalculations, suppliers,
   type InsertOperacao, type Operacao,
 } from "../../drizzle/schema";
@@ -26,6 +26,10 @@ export type TipoFinanceiro =
   | "despesa_local" | "comissao" | "receita" | "outro";
 export type DirecaoFinanceiro = "entrada" | "saida";
 export type StatusFinanceiro = "previsto" | "realizado" | "cancelado";
+export type TipoMarco =
+  | "pedido_confirmado" | "producao_iniciada" | "produto_embarcado"
+  | "di_registrada" | "nacionalizado" | "entregue";
+export type StatusMarco = "planejado" | "realizado" | "cancelado";
 const ORDER: Estagio[] = ["demand", "source", "analyze", "execute", "finance", "closed"];
 
 // ---------------------------------------------------------------------------
@@ -478,6 +482,80 @@ export async function removerFinanceiro(userId: number, lancamentoId: number) {
 }
 
 // ---------------------------------------------------------------------------
+// Marcos (pontos-chave: pedido confirmado, produção, embarque, nacionalização, entrega).
+// Cada marco grava um evento na timeline (coesão Painel ↔ Excambia).
+// Imutáveis: uma vez registrado, apenas marcar como cancelado.
+// ---------------------------------------------------------------------------
+export async function registrarMarco(input: {
+  userId: number;
+  operacaoId: number;
+  tipo: TipoMarco;
+  status?: StatusMarco;
+  descricao?: string;
+  dataReferencia?: Date;
+  refTipo?: string;
+  refId?: number;
+  autor?: "usuario" | "excambia" | "sistema";
+}) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [op] = await db.select().from(operacoes)
+    .where(and(eq(operacoes.id, input.operacaoId), eq(operacoes.userId, input.userId)))
+    .limit(1);
+  if (!op) throw new Error("operação não encontrada");
+
+  // Mapeia tipo de marco → estagio esperado
+  const estagioEsperado: Record<TipoMarco, Estagio | null> = {
+    pedido_confirmado: "source",
+    producao_iniciada: "execute",
+    produto_embarcado: "execute",
+    di_registrada: "finance",
+    nacionalizado: "finance",
+    entregue: "finance",
+  };
+
+  const [res] = await db.insert(operacaoMarcos).values({
+    operacaoId: input.operacaoId,
+    userId: input.userId,
+    tipo: input.tipo,
+    status: (input.status ?? "realizado") as any,
+    descricao: input.descricao ?? null,
+    dataReferencia: input.dataReferencia ?? sql`now()`,
+    refTipo: input.refTipo ?? null,
+    refId: input.refId ?? null,
+    autor: input.autor ?? "usuario",
+  });
+  const id = (res as any).insertId as number;
+
+  await addEvento({
+    operacaoId: input.operacaoId,
+    tipo: input.tipo as any,
+    estagio: estagioEsperado[input.tipo] ?? op.estagioAtual as Estagio,
+    refTipo: "operacao_marcos",
+    refId: id,
+    autor: input.autor ?? "usuario",
+    titulo: input.descricao ?? `Marco registrado: ${input.tipo.replace(/_/g, " ")}`,
+    payload: { tipo: input.tipo, status: input.status ?? "realizado" },
+  });
+
+  const [marco] = await db.select().from(operacaoMarcos).where(eq(operacaoMarcos.id, id)).limit(1);
+  return marco ?? null;
+}
+
+export async function listarMarcos(userId: number, operacaoId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const [op] = await db.select().from(operacoes)
+    .where(and(eq(operacoes.id, operacaoId), eq(operacoes.userId, userId)))
+    .limit(1);
+  if (!op) return [];
+  return db.select().from(operacaoMarcos)
+    .where(eq(operacaoMarcos.operacaoId, operacaoId))
+    .orderBy(operacaoMarcos.dataReferencia);
+}
+
+// ---------------------------------------------------------------------------
 // Leituras (consumidas pelo Kanban e pela tela da operação)
 // ---------------------------------------------------------------------------
 export async function listOperacoes(userId: number) {
@@ -513,5 +591,8 @@ export async function getOperacao(userId: number, id: number) {
   const financeiro = await db.select().from(operacaoFinanceiro)
     .where(eq(operacaoFinanceiro.operacaoId, id))
     .orderBy(desc(operacaoFinanceiro.criadoEm));
-  return { operacao: op, eventos, estagios, anexos, financeiro };
+  const marcos = await db.select().from(operacaoMarcos)
+    .where(eq(operacaoMarcos.operacaoId, id))
+    .orderBy(operacaoMarcos.dataReferencia);
+  return { operacao: op, eventos, estagios, anexos, financeiro, marcos };
 }

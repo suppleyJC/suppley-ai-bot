@@ -1438,6 +1438,8 @@ export const operacaoEventos = mysqlTable(
       "di_registrada", "cambio_fechado", "mensagem", "nota_interna", "alerta_ia",
       "estagio_avancado", "anexo_adicionado", "anexo_removido",
       "financeiro_lancado", "financeiro_removido",
+      "pedido_confirmado", "producao_iniciada", "produto_embarcado",
+      "nacionalizado", "entregue",
     ]).notNull(),
     estagio: mysqlEnum("estagio",
       ["demand", "source", "analyze", "execute", "finance", "closed", "lost"]).notNull(),
@@ -1541,6 +1543,40 @@ export const operacaoFinanceiro = mysqlTable(
 );
 export type OperacaoFinanceiro = typeof operacaoFinanceiro.$inferSelect;
 export type InsertOperacaoFinanceiro = typeof operacaoFinanceiro.$inferInsert;
+
+/**
+ * Marcos da operação: pontos-chave no fluxo de produção/embarque/nacionalização.
+ * Cada marco gera um evento na timeline (coesão Painel ↔ Excambia).
+ * Marcos são imutáveis (uma vez registrado, não se remove — apenas marcar como cancelado).
+ */
+export const operacaoMarcos = mysqlTable(
+  "operacao_marcos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    operacaoId: int("operacaoId").notNull(),
+    userId: int("userId").notNull(),
+
+    tipo: mysqlEnum("tipo", [
+      "pedido_confirmado", "producao_iniciada", "produto_embarcado",
+      "di_registrada", "nacionalizado", "entregue",
+    ]).notNull(),
+
+    status: mysqlEnum("status", ["planejado", "realizado", "cancelado"])
+      .default("realizado").notNull(),
+
+    descricao: text("descricao"),
+    dataReferencia: timestamp("dataReferencia").notNull(),
+
+    refTipo: varchar("refTipo", { length: 40 }),
+    refId: int("refId"),
+
+    autor: mysqlEnum("autor", ["usuario", "excambia", "sistema"]).default("usuario").notNull(),
+    criadoEm: timestamp("criadoEm").defaultNow().notNull(),
+  },
+  (t) => ({ byOperacao: index("idx_marcos_operacao").on(t.operacaoId) })
+);
+export type OperacaoMarco = typeof operacaoMarcos.$inferSelect;
+export type InsertOperacaoMarco = typeof operacaoMarcos.$inferInsert;
 
 // ============================================================
 // MOTOR V2 SCHEMAS — Market Intelligence (Comex Stat)

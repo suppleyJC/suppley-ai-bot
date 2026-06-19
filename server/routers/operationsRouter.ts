@@ -142,4 +142,24 @@ export const operationsRouter = router({
   removeFinanceiro: protectedProcedure
     .input(z.object({ lancamentoId: z.number() }))
     .mutation(({ ctx, input }) => svc.removerFinanceiro(ctx.user.id, input.lancamentoId)),
+
+  // --- Marcos (production/shipment/nationalization milestones) ---
+  listMarcos: protectedProcedure
+    .input(z.object({ operacaoId: z.number() }))
+    .query(({ ctx, input }) => svc.listarMarcos(ctx.user.id, input.operacaoId)),
+
+  registrarMarco: protectedProcedure
+    .input(z.object({
+      operacaoId: z.number(),
+      tipo: z.enum([
+        "pedido_confirmado", "producao_iniciada", "produto_embarcado",
+        "di_registrada", "nacionalizado", "entregue",
+      ]),
+      status: z.enum(["planejado", "realizado", "cancelado"]).optional(),
+      descricao: z.string().optional(),
+      dataReferencia: z.coerce.date().optional(),
+      refTipo: z.string().optional(),
+      refId: z.number().optional(),
+    }))
+    .mutation(({ ctx, input }) => svc.registrarMarco({ userId: ctx.user.id, ...input })),
 });

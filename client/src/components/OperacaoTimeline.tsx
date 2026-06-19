@@ -12,6 +12,7 @@ import React from "react";
 import {
   Users, FileBarChart, CircleDollarSign,
   Check, Sparkles, Truck, FileText, StickyNote, AlertTriangle, Clock, Paperclip,
+  ShoppingCart, Factory, FileCheck, Zap, PackageCheck,
 } from "lucide-react";
 import { STAGE_ORDER, STAGE_META, STAGE_ORDER_FULL, type Estagio } from "@/lib/stageLabels";
 
@@ -70,13 +71,18 @@ function eventoVisual(tipo: string): { Icon: React.ComponentType<any>; tint: str
     cotacao_recebida:  { Icon: FileText, tint: "text-blue-600 bg-blue-50" },
     cotacao_extraida:  { Icon: FileText, tint: "text-blue-600 bg-blue-50" },
     rfq_enviada:       { Icon: Users, tint: "text-violet-600 bg-violet-50" },
-    di_registrada:     { Icon: FileText, tint: "text-amber-600 bg-amber-50" },
     cambio_fechado:    { Icon: CircleDollarSign, tint: "text-emerald-600 bg-emerald-50" },
-    estagio_avancado:  { Icon: Truck, tint: "text-violet-600 bg-violet-50" },
+    estagio_avancado:  { Icon: Check, tint: "text-violet-600 bg-violet-50" },
     anexo_adicionado:  { Icon: Paperclip, tint: "text-slate-600 bg-slate-100" },
     anexo_removido:    { Icon: Paperclip, tint: "text-slate-400 bg-slate-50" },
     financeiro_lancado:  { Icon: CircleDollarSign, tint: "text-emerald-600 bg-emerald-50" },
     financeiro_removido: { Icon: CircleDollarSign, tint: "text-slate-400 bg-slate-50" },
+    pedido_confirmado:   { Icon: ShoppingCart, tint: "text-violet-600 bg-violet-50" },
+    producao_iniciada:   { Icon: Factory, tint: "text-orange-600 bg-orange-50" },
+    produto_embarcado:   { Icon: Truck, tint: "text-blue-600 bg-blue-50" },
+    di_registrada:       { Icon: FileCheck, tint: "text-amber-600 bg-amber-50" },
+    nacionalizado:       { Icon: Zap, tint: "text-teal-600 bg-teal-50" },
+    entregue:            { Icon: PackageCheck, tint: "text-emerald-600 bg-emerald-50" },
     nota_interna:      { Icon: StickyNote, tint: "text-slate-500 bg-slate-100" },
     alerta_ia:         { Icon: Sparkles, tint: "text-teal-600 bg-teal-50" },
     mensagem:          { Icon: Sparkles, tint: "text-teal-600 bg-teal-50" },
