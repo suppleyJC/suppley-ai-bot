@@ -91,7 +91,7 @@ em `operacao_eventos` (timeline = fonte de verdade).
 |---|---|---|---|
 | 1 | `STAGE_LABELS` (Câmbio sai de coluna → "Nacionalização/Entrega") | Frontend (risco zero) | ✅ Completo — stageLabels.ts criado, Operacoes.tsx e OperacaoTimeline.tsx atualizados |
 | 2 | Campos novos da Demanda (`prioridade`, `prazoDesejado`, `responsavelId`, `origemDesejada`) | Migração aditiva | ✅ Completo — schema + migration 0020 + service/router/frontend (commits `3fc8721`, `a2b3353`). ⏳ Falta aplicar a migration em produção |
-| 3 | Tabela `operacao_anexos` | Migração nova | ⬜ |
+| 3 | Tabela `operacao_anexos` | Migração nova | ✅ Completo — schema + migration 0021 + service (anexar/listar/remover) + router + UI (`OperacaoAnexos.tsx`). Eventos `anexo_adicionado`/`anexo_removido` na timeline (commit `9974e3f`). ⏳ Falta aplicar migration |
 | 4 | Tabela `operacao_financeiro` (camada transversal) | Migração nova | ⬜ |
 | 5 | Serviços compartilhados: `registrarMarco`, `anexarDocumento`, `lancarFinanceiro` | Backend | ⬜ |
 | 6 | 5 tools novas da Excambia (`enviar_rfq`, `registrar_cotacao`, `registrar_marco_producao`, `registrar_nacionalizacao`, `lancar_financeiro`) | Backend | ⬜ |
@@ -150,9 +150,11 @@ docker restart suppley-app
 
 1. ✅ **FASE 1 finalizado** — COMANDO 1 (stageLabels) completo e commitado.
 2. ✅ **COMANDO 2 finalizado** — schema + migration 0020 + service (`createOperacao`/`updateOperacao`) + router (`update`) + frontend (`priorityLabels.ts`, badge no kanban, barra editável no detalhe).
-   - ⏳ **Única pendência:** aplicar a migration `0020_operacoes_fase2_fields.sql` no banco de produção.
-3. **COMANDO 3+ Próximos** — tabelas novas (`operacao_anexos`, `operacao_financeiro`) e integração com Excambia.
-4. **Validar o cálculo real** do NCM 7308.40.00 (II 25%) pela aba de cálculo (pendente desde antes).
+3. ✅ **COMANDO 3 finalizado** — tabela `operacao_anexos` + migration 0021 + service (anexar/listar/remover) + router + UI (`OperacaoAnexos.tsx`); eventos de anexo na timeline.
+4. **COMANDO 4+ Próximos** — `operacao_financeiro` (camada transversal) e integração com Excambia (tools).
+5. **Validar o cálculo real** do NCM 7308.40.00 (II 25%) pela aba de cálculo (pendente desde antes).
+
+> ⏳ **Migrations pendentes de aplicação em produção:** `0020_operacoes_fase2_fields.sql` e `0021_operacao_anexos.sql`.
 
 ---
 
