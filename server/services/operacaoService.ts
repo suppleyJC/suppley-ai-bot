@@ -13,13 +13,14 @@
 import { and, desc, eq, like, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import {
-  operacoes, operacaoEventos, operacaoEstagios, demandas,
+  operacoes, operacaoEventos, operacaoEstagios, operacaoAnexos, demandas,
   quotations, importCalculations, suppliers,
   type InsertOperacao, type Operacao,
 } from "../../drizzle/schema";
 
 export type Estagio = "demand" | "source" | "analyze" | "execute" | "finance" | "closed" | "lost";
 export type Prioridade = "baixa" | "media" | "alta" | "critica";
+export type TipoAnexo = "desenho" | "pdf" | "imagem" | "especificacao" | "catalogo" | "cotacao" | "outro";
 const ORDER: Estagio[] = ["demand", "source", "analyze", "execute", "finance", "closed"];
 
 // ---------------------------------------------------------------------------
@@ -275,6 +276,99 @@ export async function decideGoNoGo(input: {
 }
 
 // ---------------------------------------------------------------------------
+// Anexos (desenhos, PDFs, imagens, especificações, catálogos, cotações)
+//
+// O arquivo em si já foi enviado ao storage (via calculations.uploadQuotation);
+// aqui só registramos o metadado + gravamos o evento na timeline (coesão).
+// ---------------------------------------------------------------------------
+export async function anexarDocumento(input: {
+  userId: number;
+  operacaoId: number;
+  tipo?: TipoAnexo;
+  nome: string;
+  fileKey: string;
+  fileUrl: string;
+  contentType?: string;
+  tamanhoBytes?: number;
+  descricao?: string;
+  autor?: "usuario" | "excambia" | "sistema";
+}) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [op] = await db.select().from(operacoes)
+    .where(and(eq(operacoes.id, input.operacaoId), eq(operacoes.userId, input.userId)))
+    .limit(1);
+  if (!op) throw new Error("operação não encontrada");
+
+  const [res] = await db.insert(operacaoAnexos).values({
+    operacaoId: input.operacaoId,
+    userId: input.userId,
+    tipo: (input.tipo ?? "outro") as any,
+    nome: input.nome,
+    fileKey: input.fileKey,
+    fileUrl: input.fileUrl,
+    contentType: input.contentType ?? null,
+    tamanhoBytes: input.tamanhoBytes ?? null,
+    descricao: input.descricao ?? null,
+    autor: input.autor ?? "usuario",
+    estagio: op.estagioAtual as any,
+  });
+  const id = (res as any).insertId as number;
+
+  await addEvento({
+    operacaoId: input.operacaoId,
+    tipo: "anexo_adicionado",
+    estagio: op.estagioAtual as Estagio,
+    refTipo: "operacao_anexos",
+    refId: id,
+    autor: input.autor ?? "usuario",
+    titulo: `Anexo adicionado: ${input.nome}`,
+    payload: { tipo: input.tipo ?? "outro", nome: input.nome },
+  });
+
+  const [anexo] = await db.select().from(operacaoAnexos).where(eq(operacaoAnexos.id, id)).limit(1);
+  return anexo ?? null;
+}
+
+export async function listarAnexos(userId: number, operacaoId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const [op] = await db.select().from(operacoes)
+    .where(and(eq(operacoes.id, operacaoId), eq(operacoes.userId, userId)))
+    .limit(1);
+  if (!op) return [];
+  return db.select().from(operacaoAnexos)
+    .where(eq(operacaoAnexos.operacaoId, operacaoId))
+    .orderBy(desc(operacaoAnexos.criadoEm));
+}
+
+export async function removerAnexo(userId: number, anexoId: number) {
+  const db = await getDb();
+  if (!db) return { ok: false, message: "sem conexão" };
+
+  const [anexo] = await db.select().from(operacaoAnexos)
+    .where(eq(operacaoAnexos.id, anexoId)).limit(1);
+  if (!anexo) return { ok: false, message: "anexo não encontrado" };
+
+  // Confirma que a operação pertence ao usuário
+  const [op] = await db.select().from(operacoes)
+    .where(and(eq(operacoes.id, anexo.operacaoId), eq(operacoes.userId, userId)))
+    .limit(1);
+  if (!op) return { ok: false, message: "sem permissão" };
+
+  await db.delete(operacaoAnexos).where(eq(operacaoAnexos.id, anexoId));
+  await addEvento({
+    operacaoId: anexo.operacaoId,
+    tipo: "anexo_removido",
+    estagio: op.estagioAtual as Estagio,
+    autor: "usuario",
+    titulo: `Anexo removido: ${anexo.nome}`,
+  });
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
 // Leituras (consumidas pelo Kanban e pela tela da operação)
 // ---------------------------------------------------------------------------
 export async function listOperacoes(userId: number) {
@@ -304,5 +398,8 @@ export async function getOperacao(userId: number, id: number) {
     .orderBy(desc(operacaoEventos.criadoEm));
   const estagios = await db.select().from(operacaoEstagios)
     .where(eq(operacaoEstagios.operacaoId, id));
-  return { operacao: op, eventos, estagios };
+  const anexos = await db.select().from(operacaoAnexos)
+    .where(eq(operacaoAnexos.operacaoId, id))
+    .orderBy(desc(operacaoAnexos.criadoEm));
+  return { operacao: op, eventos, estagios, anexos };
 }

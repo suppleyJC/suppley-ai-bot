@@ -90,4 +90,26 @@ export const operationsRouter = router({
       payload: z.unknown().optional(),
     }))
     .mutation(({ input }) => svc.addEvento({ ...input } as any)),
+
+  // --- Anexos (o arquivo já foi enviado via calculations.uploadQuotation) ---
+  listAnexos: protectedProcedure
+    .input(z.object({ operacaoId: z.number() }))
+    .query(({ ctx, input }) => svc.listarAnexos(ctx.user.id, input.operacaoId)),
+
+  addAnexo: protectedProcedure
+    .input(z.object({
+      operacaoId: z.number(),
+      tipo: z.enum(["desenho", "pdf", "imagem", "especificacao", "catalogo", "cotacao", "outro"]).optional(),
+      nome: z.string().min(1),
+      fileKey: z.string().min(1),
+      fileUrl: z.string().min(1),
+      contentType: z.string().optional(),
+      tamanhoBytes: z.number().optional(),
+      descricao: z.string().optional(),
+    }))
+    .mutation(({ ctx, input }) => svc.anexarDocumento({ userId: ctx.user.id, ...input })),
+
+  removeAnexo: protectedProcedure
+    .input(z.object({ anexoId: z.number() }))
+    .mutation(({ ctx, input }) => svc.removerAnexo(ctx.user.id, input.anexoId)),
 });

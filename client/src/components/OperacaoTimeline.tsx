@@ -11,7 +11,7 @@
 import React from "react";
 import {
   Users, FileBarChart, CircleDollarSign,
-  Check, Sparkles, Truck, FileText, StickyNote, AlertTriangle, Clock,
+  Check, Sparkles, Truck, FileText, StickyNote, AlertTriangle, Clock, Paperclip,
 } from "lucide-react";
 import { STAGE_ORDER, STAGE_META, STAGE_ORDER_FULL, type Estagio } from "@/lib/stageLabels";
 
@@ -73,6 +73,8 @@ function eventoVisual(tipo: string): { Icon: React.ComponentType<any>; tint: str
     di_registrada:     { Icon: FileText, tint: "text-amber-600 bg-amber-50" },
     cambio_fechado:    { Icon: CircleDollarSign, tint: "text-emerald-600 bg-emerald-50" },
     estagio_avancado:  { Icon: Truck, tint: "text-violet-600 bg-violet-50" },
+    anexo_adicionado:  { Icon: Paperclip, tint: "text-slate-600 bg-slate-100" },
+    anexo_removido:    { Icon: Paperclip, tint: "text-slate-400 bg-slate-50" },
     nota_interna:      { Icon: StickyNote, tint: "text-slate-500 bg-slate-100" },
     alerta_ia:         { Icon: Sparkles, tint: "text-teal-600 bg-teal-50" },
     mensagem:          { Icon: Sparkles, tint: "text-teal-600 bg-teal-50" },

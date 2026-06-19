@@ -14,6 +14,7 @@ import React from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import OperacaoTimeline from "@/components/OperacaoTimeline";
+import OperacaoAnexos from "@/components/OperacaoAnexos";
 import { ArrowLeft, CalendarClock, Globe2 } from "lucide-react";
 import { PRIORITY_ORDER, getPriorityMeta } from "@/lib/priorityLabels";
 
@@ -64,6 +65,7 @@ export default function OperacaoDetail() {
   }
 
   const { operacao, eventos } = data;
+  const anexos = (data as any).anexos ?? [];
   const st = STATUS_LABEL[operacao.status] ?? { txt: operacao.status, cls: "bg-slate-100 text-slate-500" };
   const op = operacao as typeof operacao & {
     prioridade?: "baixa" | "media" | "alta" | "critica" | null;
@@ -155,6 +157,10 @@ export default function OperacaoDetail() {
           </div>
         </div>
       </header>
+
+      <div className="mb-6">
+        <OperacaoAnexos operacaoId={operacao.id} anexos={anexos} onChange={invalidate} />
+      </div>
 
       <OperacaoTimeline
         operacao={operacao as any}

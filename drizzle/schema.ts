@@ -1436,7 +1436,7 @@ export const operacaoEventos = mysqlTable(
       "demanda_criada", "operacao_criada", "rfq_enviada", "cotacao_recebida",
       "cotacao_extraida", "calculo_executado", "go_decidido", "no_go_decidido",
       "di_registrada", "cambio_fechado", "mensagem", "nota_interna", "alerta_ia",
-      "estagio_avancado",
+      "estagio_avancado", "anexo_adicionado", "anexo_removido",
     ]).notNull(),
     estagio: mysqlEnum("estagio",
       ["demand", "source", "analyze", "execute", "finance", "closed", "lost"]).notNull(),
@@ -1468,6 +1468,32 @@ export const operacaoEstagios = mysqlTable(
   (t) => ({ byOperacao: index("idx_estagios_operacao").on(t.operacaoId) })
 );
 export type OperacaoEstagio = typeof operacaoEstagios.$inferSelect;
+
+/** Anexos da operação: desenhos, PDFs, imagens, especificações, catálogos, cotações. */
+export const operacaoAnexos = mysqlTable(
+  "operacao_anexos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    operacaoId: int("operacaoId").notNull(),
+    userId: int("userId").notNull(),
+    tipo: mysqlEnum("tipo", [
+      "desenho", "pdf", "imagem", "especificacao", "catalogo", "cotacao", "outro",
+    ]).default("outro").notNull(),
+    nome: varchar("nome", { length: 255 }).notNull(),
+    fileKey: varchar("fileKey", { length: 512 }).notNull(),
+    fileUrl: varchar("fileUrl", { length: 1024 }).notNull(),
+    contentType: varchar("contentType", { length: 120 }),
+    tamanhoBytes: bigint("tamanhoBytes", { mode: "number" }),
+    descricao: text("descricao"),
+    autor: mysqlEnum("autor", ["usuario", "excambia", "sistema"]).default("usuario").notNull(),
+    estagio: mysqlEnum("estagio",
+      ["demand", "source", "analyze", "execute", "finance", "closed", "lost"]),
+    criadoEm: timestamp("criadoEm").defaultNow().notNull(),
+  },
+  (t) => ({ byOperacao: index("idx_anexos_operacao").on(t.operacaoId) })
+);
+export type OperacaoAnexo = typeof operacaoAnexos.$inferSelect;
+export type InsertOperacaoAnexo = typeof operacaoAnexos.$inferInsert;
 
 // ============================================================
 // MOTOR V2 SCHEMAS — Market Intelligence (Comex Stat)
