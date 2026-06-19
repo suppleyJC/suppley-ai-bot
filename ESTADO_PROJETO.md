@@ -3,9 +3,9 @@
 > Documento-síntese do estado atual da plataforma. Serve como ponto de retomada
 > entre sessões: o que está pronto, o que está em andamento e o que falta.
 >
-> **Última atualização:** 2026-06-19
+> **Última atualização:** 2026-06-19 (Fase 1 concluída, Fase 2 iniciada)
 > **Branch de trabalho:** `claude/manus-migration-independent-1kfrll`
-> **Versão:** 2.0.0
+> **Versão:** 2.1.0
 
 ---
 
@@ -82,15 +82,15 @@ Docker), está em produção em `calculasuppley.com.br`.
 - ⚠️ **Atenção:** se a elevação DCC não for renovada, em **2026-06-23** o aço volta a ~12,6%.
   Re-rodar `build_ncm_seed.py` com o xlsx atualizado quando houver mudança da CAMEX.
 
-### 3.2 Redesenho do Painel de Operações — **NÃO INICIADO**
+### 3.2 Redesenho do Painel de Operações — **FASE 1 COMPLETA / FASE 2 EM ANDAMENTO**
 Pacote recebido (`SPEC_PAINEL.md` + `INSTRUCOES_PAINEL.md`), 9 comandos.
 Princípio: **Painel e Excambia chamam o MESMO serviço e gravam o MESMO evento**
 em `operacao_eventos` (timeline = fonte de verdade).
 
 | # | Comando | Tipo | Status |
 |---|---|---|---|
-| 1 | `STAGE_LABELS` (Câmbio sai de coluna → "Nacionalização/Entrega") | Frontend (risco zero) | ⬜ |
-| 2 | Campos novos da Demanda (`prioridade`, `prazoDesejado`, `responsavelId`, `origemDesejada`) | Migração aditiva | ⬜ |
+| 1 | `STAGE_LABELS` (Câmbio sai de coluna → "Nacionalização/Entrega") | Frontend (risco zero) | ✅ Completo — stageLabels.ts criado, Operacoes.tsx e OperacaoTimeline.tsx atualizados |
+| 2 | Campos novos da Demanda (`prioridade`, `prazoDesejado`, `responsavelId`, `origemDesejada`) | Migração aditiva | 🔄 Schema pronto — migration 0020 gerada, commit `3fc8721` |
 | 3 | Tabela `operacao_anexos` | Migração nova | ⬜ |
 | 4 | Tabela `operacao_financeiro` (camada transversal) | Migração nova | ⬜ |
 | 5 | Serviços compartilhados: `registrarMarco`, `anexarDocumento`, `lancarFinanceiro` | Backend | ⬜ |
@@ -148,10 +148,13 @@ docker restart suppley-app
 
 ## 6. Próximos passos sugeridos
 
-1. **Validar o cálculo real** do NCM 7308.40.00 (II 25%) pela aba de cálculo.
-2. **Decidir escopo** do redesenho do Painel de Operações (9 comandos).
-3. Começar pelo **COMANDO 1** (rótulos) — risco zero, sem migração.
-4. Definir quem aplica as **migrações de banco** em produção.
+1. ✅ **FASE 1 finalizado** — COMANDO 1 (stageLabels) completo e commitado.
+2. 🔄 **FASE 2 iniciado** — COMANDO 2 (schema operacoes) pronto, aguardando:
+   - Aplicação da migration 0020 no banco de dados
+   - Atualização dos services/routers para manipular os novos campos
+   - Atualização das páginas Frontend (`OperacaoDetail.tsx`, formulário de criação)
+3. **COMANDO 3+ Próximos** — tabelas novas (`operacao_anexos`, `operacao_financeiro`) e integração com Excambia.
+4. **Validar o cálculo real** do NCM 7308.40.00 (II 25%) pela aba de cálculo (pendente desde antes).
 
 ---
 
