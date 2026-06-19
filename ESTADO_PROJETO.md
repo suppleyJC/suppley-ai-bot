@@ -94,7 +94,7 @@ em `operacao_eventos` (timeline = fonte de verdade).
 | 3 | Tabela `operacao_anexos` | Migração nova | ✅ Completo — schema + migration 0021 + service (anexar/listar/remover) + router + UI (`OperacaoAnexos.tsx`). Eventos `anexo_adicionado`/`anexo_removido` na timeline (commit `9974e3f`). ⏳ Falta aplicar migration |
 | 4 | Tabela `operacao_financeiro` (camada transversal) | Migração nova | ✅ Completo — schema + migration 0022 + service (lançar/listar/remover) + router + UI (`OperacaoFinanceiro.tsx`) com resumo entradas/saídas/saldo (commit `9176679`). ⏳ Falta aplicar migration |
 | 5 | Serviços compartilhados: `registrarMarco`, `anexarDocumento`, `lancarFinanceiro` | Backend | ✅ Completo — os 3 serviços estão implementados em `operacaoService.ts` + routers + UI (commit `5749d29`). Base pronta para tools da Excambia |
-| 6 | 5 tools novas da Excambia (`enviar_rfq`, `registrar_cotacao`, `registrar_marco_producao`, `registrar_nacionalizacao`, `lancar_financeiro`) | Backend | ⬜ |
+| 6 | 5 tools novas da Excambia (`enviar_rfq`, `registrar_cotacao`, `registrar_marco_producao`, `registrar_nacionalizacao`, `lancar_financeiro`) | Backend | ✅ Completo — 5 tools implementadas em `server/agent/tools/`, registradas no `index.ts`, integradas ao orchestrator. Sem migrations necessárias. |
 | 7 | Vocabulário único de eventos (ampliar enum `operacao_eventos.tipo`) | Migração aditiva | ⬜ |
 | 8 | Câmbio como transversal (card "Câmbio do dia" em Inteligência de Mercado) | Frontend | ⬜ |
 | 9 | Validar coesão (mesma ação no Painel e na Excambia gera o mesmo evento) | Teste | ⬜ |

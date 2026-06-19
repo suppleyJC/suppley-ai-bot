@@ -14,18 +14,21 @@ import type { Tool } from "../../_core/llm";
 import { montarCalculoTool } from "./montarCalculo";
 import { classificarNcmTool } from "./classificarNcm";
 import { compararCotacoesTool } from "./compararCotacoes";
-// À medida que forem implementadas, importar e registrar:
-// import { enviarRfqTool } from "./enviarRfq";
-// import { consultarMercadoTool } from "./consultarMercado";
-// import { preverTendenciaTool } from "./preverTendencia";
+import { enviarRfqTool } from "./enviarRfq";
+import { registrarCotacaoTool } from "./registrarCotacao";
+import { registrarMarcoProducaoTool } from "./registrarMarcoProducao";
+import { registrarNacionalizacaoTool } from "./registrarNacionalizacao";
+import { lancarFinanceiroTool } from "./lancarFinanceiroTool";
 
 const ALL_TOOLS: AgentTool[] = [
   montarCalculoTool,
   classificarNcmTool,
   compararCotacoesTool,
-  // enviarRfqTool,
-  // consultarMercadoTool,
-  // preverTendenciaTool,
+  enviarRfqTool,
+  registrarCotacaoTool,
+  registrarMarcoProducaoTool,
+  registrarNacionalizacaoTool,
+  lancarFinanceiroTool,
 ];
 
 const byName = new Map<string, AgentTool>(ALL_TOOLS.map((t) => [t.name, t]));
