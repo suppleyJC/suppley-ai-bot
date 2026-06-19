@@ -25,6 +25,10 @@ services:
       - suppley_net
 
   app:
+    # Usa exatamente a imagem que o scripts/deploy.sh builda (docker build -t
+    # suppley-app:latest). Sem isto, o compose criava/reusava uma imagem própria
+    # (suppley-ai-bot_app), podendo subir um build antigo em cache.
+    image: suppley-app:latest
     build:
       context: .
       dockerfile: Dockerfile
