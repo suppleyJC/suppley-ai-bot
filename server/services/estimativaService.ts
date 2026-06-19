@@ -102,6 +102,21 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
       if (rates) {
         iiRate ??= rates.iiRate / 10000;   // bp → fração
         ipiRate ??= rates.ipiRate / 10000;
+        // A II vem do seed oficial MDIC (notes registra a origem). Só alertamos
+        // quando a alíquota é uma estimativa por capítulo (fonte não cobriu o NCM)
+        // ou quando há uma elevação temporária (DCC) prestes a expirar.
+        const notes = rates.notes ?? "";
+        if (/estimad/i.test(notes)) {
+          ncmWarnings.push(
+            `NCM ${p.ncmCode} (${p.productName}): II ${(iiRate * 100).toFixed(1)}% ESTIMADA ` +
+            `por capítulo (não consta na TEC/aplicada). Confirme na TEC antes de fechar.`
+          );
+        } else if (/DCC|elevac|elevaç/i.test(notes)) {
+          ncmWarnings.push(
+            `NCM ${p.ncmCode} (${p.productName}): II ${(iiRate * 100).toFixed(1)}% é elevação ` +
+            `temporária (DCC). ${notes}. Reconfirme a vigência antes de fechar.`
+          );
+        }
       } else {
         iiRate ??= DEFAULT_II_FALLBACK;
         ipiRate ??= 0;

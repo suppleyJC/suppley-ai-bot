@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
 #
-# Carrega a tabela NCM (códigos + descrições + alíquotas-padrão por capítulo)
-# no banco MySQL de produção, a partir de data/ncm_import.sql.gz.
+# Carrega as alíquotas de II (Imposto de Importação) por NCM no banco MySQL de
+# produção, a partir de data/ncm_import.sql.gz.
 #
-# Idempotente: usa INSERT ... ON DUPLICATE KEY UPDATE (atualiza só a descrição,
-# preservando alíquotas reais já cadastradas). Pode rodar quantas vezes quiser.
+# O .sql.gz é gerado por scripts/build_ncm_seed.py a partir do arquivo OFICIAL do
+# MDIC (Anexos I a X da Res. GECEX 272/21 — Tarifas Vigentes), consolidando TEC +
+# alíquota aplicada + elevações temporárias (DCC, ex.: aço a 25%).
+#
+# Idempotente: usa INSERT ... ON DUPLICATE KEY UPDATE que atualiza APENAS iiRate +
+# notes, preservando IPI/PIS/COFINS/descrição já cadastrados. Pode rodar à vontade.
+#
+# PARA ATUALIZAR (quando a CAMEX mudar alíquotas):
+#   1. Baixe o xlsx novo das Tarifas Vigentes (gov.br/mdic)
+#   2. python3 scripts/build_ncm_seed.py /caminho/tec_vigente.xlsx
+#   3. bash scripts/load-ncm.sh
 #
 # USO (no servidor, dentro de /opt/suppley/suppley-ai-bot):
 #   bash scripts/load-ncm.sh
