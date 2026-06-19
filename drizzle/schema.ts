@@ -1403,8 +1403,14 @@ export const operacoes = mysqlTable(
     regimeTributario: mysqlEnum("regimeTributario",
       ["lucro_real", "lucro_presumido", "simples_nacional"]),
     origemPais: varchar("origemPais", { length: 60 }),
+    origemDesejada: varchar("origemDesejada", { length: 60 }),
     valorEstimadoBrlCents: int("valorEstimadoBrlCents"),
     margemEstimadaBp: int("margemEstimadaBp"),
+
+    prioridade: mysqlEnum("prioridade", ["baixa", "media", "alta", "critica"])
+      .default("media"),
+    prazoDesejado: timestamp("prazoDesejado"),
+    responsavelId: int("responsavelId"),
 
     decisaoGoNoGo: json("decisaoGoNoGo"),
 
