@@ -162,8 +162,7 @@ docker restart suppley-app
 ### Status de Produção
 
 - ✅ Migrations 0020-0023 foram aplicadas com sucesso ao banco de produção (confirmado com checagem pós-execução).
-- ⏳ Deploy do Docker: falhou na pull de `mysql:8.0-alpine` (network/registry issue, não relacionado ao código).
-  - Solução: retentar `bash scripts/deploy.sh production` quando a conectividade Docker for restaurada.
+- ✅ Deploy do Docker: corrigido. A tag `mysql:8.0-alpine` não existe no Docker Hub (MySQL nunca publicou Alpine para o 8.0). Trocado para `mysql:8.0` oficial nos dois compose files. O volume `mysql_data` persiste — dados de produção intactos.
 
 ---
 

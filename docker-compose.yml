@@ -36,7 +36,7 @@ services:
 
   # MySQL Database
   db:
-    image: mysql:8.0-alpine
+    image: mysql:8.0
     container_name: suppley-mysql
     environment:
       MYSQL_DATABASE: ${DB_NAME:-suppley_calc}
