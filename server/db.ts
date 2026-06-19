@@ -17,5 +17,6 @@ export * from "./db/calculationsDb";
 export * from "./db/settingsDb";
 export * from "./db/quotationsDb";
 export * from "./db/chatDb";
+export * from "./db/conversaDb";
 export * from "./db/industriesDb";
 export * from "./db/messagingDb";

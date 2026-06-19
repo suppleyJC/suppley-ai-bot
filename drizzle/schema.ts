@@ -582,23 +582,62 @@ export type InsertQuotation = typeof quotations.$inferInsert;
 export const sofiaChatMessages = mysqlTable("sofia_chat_messages", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  
+
+  // Conversa à qual a mensagem pertence (Fase 3). Nullable para retrocompat:
+  // mensagens antigas (pré-Fase 3) ficam sem conversa e são agrupadas no histórico legado.
+  conversaId: int("conversaId"),
+
   // Message content
   role: mysqlEnum("role", ["user", "assistant", "system"]).notNull(),
   content: text("content").notNull(),
-  
+
   // Session tracking (para agrupar conversas)
   sessionId: varchar("sessionId", { length: 64 }),
-  
+
   // Metadata
   model: varchar("model", { length: 100 }),
   tokensUsed: int("tokensUsed"),
-  
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type SofiaChatMessage = typeof sofiaChatMessages.$inferSelect;
 export type InsertSofiaChatMessage = typeof sofiaChatMessages.$inferInsert;
+
+/**
+ * Conversas (Fase 3) — cada thread de chat com a Excambia é uma conversa
+ * nomeável, retomável e (opcionalmente) vinculada a uma Operação. É o que
+ * permite a sidebar de histórico e a sincronização chat ↔ Painel.
+ */
+export const conversas = mysqlTable(
+  "conversas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+
+    titulo: varchar("titulo", { length: 255 }).notNull(),
+    status: mysqlEnum("status", ["ativa", "arquivada"]).default("ativa").notNull(),
+
+    // Vínculo opcional com uma operação (sincronização bidirecional chat ↔ Painel).
+    operacaoId: int("operacaoId"),
+
+    // Estágio do funil em que a conversa está operando (espelha a operação quando vinculada).
+    estagio: mysqlEnum("estagio",
+      ["demand", "source", "analyze", "execute", "finance", "closed", "lost"]),
+
+    // Para ordenar a sidebar pela atividade mais recente.
+    ultimaMensagemEm: timestamp("ultimaMensagemEm"),
+
+    criadaEm: timestamp("criadaEm").defaultNow().notNull(),
+    atualizadaEm: timestamp("atualizadaEm").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    byUser: index("idx_conversas_user").on(t.userId),
+    byOperacao: index("idx_conversas_operacao").on(t.operacaoId),
+  })
+);
+export type Conversa = typeof conversas.$inferSelect;
+export type InsertConversa = typeof conversas.$inferInsert;
 
 /**
  * Excambia Learning Context - Aprendizado persistente da IA

@@ -182,19 +182,94 @@ saveChatMessage: protectedProcedure
     role: z.enum(["user", "assistant", "system"]),
     content: z.string(),
     sessionId: z.string().optional(),
+    conversaId: z.number().optional(),
   }))
   .mutation(async ({ ctx, input }) => {
-    return db.saveChatMessage({
+    const saved = await db.saveChatMessage({
       userId: ctx.user.id,
       role: input.role,
       content: input.content,
       sessionId: input.sessionId || null,
+      conversaId: input.conversaId ?? null,
     });
+    // Mantém a sidebar ordenada por atividade recente.
+    if (input.conversaId) await db.touchConversa(input.conversaId);
+    return saved;
   }),
 
 clearChatHistory: protectedProcedure.mutation(async ({ ctx }) => {
   return db.clearChatHistory(ctx.user.id);
 }),
+
+// ==================== Conversas (Fase 3) ====================
+// Threads de chat nomeáveis, retomáveis e (opcionalmente) ligadas a uma Operação.
+
+listConversas: protectedProcedure
+  .input(z.object({ status: z.enum(["ativa", "arquivada"]).optional() }).optional())
+  .query(async ({ ctx, input }) => {
+    const conversas = await db.listConversas(ctx.user.id, { status: input?.status });
+    const legacyCount = await db.countLegacyMessages(ctx.user.id);
+    return { conversas, legacyCount };
+  }),
+
+createConversa: protectedProcedure
+  .input(z.object({
+    titulo: z.string().optional(),
+    operacaoId: z.number().optional(),
+    estagio: z.enum(["demand", "source", "analyze", "execute", "finance", "closed", "lost"]).optional(),
+  }).optional())
+  .mutation(async ({ ctx, input }) => {
+    return db.createConversa({
+      userId: ctx.user.id,
+      titulo: input?.titulo,
+      operacaoId: input?.operacaoId,
+      estagio: input?.estagio,
+    });
+  }),
+
+getConversaMessages: protectedProcedure
+  .input(z.object({ conversaId: z.number() }))
+  .query(async ({ ctx, input }) => {
+    return db.getConversaMessages(input.conversaId, ctx.user.id);
+  }),
+
+renameConversa: protectedProcedure
+  .input(z.object({ conversaId: z.number(), titulo: z.string().min(1) }))
+  .mutation(async ({ ctx, input }) => {
+    const updated = await db.renameConversa(input.conversaId, ctx.user.id, input.titulo);
+    if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Conversa não encontrada" });
+    return updated;
+  }),
+
+archiveConversa: protectedProcedure
+  .input(z.object({ conversaId: z.number(), status: z.enum(["ativa", "arquivada"]) }))
+  .mutation(async ({ ctx, input }) => {
+    const updated = await db.setConversaStatus(input.conversaId, ctx.user.id, input.status);
+    if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Conversa não encontrada" });
+    return updated;
+  }),
+
+deleteConversa: protectedProcedure
+  .input(z.object({ conversaId: z.number() }))
+  .mutation(async ({ ctx, input }) => {
+    const ok = await db.deleteConversa(input.conversaId, ctx.user.id);
+    if (!ok) throw new TRPCError({ code: "NOT_FOUND", message: "Conversa não encontrada" });
+    return { ok };
+  }),
+
+linkConversaOperacao: protectedProcedure
+  .input(z.object({
+    conversaId: z.number(),
+    operacaoId: z.number().nullable(),
+    estagio: z.enum(["demand", "source", "analyze", "execute", "finance", "closed", "lost"]).optional(),
+  }))
+  .mutation(async ({ ctx, input }) => {
+    const updated = await db.linkConversaToOperacao(
+      input.conversaId, ctx.user.id, input.operacaoId, input.estagio,
+    );
+    if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Conversa não encontrada" });
+    return updated;
+  }),
 
 // Learning Context
 getLearningContext: protectedProcedure.query(async ({ ctx }) => {

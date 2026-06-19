@@ -10,5 +10,6 @@ export * from "./calculationsDb";
 export * from "./settingsDb";
 export * from "./quotationsDb";
 export * from "./chatDb";
+export * from "./conversaDb";
 export * from "./industriesDb";
 export * from "./messagingDb";
