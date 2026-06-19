@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import CambioDoDia from "@/components/CambioDoDia";
 import { toast } from "sonner";
 import {
   TrendingUp,
@@ -257,9 +258,12 @@ export default function ExcambiaMarket() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+      {/* Câmbio do dia — camada transversal (COMANDO 8): sempre visível, fora do fluxo de etapas */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <CambioDoDia />
+        {/* Summary Cards (ocupam as 2 colunas restantes no desktop) */}
+        <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
@@ -295,6 +299,7 @@ export default function ExcambiaMarket() {
             <p className="text-2xl font-bold mt-1">{insights?.length || 0}</p>
           </CardContent>
         </Card>
+        </div>
       </div>
 
       {/* Main Content */}
