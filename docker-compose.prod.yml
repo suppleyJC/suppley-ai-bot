@@ -56,8 +56,12 @@ services:
       - suppley_net
 
 volumes:
+  # Usa o volume EXISTENTE com os dados reais de produção (criado por um compose
+  # antigo, projeto "suppley"). Sem isto, o compose criava um volume novo e vazio
+  # (suppley-ai-bot_mysql_data), e o app subia sem os dados/migrations.
   mysql_data:
-    driver: local
+    external: true
+    name: suppley_mysql_data
 
 networks:
   suppley_net:
