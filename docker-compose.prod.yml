@@ -10,7 +10,10 @@ services:
       MYSQL_USER: suppley
       MYSQL_PASSWORD: ${DB_PASSWORD:-SuppleyDb2024}
     ports:
-      - "3306:3306"
+      # O app conecta via rede interna do Docker (mysql:3306), não precisa
+      # publicar no host. Mapeado só no localhost numa porta alternativa para
+      # debug, evitando conflito com um MySQL nativo na 3306 do host.
+      - "127.0.0.1:3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
