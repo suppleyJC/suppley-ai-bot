@@ -59,12 +59,14 @@ NCM_RE = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
 
 
 def norm(s):
-    """minúsculas, sem acento, sem espaços nas pontas — p/ casar cabeçalhos."""
+    """minúsculas, sem acento, sem ordinais (º/ª), espaços colapsados — p/ casar cabeçalhos."""
     if s is None:
         return ""
     s = str(s)
     s = unicodedata.normalize("NFD", s)
     s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    s = s.replace("º", "").replace("ª", "").replace("°", "")
+    s = re.sub(r"\s+", " ", s)
     return s.lower().strip()
 
 
@@ -92,22 +94,23 @@ def parse_rate_to_bp(raw):
     return round(pct * 100)
 
 
-def find_header_row(ws, must_have, max_scan=12):
+def find_header_row(ws, aliases_by_key, required, max_scan=12):
     """
     Acha a linha de cabeçalho e devolve (idx_linha, {chave: idx_coluna}).
-    must_have: dict {chave: [aliases normalizados]}.
+    aliases_by_key: dict {chave: [aliases normalizados]}.
+    required: lista de chaves obrigatórias (as demais são best-effort).
     """
     for i, row in enumerate(ws.iter_rows(values_only=True)):
         if i >= max_scan:
             break
         normd = [norm(c) for c in row]
         colmap = {}
-        for key, aliases in must_have.items():
+        for key, aliases in aliases_by_key.items():
             for ci, val in enumerate(normd):
                 if any(val == a or val.startswith(a) for a in aliases):
                     colmap.setdefault(key, ci)
                     break
-        if "ncm" in colmap and all(k in colmap for k in must_have if k != "_opt"):
+        if all(k in colmap for k in required):
             return i, colmap
     return None, {}
 
@@ -180,8 +183,8 @@ def main():
             "ncm": ["ncm"],
             "aplicada": ["aliquota aplicada", "aliquota aplicada (%)"],
             "desc": ["descricao"],
-        })
-        if "aplicada" in cols:
+        }, required=["ncm", "aplicada"])
+        if hdr_i is not None and "aplicada" in cols:
             for i, row in enumerate(ws2.iter_rows(values_only=True)):
                 if i <= hdr_i:
                     continue
@@ -206,8 +209,9 @@ def main():
             "aliq": ["aliquota", "aliquota (%)"],
             "ini": ["inicio de vigencia", "inicio"],
             "fim": ["termino de vigencia", "termino"],
-            "ex": ["n ex", "no ex", "n  ex", "numero ex"],
-        })
+            "ex": ["n ex", "no ex", "numero ex", "ex"],
+        }, required=["ncm", "aliq"])
+    if ws9 is not None and hdr_i is not None:
         for i, row in enumerate(ws9.iter_rows(values_only=True)):
             if i <= hdr_i:
                 continue
