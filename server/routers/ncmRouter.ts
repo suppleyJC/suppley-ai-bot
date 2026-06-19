@@ -2,6 +2,9 @@ import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import * as db from "../db";
 import * as ncmService from "../services/ncmService";
+import { getDb } from "../db";
+import { ncmTaxRates } from "../../drizzle/schema";
+import { sql } from "drizzle-orm";
 
 export const ncmRouter = router({
 get: publicProcedure
@@ -93,4 +96,49 @@ importFromFile: protectedProcedure
   .mutation(async ({ input }) => {
     return ncmService.importNCMsFromFile(input.fileContent, input.fileType);
   }),
+
+// Diagnose NCM data in database
+diagnose: publicProcedure.query(async () => {
+  try {
+    // Check connection
+    const dbInstance = await getDb();
+    if (!dbInstance) {
+      return {
+        ok: false,
+        message: "Não conseguiu conectar ao banco",
+        total: 0,
+        ncm73084000: null,
+      };
+    }
+
+    // Get total count
+    const totalResult = await dbInstance
+      .select({ count: sql<number>`count(*)` })
+      .from(ncmTaxRates);
+    const total = Number(totalResult[0]?.count || 0);
+
+    // Check specific NCM
+    const ncm = await db.getNcmTaxRate("73084000");
+
+    return {
+      ok: true,
+      message: `Banco conectado: ${total} NCMs carregados`,
+      total,
+      ncm73084000: ncm ? {
+        ncmCode: ncm.ncmCode,
+        description: ncm.description?.substring(0, 80),
+        iiRate: ncm.iiRate,
+        ipiRate: ncm.ipiRate,
+        notes: ncm.notes,
+      } : null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: `Erro: ${String(error)}`,
+      total: 0,
+      ncm73084000: null,
+    };
+  }
+}),
 });
