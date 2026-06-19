@@ -96,8 +96,10 @@ em `operacao_eventos` (timeline = fonte de verdade).
 | 5 | Serviços compartilhados: `registrarMarco`, `anexarDocumento`, `lancarFinanceiro` | Backend | ✅ Completo — os 3 serviços estão implementados em `operacaoService.ts` + routers + UI (commit `5749d29`). Base pronta para tools da Excambia |
 | 6 | 5 tools novas da Excambia (`enviar_rfq`, `registrar_cotacao`, `registrar_marco_producao`, `registrar_nacionalizacao`, `lancar_financeiro`) | Backend | ✅ Completo — 5 tools implementadas em `server/agent/tools/`, registradas no `index.ts`, integradas ao orchestrator. Sem migrations necessárias. |
 | 7 | Vocabulário único de eventos (ampliar enum `operacao_eventos.tipo`) | Migração aditiva | ✅ Completo — enum já expandido em migration 0023 com todos os tipos necessários (`rfq_enviada`, marcos, eventos financeiros). |
-| 8 | Câmbio como transversal (card "Câmbio do dia" em Inteligência de Mercado) | Frontend | ⬜ |
-| 9 | Validar coesão (mesma ação no Painel e na Excambia gera o mesmo evento) | Teste | ⬜ |
+| 8 | Câmbio como transversal (card "Câmbio do dia" em Inteligência de Mercado) | Frontend | ✅ Completo — `CambioDoDia.tsx` (USD/EUR/CNY → BRL via `trpc.exchange.getRate`) inserido em `ExcambiaMarket.tsx`. Frontend puro, sem migration. |
+| 9 | Validar coesão (mesma ação no Painel e na Excambia gera o mesmo evento) | Teste | ✅ Completo — `server/coesao.test.ts` (4 testes) prova que Painel (router) e Excambia (tools) convergem no mesmo serviço com o mesmo tipo de evento; difere só o `autor`. |
+
+> 🎉 **FASE 2 COMPLETA (COMANDOS 1–9).** Falta só a validação manual do NCM 7308.40.00 e os itens da Fase 3 (UI conversacional).
 
 **Nova nomenclatura das etapas (rótulos UI; códigos internos inalterados):**
 
