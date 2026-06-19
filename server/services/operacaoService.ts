@@ -19,6 +19,7 @@ import {
 } from "../../drizzle/schema";
 
 export type Estagio = "demand" | "source" | "analyze" | "execute" | "finance" | "closed" | "lost";
+export type Prioridade = "baixa" | "media" | "alta" | "critica";
 const ORDER: Estagio[] = ["demand", "source", "analyze", "execute", "finance", "closed"];
 
 // ---------------------------------------------------------------------------
@@ -74,9 +75,17 @@ export async function createOperacao(input: {
   clienteNome?: string;
   origemPais?: string;
   regimeTributario?: "lucro_real" | "lucro_presumido" | "simples_nacional";
+  prioridade?: Prioridade;
+  prazoDesejado?: Date;
+  responsavelId?: number;
+  origemDesejada?: string;
 }): Promise<Operacao | null> {
   const db = await getDb();
   if (!db) return null;
+
+  if (input.prazoDesejado && input.prazoDesejado.getTime() < Date.now()) {
+    throw new Error("Prazo desejado não pode ser no passado");
+  }
 
   const codigo = await nextCodigo(db, input.userId);
   const values: InsertOperacao = {
@@ -87,6 +96,10 @@ export async function createOperacao(input: {
     clienteNome: input.clienteNome ?? null,
     origemPais: input.origemPais ?? null,
     regimeTributario: input.regimeTributario ?? null,
+    prioridade: input.prioridade ?? "media",
+    prazoDesejado: input.prazoDesejado ?? null,
+    responsavelId: input.responsavelId ?? null,
+    origemDesejada: input.origemDesejada ?? null,
     estagioAtual: "demand",
     status: "ativa",
   };
@@ -103,6 +116,50 @@ export async function createOperacao(input: {
   }
   const [op] = await db.select().from(operacoes).where(eq(operacoes.id, id)).limit(1);
   return op ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Atualizar metadados da operação (prioridade, prazo, responsável, etc.)
+// ---------------------------------------------------------------------------
+export async function updateOperacao(input: {
+  userId: number;
+  operacaoId: number;
+  titulo?: string;
+  clienteNome?: string;
+  origemPais?: string;
+  regimeTributario?: "lucro_real" | "lucro_presumido" | "simples_nacional";
+  prioridade?: Prioridade;
+  prazoDesejado?: Date | null;
+  responsavelId?: number | null;
+  origemDesejada?: string;
+}): Promise<Operacao | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [op] = await db.select().from(operacoes)
+    .where(and(eq(operacoes.id, input.operacaoId), eq(operacoes.userId, input.userId)))
+    .limit(1);
+  if (!op) throw new Error("operação não encontrada");
+
+  if (input.prazoDesejado && input.prazoDesejado.getTime() < Date.now()) {
+    throw new Error("Prazo desejado não pode ser no passado");
+  }
+
+  const patch: Partial<InsertOperacao> = {};
+  if (input.titulo !== undefined) patch.titulo = input.titulo;
+  if (input.clienteNome !== undefined) patch.clienteNome = input.clienteNome;
+  if (input.origemPais !== undefined) patch.origemPais = input.origemPais;
+  if (input.regimeTributario !== undefined) patch.regimeTributario = input.regimeTributario;
+  if (input.prioridade !== undefined) patch.prioridade = input.prioridade;
+  if (input.prazoDesejado !== undefined) patch.prazoDesejado = input.prazoDesejado;
+  if (input.responsavelId !== undefined) patch.responsavelId = input.responsavelId;
+  if (input.origemDesejada !== undefined) patch.origemDesejada = input.origemDesejada;
+
+  if (Object.keys(patch).length === 0) return op;
+
+  await db.update(operacoes).set(patch).where(eq(operacoes.id, input.operacaoId));
+  const [updated] = await db.select().from(operacoes).where(eq(operacoes.id, input.operacaoId)).limit(1);
+  return updated ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -231,6 +288,8 @@ export async function listOperacoes(userId: number) {
     estagioAtual: o.estagioAtual, status: o.status,
     clienteNome: o.clienteNome, fornecedorNome: o.fornecedorNome,
     valorEstimadoBrl: o.valorEstimadoBrlCents, margemEstimada: o.margemEstimadaBp,
+    prioridade: o.prioridade, prazoDesejado: o.prazoDesejado,
+    responsavelId: o.responsavelId, origemDesejada: o.origemDesejada,
   }));
 }
 

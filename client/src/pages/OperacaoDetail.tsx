@@ -14,7 +14,8 @@ import React from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import OperacaoTimeline from "@/components/OperacaoTimeline";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CalendarClock, Globe2 } from "lucide-react";
+import { PRIORITY_ORDER, getPriorityMeta } from "@/lib/priorityLabels";
 
 const STATUS_LABEL: Record<string, { txt: string; cls: string }> = {
   ativa:     { txt: "Ativa",     cls: "bg-violet-50 text-violet-700" },
@@ -24,6 +25,11 @@ const STATUS_LABEL: Record<string, { txt: string; cls: string }> = {
   perdida:   { txt: "Perdida",   cls: "bg-slate-100 text-slate-500" },
   pausada:   { txt: "Pausada",   cls: "bg-amber-50 text-amber-700" },
 };
+
+function fmtPrazo(d?: string | Date | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 export default function OperacaoDetail() {
   const [, params] = useRoute("/operacao/:id");
@@ -41,6 +47,7 @@ export default function OperacaoDetail() {
   const advance = trpc.operations.advanceStage.useMutation({ onSuccess: invalidate });
   const decide = trpc.operations.decideGoNoGo.useMutation({ onSuccess: invalidate });
   const addEvento = trpc.operations.addEvento.useMutation({ onSuccess: invalidate });
+  const update = trpc.operations.update.useMutation({ onSuccess: invalidate });
 
   if (!Number.isFinite(id)) {
     return <div className="p-8 text-sm text-slate-500">Operação inválida.</div>;
@@ -58,11 +65,26 @@ export default function OperacaoDetail() {
 
   const { operacao, eventos } = data;
   const st = STATUS_LABEL[operacao.status] ?? { txt: operacao.status, cls: "bg-slate-100 text-slate-500" };
+  const op = operacao as typeof operacao & {
+    prioridade?: "baixa" | "media" | "alta" | "critica" | null;
+    prazoDesejado?: string | Date | null;
+    origemDesejada?: string | null;
+  };
+  const prio = getPriorityMeta(op.prioridade);
 
   function handleAddNote() {
     const titulo = window.prompt("Nota para a operação:");
     if (!titulo) return;
     addEvento.mutate({ operacaoId: operacao.id, tipo: "nota_interna", estagio: operacao.estagioAtual, titulo });
+  }
+
+  function handleChangePrioridade(e: React.ChangeEvent<HTMLSelectElement>) {
+    update.mutate({ operacaoId: operacao.id, prioridade: e.target.value as any });
+  }
+
+  function handleChangePrazo(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value;
+    update.mutate({ operacaoId: operacao.id, prazoDesejado: v ? new Date(v) : null });
   }
 
   return (
@@ -89,6 +111,48 @@ export default function OperacaoDetail() {
           <span className={`ml-auto rounded-lg px-3 py-1 text-xs font-bold ${st.cls}`}>
             {st.txt}
           </span>
+        </div>
+
+        {/* metadados editáveis: prioridade, prazo, origem desejada */}
+        <div className="mt-4 grid grid-cols-1 gap-3 border-t border-slate-100 pt-4 sm:grid-cols-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Prioridade</span>
+            <div className="flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${prio.dot}`} />
+              <select
+                value={op.prioridade ?? "media"}
+                onChange={handleChangePrioridade}
+                disabled={update.isPending}
+                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-60"
+              >
+                {PRIORITY_ORDER.map((p) => (
+                  <option key={p} value={p}>{getPriorityMeta(p).label}</option>
+                ))}
+              </select>
+            </div>
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              <CalendarClock className="mr-1 inline h-3 w-3" /> Prazo desejado
+            </span>
+            <input
+              type="date"
+              value={op.prazoDesejado ? new Date(op.prazoDesejado).toISOString().slice(0, 10) : ""}
+              onChange={handleChangePrazo}
+              disabled={update.isPending}
+              className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-60"
+            />
+          </label>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              <Globe2 className="mr-1 inline h-3 w-3" /> Origem desejada
+            </span>
+            <p className="px-2 py-1.5 text-sm font-medium text-slate-700">
+              {op.origemDesejada || "—"}
+            </p>
+          </div>
         </div>
       </header>
 

@@ -40,6 +40,10 @@ export interface Operacao {
   origemPais?: string | null;
   valorEstimadoBrlCents?: number | null;
   margemEstimadaBp?: number | null;
+  prioridade?: "baixa" | "media" | "alta" | "critica" | null;
+  prazoDesejado?: string | Date | null;
+  responsavelId?: number | null;
+  origemDesejada?: string | null;
 }
 export interface OperacaoTimelineProps {
   operacao: Operacao;

@@ -26,8 +26,26 @@ export const operationsRouter = router({
       clienteNome: z.string().optional(),
       origemPais: z.string().optional(),
       regimeTributario: z.enum(["lucro_real", "lucro_presumido", "simples_nacional"]).optional(),
+      prioridade: z.enum(["baixa", "media", "alta", "critica"]).optional(),
+      prazoDesejado: z.coerce.date().optional(),
+      responsavelId: z.number().optional(),
+      origemDesejada: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => svc.createOperacao({ userId: ctx.user.id, ...input })),
+
+  update: protectedProcedure
+    .input(z.object({
+      operacaoId: z.number(),
+      titulo: z.string().min(1).optional(),
+      clienteNome: z.string().optional(),
+      origemPais: z.string().optional(),
+      regimeTributario: z.enum(["lucro_real", "lucro_presumido", "simples_nacional"]).optional(),
+      prioridade: z.enum(["baixa", "media", "alta", "critica"]).optional(),
+      prazoDesejado: z.coerce.date().nullable().optional(),
+      responsavelId: z.number().nullable().optional(),
+      origemDesejada: z.string().optional(),
+    }))
+    .mutation(({ ctx, input }) => svc.updateOperacao({ userId: ctx.user.id, ...input })),
 
   advanceStage: protectedProcedure
     .input(z.object({

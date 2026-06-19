@@ -16,6 +16,7 @@ import { trpc } from "@/lib/trpc";
 import { ClipboardList, Plus, Loader2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { STAGE_ORDER, STAGE_META, type Estagio } from "@/lib/stageLabels";
+import { getPriorityMeta, type Prioridade } from "@/lib/priorityLabels";
 
 const COLUNAS = STAGE_ORDER.map((key) => ({
   key,
@@ -47,6 +48,9 @@ interface OperacaoRow {
   fornecedorNome?: string | null;
   valorEstimadoBrl?: number | null;
   margemEstimada?: number | null;
+  prioridade?: Prioridade | null;
+  prazoDesejado?: string | Date | null;
+  origemDesejada?: string | null;
 }
 
 export default function Operacoes() {
@@ -164,6 +168,7 @@ export default function Operacoes() {
 
 function OperacaoCard({ op, onClick }: { op: OperacaoRow; onClick: () => void }) {
   const st = STATUS_LABEL[op.status] ?? { txt: op.status, cls: "bg-slate-100 text-slate-500" };
+  const prio = getPriorityMeta(op.prioridade);
   return (
     <button
       onClick={onClick}
@@ -171,7 +176,15 @@ function OperacaoCard({ op, onClick }: { op: OperacaoRow; onClick: () => void })
     >
       <div className="flex items-center justify-between gap-2">
         <p className="font-mono text-[10px] text-slate-400">{op.codigo}</p>
-        <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${st.cls}`}>{st.txt}</span>
+        <div className="flex items-center gap-1.5">
+          {/* mostra prioridade só quando relevante (alta/crítica) para não poluir */}
+          {(op.prioridade === "alta" || op.prioridade === "critica") && (
+            <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${prio.cls}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${prio.dot}`} /> {prio.label}
+            </span>
+          )}
+          <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${st.cls}`}>{st.txt}</span>
+        </div>
       </div>
       <p className="mt-1 line-clamp-2 text-sm font-semibold text-slate-800">{op.titulo}</p>
       {(op.clienteNome || op.fornecedorNome) && (
