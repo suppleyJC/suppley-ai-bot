@@ -1437,6 +1437,7 @@ export const operacaoEventos = mysqlTable(
       "cotacao_extraida", "calculo_executado", "go_decidido", "no_go_decidido",
       "di_registrada", "cambio_fechado", "mensagem", "nota_interna", "alerta_ia",
       "estagio_avancado", "anexo_adicionado", "anexo_removido",
+      "financeiro_lancado", "financeiro_removido",
     ]).notNull(),
     estagio: mysqlEnum("estagio",
       ["demand", "source", "analyze", "execute", "finance", "closed", "lost"]).notNull(),
@@ -1494,6 +1495,52 @@ export const operacaoAnexos = mysqlTable(
 );
 export type OperacaoAnexo = typeof operacaoAnexos.$inferSelect;
 export type InsertOperacaoAnexo = typeof operacaoAnexos.$inferInsert;
+
+/**
+ * Camada financeira transversal da operação: lançamentos previstos/realizados
+ * (câmbio, pagamento ao fornecedor, impostos, frete, despesas locais, receita).
+ * Cada lançamento gera um evento na timeline (coesão Painel ↔ Excambia).
+ */
+export const operacaoFinanceiro = mysqlTable(
+  "operacao_financeiro",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    operacaoId: int("operacaoId").notNull(),
+    userId: int("userId").notNull(),
+
+    tipo: mysqlEnum("tipo", [
+      "cambio", "pagamento_fornecedor", "imposto", "frete", "seguro",
+      "despesa_local", "comissao", "receita", "outro",
+    ]).default("outro").notNull(),
+    direcao: mysqlEnum("direcao", ["entrada", "saida"]).default("saida").notNull(),
+    status: mysqlEnum("status", ["previsto", "realizado", "cancelado"])
+      .default("previsto").notNull(),
+
+    descricao: varchar("descricao", { length: 255 }),
+
+    // Valor na moeda original + conversão para BRL (para somatório)
+    valorCents: bigint("valorCents", { mode: "number" }).notNull(),
+    moeda: varchar("moeda", { length: 3 }).default("BRL").notNull(),
+    valorBrlCents: bigint("valorBrlCents", { mode: "number" }),
+    cambioRate: bigint("cambioRate", { mode: "number" }), // rate * 1000000
+
+    // Vínculo opcional a outra entidade (quotation, calculation, di, etc.)
+    refTipo: varchar("refTipo", { length: 40 }),
+    refId: int("refId"),
+
+    dataReferencia: timestamp("dataReferencia"),
+    vencimento: timestamp("vencimento"),
+
+    autor: mysqlEnum("autor", ["usuario", "excambia", "sistema"]).default("usuario").notNull(),
+    estagio: mysqlEnum("estagio",
+      ["demand", "source", "analyze", "execute", "finance", "closed", "lost"]),
+    criadoEm: timestamp("criadoEm").defaultNow().notNull(),
+    atualizadoEm: timestamp("atualizadoEm").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({ byOperacao: index("idx_financeiro_operacao").on(t.operacaoId) })
+);
+export type OperacaoFinanceiro = typeof operacaoFinanceiro.$inferSelect;
+export type InsertOperacaoFinanceiro = typeof operacaoFinanceiro.$inferInsert;
 
 // ============================================================
 // MOTOR V2 SCHEMAS — Market Intelligence (Comex Stat)

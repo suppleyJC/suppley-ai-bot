@@ -15,6 +15,7 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import OperacaoTimeline from "@/components/OperacaoTimeline";
 import OperacaoAnexos from "@/components/OperacaoAnexos";
+import OperacaoFinanceiro from "@/components/OperacaoFinanceiro";
 import { ArrowLeft, CalendarClock, Globe2 } from "lucide-react";
 import { PRIORITY_ORDER, getPriorityMeta } from "@/lib/priorityLabels";
 
@@ -66,6 +67,7 @@ export default function OperacaoDetail() {
 
   const { operacao, eventos } = data;
   const anexos = (data as any).anexos ?? [];
+  const financeiro = (data as any).financeiro ?? [];
   const st = STATUS_LABEL[operacao.status] ?? { txt: operacao.status, cls: "bg-slate-100 text-slate-500" };
   const op = operacao as typeof operacao & {
     prioridade?: "baixa" | "media" | "alta" | "critica" | null;
@@ -158,8 +160,9 @@ export default function OperacaoDetail() {
         </div>
       </header>
 
-      <div className="mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <OperacaoAnexos operacaoId={operacao.id} anexos={anexos} onChange={invalidate} />
+        <OperacaoFinanceiro operacaoId={operacao.id} lancamentos={financeiro} onChange={invalidate} />
       </div>
 
       <OperacaoTimeline

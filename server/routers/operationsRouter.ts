@@ -112,4 +112,34 @@ export const operationsRouter = router({
   removeAnexo: protectedProcedure
     .input(z.object({ anexoId: z.number() }))
     .mutation(({ ctx, input }) => svc.removerAnexo(ctx.user.id, input.anexoId)),
+
+  // --- Financeiro (camada transversal) ---
+  listFinanceiro: protectedProcedure
+    .input(z.object({ operacaoId: z.number() }))
+    .query(({ ctx, input }) => svc.listarFinanceiro(ctx.user.id, input.operacaoId)),
+
+  lancarFinanceiro: protectedProcedure
+    .input(z.object({
+      operacaoId: z.number(),
+      tipo: z.enum([
+        "cambio", "pagamento_fornecedor", "imposto", "frete", "seguro",
+        "despesa_local", "comissao", "receita", "outro",
+      ]).optional(),
+      direcao: z.enum(["entrada", "saida"]).optional(),
+      status: z.enum(["previsto", "realizado", "cancelado"]).optional(),
+      descricao: z.string().optional(),
+      valorCents: z.number().int(),
+      moeda: z.string().optional(),
+      valorBrlCents: z.number().int().optional(),
+      cambioRate: z.number().int().optional(),
+      refTipo: z.string().optional(),
+      refId: z.number().optional(),
+      dataReferencia: z.coerce.date().optional(),
+      vencimento: z.coerce.date().optional(),
+    }))
+    .mutation(({ ctx, input }) => svc.lancarFinanceiro({ userId: ctx.user.id, ...input })),
+
+  removeFinanceiro: protectedProcedure
+    .input(z.object({ lancamentoId: z.number() }))
+    .mutation(({ ctx, input }) => svc.removerFinanceiro(ctx.user.id, input.lancamentoId)),
 });

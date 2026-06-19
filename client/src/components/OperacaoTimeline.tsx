@@ -75,6 +75,8 @@ function eventoVisual(tipo: string): { Icon: React.ComponentType<any>; tint: str
     estagio_avancado:  { Icon: Truck, tint: "text-violet-600 bg-violet-50" },
     anexo_adicionado:  { Icon: Paperclip, tint: "text-slate-600 bg-slate-100" },
     anexo_removido:    { Icon: Paperclip, tint: "text-slate-400 bg-slate-50" },
+    financeiro_lancado:  { Icon: CircleDollarSign, tint: "text-emerald-600 bg-emerald-50" },
+    financeiro_removido: { Icon: CircleDollarSign, tint: "text-slate-400 bg-slate-50" },
     nota_interna:      { Icon: StickyNote, tint: "text-slate-500 bg-slate-100" },
     alerta_ia:         { Icon: Sparkles, tint: "text-teal-600 bg-teal-50" },
     mensagem:          { Icon: Sparkles, tint: "text-teal-600 bg-teal-50" },

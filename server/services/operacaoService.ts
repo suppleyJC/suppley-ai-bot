@@ -13,7 +13,7 @@
 import { and, desc, eq, like, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import {
-  operacoes, operacaoEventos, operacaoEstagios, operacaoAnexos, demandas,
+  operacoes, operacaoEventos, operacaoEstagios, operacaoAnexos, operacaoFinanceiro, demandas,
   quotations, importCalculations, suppliers,
   type InsertOperacao, type Operacao,
 } from "../../drizzle/schema";
@@ -21,6 +21,11 @@ import {
 export type Estagio = "demand" | "source" | "analyze" | "execute" | "finance" | "closed" | "lost";
 export type Prioridade = "baixa" | "media" | "alta" | "critica";
 export type TipoAnexo = "desenho" | "pdf" | "imagem" | "especificacao" | "catalogo" | "cotacao" | "outro";
+export type TipoFinanceiro =
+  | "cambio" | "pagamento_fornecedor" | "imposto" | "frete" | "seguro"
+  | "despesa_local" | "comissao" | "receita" | "outro";
+export type DirecaoFinanceiro = "entrada" | "saida";
+export type StatusFinanceiro = "previsto" | "realizado" | "cancelado";
 const ORDER: Estagio[] = ["demand", "source", "analyze", "execute", "finance", "closed"];
 
 // ---------------------------------------------------------------------------
@@ -369,6 +374,110 @@ export async function removerAnexo(userId: number, anexoId: number) {
 }
 
 // ---------------------------------------------------------------------------
+// Financeiro (camada transversal): câmbio, pagamentos, impostos, despesas, receita.
+// Cada lançamento grava um evento na timeline (coesão Painel ↔ Excambia).
+// ---------------------------------------------------------------------------
+export async function lancarFinanceiro(input: {
+  userId: number;
+  operacaoId: number;
+  tipo?: TipoFinanceiro;
+  direcao?: DirecaoFinanceiro;
+  status?: StatusFinanceiro;
+  descricao?: string;
+  valorCents: number;
+  moeda?: string;
+  valorBrlCents?: number;
+  cambioRate?: number;
+  refTipo?: string;
+  refId?: number;
+  dataReferencia?: Date;
+  vencimento?: Date;
+  autor?: "usuario" | "excambia" | "sistema";
+}) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [op] = await db.select().from(operacoes)
+    .where(and(eq(operacoes.id, input.operacaoId), eq(operacoes.userId, input.userId)))
+    .limit(1);
+  if (!op) throw new Error("operação não encontrada");
+
+  // Se moeda BRL e sem valorBrlCents, usa o próprio valor como BRL.
+  const moeda = (input.moeda ?? "BRL").toUpperCase();
+  const valorBrlCents = input.valorBrlCents ?? (moeda === "BRL" ? input.valorCents : null);
+
+  const [res] = await db.insert(operacaoFinanceiro).values({
+    operacaoId: input.operacaoId,
+    userId: input.userId,
+    tipo: (input.tipo ?? "outro") as any,
+    direcao: (input.direcao ?? "saida") as any,
+    status: (input.status ?? "previsto") as any,
+    descricao: input.descricao ?? null,
+    valorCents: input.valorCents,
+    moeda,
+    valorBrlCents,
+    cambioRate: input.cambioRate ?? null,
+    refTipo: input.refTipo ?? null,
+    refId: input.refId ?? null,
+    dataReferencia: input.dataReferencia ?? null,
+    vencimento: input.vencimento ?? null,
+    autor: input.autor ?? "usuario",
+    estagio: op.estagioAtual as any,
+  });
+  const id = (res as any).insertId as number;
+
+  await addEvento({
+    operacaoId: input.operacaoId,
+    tipo: "financeiro_lancado",
+    estagio: op.estagioAtual as Estagio,
+    refTipo: "operacao_financeiro",
+    refId: id,
+    autor: input.autor ?? "usuario",
+    titulo: `Financeiro: ${input.descricao ?? input.tipo ?? "lançamento"}`,
+    payload: { tipo: input.tipo ?? "outro", direcao: input.direcao ?? "saida", valorCents: input.valorCents, moeda },
+  });
+
+  const [lanc] = await db.select().from(operacaoFinanceiro).where(eq(operacaoFinanceiro.id, id)).limit(1);
+  return lanc ?? null;
+}
+
+export async function listarFinanceiro(userId: number, operacaoId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const [op] = await db.select().from(operacoes)
+    .where(and(eq(operacoes.id, operacaoId), eq(operacoes.userId, userId)))
+    .limit(1);
+  if (!op) return [];
+  return db.select().from(operacaoFinanceiro)
+    .where(eq(operacaoFinanceiro.operacaoId, operacaoId))
+    .orderBy(desc(operacaoFinanceiro.criadoEm));
+}
+
+export async function removerFinanceiro(userId: number, lancamentoId: number) {
+  const db = await getDb();
+  if (!db) return { ok: false, message: "sem conexão" };
+
+  const [lanc] = await db.select().from(operacaoFinanceiro)
+    .where(eq(operacaoFinanceiro.id, lancamentoId)).limit(1);
+  if (!lanc) return { ok: false, message: "lançamento não encontrado" };
+
+  const [op] = await db.select().from(operacoes)
+    .where(and(eq(operacoes.id, lanc.operacaoId), eq(operacoes.userId, userId)))
+    .limit(1);
+  if (!op) return { ok: false, message: "sem permissão" };
+
+  await db.delete(operacaoFinanceiro).where(eq(operacaoFinanceiro.id, lancamentoId));
+  await addEvento({
+    operacaoId: lanc.operacaoId,
+    tipo: "financeiro_removido",
+    estagio: op.estagioAtual as Estagio,
+    autor: "usuario",
+    titulo: `Financeiro removido: ${lanc.descricao ?? lanc.tipo}`,
+  });
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
 // Leituras (consumidas pelo Kanban e pela tela da operação)
 // ---------------------------------------------------------------------------
 export async function listOperacoes(userId: number) {
@@ -401,5 +510,8 @@ export async function getOperacao(userId: number, id: number) {
   const anexos = await db.select().from(operacaoAnexos)
     .where(eq(operacaoAnexos.operacaoId, id))
     .orderBy(desc(operacaoAnexos.criadoEm));
-  return { operacao: op, eventos, estagios, anexos };
+  const financeiro = await db.select().from(operacaoFinanceiro)
+    .where(eq(operacaoFinanceiro.operacaoId, id))
+    .orderBy(desc(operacaoFinanceiro.criadoEm));
+  return { operacao: op, eventos, estagios, anexos, financeiro };
 }
