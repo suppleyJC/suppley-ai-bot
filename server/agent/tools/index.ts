@@ -12,18 +12,18 @@ import type { AgentTool, ToolContext, ToolResult } from "./types";
 import type { Tool } from "../../_core/llm";
 
 import { montarCalculoTool } from "./montarCalculo";
+import { classificarNcmTool } from "./classificarNcm";
+import { compararCotacoesTool } from "./compararCotacoes";
 // À medida que forem implementadas, importar e registrar:
-// import { classificarNcmTool } from "./classificarNcm";
 // import { enviarRfqTool } from "./enviarRfq";
-// import { compararCotacoesTool } from "./compararCotacoes";
 // import { consultarMercadoTool } from "./consultarMercado";
 // import { preverTendenciaTool } from "./preverTendencia";
 
 const ALL_TOOLS: AgentTool[] = [
   montarCalculoTool,
-  // classificarNcmTool,
+  classificarNcmTool,
+  compararCotacoesTool,
   // enviarRfqTool,
-  // compararCotacoesTool,
   // consultarMercadoTool,
   // preverTendenciaTool,
 ];
