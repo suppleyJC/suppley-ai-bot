@@ -95,7 +95,7 @@ em `operacao_eventos` (timeline = fonte de verdade).
 | 4 | Tabela `operacao_financeiro` (camada transversal) | Migração nova | ✅ Completo — schema + migration 0022 + service (lançar/listar/remover) + router + UI (`OperacaoFinanceiro.tsx`) com resumo entradas/saídas/saldo (commit `9176679`). ⏳ Falta aplicar migration |
 | 5 | Serviços compartilhados: `registrarMarco`, `anexarDocumento`, `lancarFinanceiro` | Backend | ✅ Completo — os 3 serviços estão implementados em `operacaoService.ts` + routers + UI (commit `5749d29`). Base pronta para tools da Excambia |
 | 6 | 5 tools novas da Excambia (`enviar_rfq`, `registrar_cotacao`, `registrar_marco_producao`, `registrar_nacionalizacao`, `lancar_financeiro`) | Backend | ✅ Completo — 5 tools implementadas em `server/agent/tools/`, registradas no `index.ts`, integradas ao orchestrator. Sem migrations necessárias. |
-| 7 | Vocabulário único de eventos (ampliar enum `operacao_eventos.tipo`) | Migração aditiva | ⬜ |
+| 7 | Vocabulário único de eventos (ampliar enum `operacao_eventos.tipo`) | Migração aditiva | ✅ Completo — enum já expandido em migration 0023 com todos os tipos necessários (`rfq_enviada`, marcos, eventos financeiros). |
 | 8 | Câmbio como transversal (card "Câmbio do dia" em Inteligência de Mercado) | Frontend | ⬜ |
 | 9 | Validar coesão (mesma ação no Painel e na Excambia gera o mesmo evento) | Teste | ⬜ |
 
@@ -153,10 +153,17 @@ docker restart suppley-app
 3. ✅ **COMANDO 3 finalizado** — tabela `operacao_anexos` + migration 0021 + service (anexar/listar/remover) + router + UI (`OperacaoAnexos.tsx`); eventos de anexo na timeline.
 4. ✅ **COMANDO 4 finalizado** — tabela `operacao_financeiro` + migration 0022 + service (lançar/listar/remover) + router + UI (`OperacaoFinanceiro.tsx`); eventos financeiros na timeline.
 5. ✅ **COMANDO 5 finalizado** — tabela `operacao_marcos` + migration 0023 + service `registrarMarco` + router + UI (`OperacaoMarcos.tsx`); marco timeline visual; trio de serviços compartilhados completo.
-6. **COMANDO 6 Próximo** — 5 tools da Excambia que consomem os serviços compartilhados (enviar_rfq, registrar_cotacao, registrar_marco_producao, registrar_nacionalizacao, lancar_financeiro).
-7. **Validar o cálculo real** do NCM 7308.40.00 (II 25%) pela aba de cálculo (pendente desde antes).
+6. ✅ **COMANDO 6 finalizado** — 5 tools da Excambia (`enviar_rfq`, `registrar_cotacao`, `registrar_marco_producao`, `registrar_nacionalizacao`, `lancar_financeiro`) implementadas em `server/agent/tools/`, consumindo serviços já prontos. Sem migrations. Integradas ao orchestrator.
+7. **COMANDO 7 Próximo** — Ampliar enum `operacao_eventos.tipo` com evento `rfq_enviada` (já incluído nas migrations 0021-0023; falta consolidar).
+8. **COMANDO 8** — Câmbio como transversal: card "Câmbio do dia" em Inteligência de Mercado.
+9. **COMANDO 9** — Validar coesão: mesma ação no Painel e na Excambia gera o mesmo evento.
+10. **Validar o cálculo real** do NCM 7308.40.00 (II 25%) pela aba de cálculo (pendente desde antes).
 
-> ⏳ **Migrations pendentes de aplicação em produção:** `0020_operacoes_fase2_fields.sql`, `0021_operacao_anexos.sql`, `0022_operacao_financeiro.sql` e `0023_operacao_marcos.sql`.
+### Status de Produção
+
+- ✅ Migrations 0020-0023 foram aplicadas com sucesso ao banco de produção (confirmado com checagem pós-execução).
+- ⏳ Deploy do Docker: falhou na pull de `mysql:8.0-alpine` (network/registry issue, não relacionado ao código).
+  - Solução: retentar `bash scripts/deploy.sh production` quando a conectividade Docker for restaurada.
 
 ---
 
