@@ -159,10 +159,30 @@ docker restart suppley-app
 9. **COMANDO 9** — Validar coesão: mesma ação no Painel e na Excambia gera o mesmo evento.
 10. **Validar o cálculo real** do NCM 7308.40.00 (II 25%) pela aba de cálculo (pendente desde antes).
 
-### Status de Produção
+### Status de Produção — ✅ FASE 2 NO AR (deploy concluído 2026-06-19)
 
-- ✅ Migrations 0020-0023 foram aplicadas com sucesso ao banco de produção (confirmado com checagem pós-execução).
-- ✅ Deploy do Docker: corrigido. A tag `mysql:8.0-alpine` não existe no Docker Hub (MySQL nunca publicou Alpine para o 8.0). Trocado para `mysql:8.0` oficial nos dois compose files. O volume `mysql_data` persiste — dados de produção intactos.
+Deploy validado em produção: `suppley_app` e `suppley_db` Up (healthy), 11.023 NCMs,
+coluna `prioridade`, tabelas `operacao_anexos/financeiro/marcos` presentes, `/health` ok.
+
+**Correções de infraestrutura aplicadas durante o deploy (importante para próximas sessões):**
+
+1. **`mysql:8.0-alpine` não existe** no Docker Hub (MySQL só teve Alpine até 5.7).
+   Trocado para `mysql:8.0` nos dois compose files.
+2. **MySQL nativo no host** (pid em `127.0.0.1:3306`) conflitava com a porta do container.
+   O app não precisa publicar a porta (conecta via rede interna `mysql:3306`); mapeado só
+   em `127.0.0.1:3307:3306` para debug.
+3. **`deploy.sh` buildava `suppley-app:latest` mas o compose usava outra imagem** (`build:`
+   sem `image:`), subindo um build antigo em cache. Fixado com `image: suppley-app:latest`.
+4. **⚠️ GOTCHA CRÍTICO — volume de dados:** os dados reais de produção (11.023 NCMs,
+   operações, schema Fase 2) estão no volume **`suppley_mysql_data`** (criado por um compose
+   antigo, projeto `suppley`). O `docker-compose.prod.yml` criava um volume novo e vazio
+   (`suppley-ai-bot_mysql_data`), subindo o app contra um banco em branco. **Corrigido**
+   marcando `mysql_data` como `external` apontando para `suppley_mysql_data`.
+   - Volumes órfãos no servidor (podem ser removidos após confirmação): `suppley-ai-bot_mysql_data`
+     (vazio), `suppley-ai-bot_db-data` (4 KB). O MySQL nativo do host tem schema antigo/vazio.
+
+**Para o próximo deploy:** basta `git pull` + `bash scripts/deploy.sh production`. O compose
+já aponta para o volume e a imagem corretos.
 
 ---
 
