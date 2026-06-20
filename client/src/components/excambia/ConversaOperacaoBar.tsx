@@ -7,6 +7,7 @@
  * (as tools gravam eventos na timeline com autor="excambia" — a mesma timeline
  * do Painel, garantindo coesão).
  */
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,8 @@ interface Props {
   conversaId: number;
   operacaoId: number | null;
   conversaTitulo?: string;
+  /** Cria uma operação a partir da conversa e a vincula (centralizado no pai). */
+  onCreateOperacao: () => Promise<void> | void;
   onChanged: () => void;
 }
 
@@ -31,9 +34,10 @@ const STATUS_LABEL: Record<string, string> = {
   concluida: "Concluída", perdida: "Perdida", pausada: "Pausada",
 };
 
-export function ConversaOperacaoBar({ conversaId, operacaoId, conversaTitulo, onChanged }: Props) {
+export function ConversaOperacaoBar({ conversaId, operacaoId, onCreateOperacao, onChanged }: Props) {
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
+  const [creating, setCreating] = useState(false);
   const { data: operacoes } = trpc.operations.list.useQuery();
   const { data: detail } = trpc.operations.get.useQuery(
     { id: operacaoId ?? 0 },
@@ -49,10 +53,6 @@ export function ConversaOperacaoBar({ conversaId, operacaoId, conversaTitulo, on
     onError: (e) => toast.error(e.message),
   });
 
-  const createOp = trpc.operations.create.useMutation({
-    onError: (e) => toast.error(e.message || "Erro ao criar operação"),
-  });
-
   function handleLink(opId: number, estagio?: Estagio) {
     link.mutate({ conversaId, operacaoId: opId, estagio });
   }
@@ -61,15 +61,14 @@ export function ConversaOperacaoBar({ conversaId, operacaoId, conversaTitulo, on
     toast.success("Conversa desvinculada da operação");
   }
 
-  // Transforma a conversa atual numa operação rastreada (chat → Painel) e vincula.
+  // Transforma a conversa atual numa operação rastreada (chat → Painel).
+  // A criação+vínculo é centralizada no pai (mesma usada nos botões da mensagem).
   async function handleCreateOp() {
-    const op = await createOp.mutateAsync({
-      titulo: (conversaTitulo || "Operação do chat").slice(0, 255),
-    });
-    if (op?.id) {
-      link.mutate({ conversaId, operacaoId: op.id, estagio: op.estagioAtual as Estagio });
-      utils.operations.list.invalidate();
-      toast.success("Operação criada e vinculada à conversa");
+    setCreating(true);
+    try {
+      await onCreateOperacao();
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -89,9 +88,9 @@ export function ConversaOperacaoBar({ conversaId, operacaoId, conversaTitulo, on
           variant="default" size="sm"
           className="h-7 gap-1 bg-gradient-to-r from-[#311260] to-[#682ABA] text-xs hover:opacity-90"
           onClick={handleCreateOp}
-          disabled={createOp.isPending || link.isPending}
+          disabled={creating || link.isPending}
         >
-          {createOp.isPending || link.isPending
+          {creating || link.isPending
             ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
             : <Plus className="h-3.5 w-3.5" />}
           Criar operação

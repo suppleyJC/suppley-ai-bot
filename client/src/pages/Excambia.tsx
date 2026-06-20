@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,10 @@ interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
   timestamp?: Date;
+  /** Ferramentas acionadas pela Excambia nesta resposta (Fase 3) — guiam os botões de ação. */
+  toolsUsed?: string[];
+  /** Operação vinculada no momento da resposta (para o botão "Ver no Painel"). */
+  linkedOperacaoId?: number | null;
 }
 
 /** Mensagem de boas-vindas exibida em conversas novas (sem histórico). */
@@ -184,6 +189,36 @@ export default function Excambia() {
 
   const createConversaMutation = trpc.excambia.createConversa.useMutation();
 
+  // ── Ações chat → Painel (compartilhadas pela barra de contexto e pelos
+  //    botões dentro das mensagens) ────────────────────────────────────────
+  const [, navigate] = useLocation();
+  const createOpMutation = trpc.operations.create.useMutation();
+  const linkConversaMutation = trpc.excambia.linkConversaOperacao.useMutation();
+
+  // Espelha o vínculo da conversa para os callbacks das mutations de chat.
+  const linkedOpIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    linkedOpIdRef.current = activeConversa?.operacaoId ?? null;
+  }, [activeConversa]);
+
+  const openOperacao = (id: number) => navigate(`/operacao/${id}`);
+
+  // Cria uma operação a partir da conversa atual e a vincula (chat → Painel).
+  const createOperacaoFromConversa = async () => {
+    if (!activeConversaId) return;
+    const titulo = (activeConversa?.titulo || "Operação do chat").slice(0, 255);
+    const op = await createOpMutation.mutateAsync({ titulo });
+    if (op?.id) {
+      await linkConversaMutation.mutateAsync({
+        conversaId: activeConversaId, operacaoId: op.id, estagio: op.estagioAtual as any,
+      });
+      utils.operations.list.invalidate();
+      utils.excambia.getConversa.invalidate({ conversaId: activeConversaId });
+      utils.excambia.listConversas.invalidate();
+      toast.success("Operação criada e vinculada à conversa");
+    }
+  };
+
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -240,6 +275,8 @@ export default function Excambia() {
         role: "assistant" as const,
         content,
         timestamp: new Date(),
+        toolsUsed: tools,
+        linkedOperacaoId: linkedOpIdRef.current,
       };
       setMessages((prev) => [...prev, assistantMessage]);
       persistAssistant(content);
@@ -701,10 +738,13 @@ export default function Excambia() {
                 conversaId={activeConversaId}
                 operacaoId={activeConversa?.operacaoId ?? null}
                 conversaTitulo={activeConversa?.titulo}
+                onCreateOperacao={createOperacaoFromConversa}
                 onChanged={() => utils.excambia.getConversa.invalidate({ conversaId: activeConversaId })}
               />
             ) : null
           }
+          onOpenOperacao={openOperacao}
+          onCreateOperacao={createOperacaoFromConversa}
         />
 
         {/* Predictive Tab */}

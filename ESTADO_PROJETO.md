@@ -173,7 +173,7 @@ Rodar ANTES do deploy do código novo (igual à Fase 2). Aditiva e backward-comp
 | 12 | Excluir/duplicar operação no Painel (cascata + desvincula conversas; cópia começa em `demand`) | ✅ Completo (`Operacoes.tsx`, service `delete/duplicateOperacao`) |
 | 13 | Sincronização chat ↔ Painel: barra de contexto da operação, `agentChat` recebe `operacaoId/estagio` | ✅ Completo (`ConversaOperacaoBar.tsx`) |
 | 14 | Ação "Criar operação desta conversa" (chat → Painel, cria e vincula) | ✅ Completo |
-| 15 | Botões de ação DENTRO das mensagens do chat (sugestões/confirmações por mensagem) | ⏳ Pendente — escopo a confirmar com o usuário |
+| 15 | Botões de ação DENTRO das mensagens do chat (guiados por tool result) | ✅ Completo — quando a resposta aciona tools: "Ver no Painel" (vinculada) ou "Criar operação desta conversa" (não vinculada). Só navega ou cria+vincula (aditivo); nada destrutivo automático. Lógica de criar+vincular centralizada (reusada pela barra e pelas mensagens). |
 
 > A conversa criada no 1º envio herda o título do texto; o vínculo com operação é
 > opcional. Quando vinculada, as tools da Excambia gravam eventos na MESMA timeline
