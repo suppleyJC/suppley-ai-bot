@@ -227,6 +227,12 @@ createConversa: protectedProcedure
     });
   }),
 
+getConversa: protectedProcedure
+  .input(z.object({ conversaId: z.number() }))
+  .query(async ({ ctx, input }) => {
+    return db.getConversa(input.conversaId, ctx.user.id);
+  }),
+
 getConversaMessages: protectedProcedure
   .input(z.object({ conversaId: z.number() }))
   .query(async ({ ctx, input }) => {

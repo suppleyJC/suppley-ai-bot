@@ -32,6 +32,8 @@ interface ChatTabProps {
   quickActions: QuickAction[];
   /** Sidebar de conversas (Fase 3) — renderizada à esquerda no desktop. */
   sidebar?: React.ReactNode;
+  /** Barra de contexto da operação vinculada (Fase 3) — acima das mensagens. */
+  topBar?: React.ReactNode;
 }
 
 export function ChatTab({
@@ -45,6 +47,7 @@ export function ChatTab({
   onKeyPress,
   quickActions,
   sidebar,
+  topBar,
 }: ChatTabProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -70,6 +73,7 @@ export function ChatTab({
         </aside>
       )}
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+        {topBar}
         {/* Messages Area - responsive padding and max-width */}
         <div
           ref={messagesContainerRef}

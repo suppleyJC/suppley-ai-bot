@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { ChatTab } from "@/components/excambia/ChatTab";
 import { ConversationSidebar } from "@/components/excambia/ConversationSidebar";
+import { ConversaOperacaoBar } from "@/components/excambia/ConversaOperacaoBar";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
 
@@ -140,17 +141,29 @@ export default function Excambia() {
     { enabled: activeConversaId !== null },
   );
 
+  // Detalhe da conversa ativa (inclui o vínculo com a operação).
+  const { data: activeConversa } = trpc.excambia.getConversa.useQuery(
+    { conversaId: activeConversaId ?? 0 },
+    { enabled: activeConversaId !== null },
+  );
+
+  // Hidrata as mensagens do DB UMA vez por conversa selecionada. Evita que um
+  // refetch (disparado ao criar a conversa no 1º envio) sobrescreva as mensagens
+  // otimistas já em tela.
+  const hydratedConversaRef = useRef<number | null>(null);
   useEffect(() => {
     if (activeConversaId === null || !conversaMessages) return;
-    if (conversaMessages.length > 0) {
-      setMessages(conversaMessages.map((msg) => ({
-        role: msg.role as "user" | "assistant",
-        content: msg.content,
-        timestamp: new Date(msg.createdAt),
-      })));
-    } else {
-      setMessages([WELCOME_MESSAGE]);
-    }
+    if (hydratedConversaRef.current === activeConversaId) return;
+    hydratedConversaRef.current = activeConversaId;
+    setMessages(
+      conversaMessages.length > 0
+        ? conversaMessages.map((msg) => ({
+            role: msg.role as "user" | "assistant",
+            content: msg.content,
+            timestamp: new Date(msg.createdAt),
+          }))
+        : [WELCOME_MESSAGE],
+    );
   }, [conversaMessages, activeConversaId]);
 
   // Trocar de conversa: abre uma conversa existente (ou o histórico legado).
@@ -310,6 +323,9 @@ export default function Excambia() {
     const conv = await createConversaMutation.mutateAsync({ titulo });
     const id = conv?.id ?? null;
     if (id) {
+      // Marca como já hidratada para a hidratação do DB não limpar as mensagens
+      // otimistas que acabaram de ser enviadas nesta conversa recém-criada.
+      hydratedConversaRef.current = id;
       setActiveConversaId(id);
       utils.excambia.listConversas.invalidate();
     }
@@ -343,6 +359,10 @@ export default function Excambia() {
         role: m.role,
         content: m.content,
       })),
+      // Sincronização chat ↔ Painel: quando a conversa está vinculada a uma
+      // operação, a Excambia opera sobre ela (eventos na timeline, autor=excambia).
+      ...(activeConversa?.operacaoId ? { operacaoId: activeConversa.operacaoId } : {}),
+      ...(activeConversa?.estagio ? { estagio: activeConversa.estagio } : {}),
     });
   };
 
@@ -674,6 +694,15 @@ export default function Excambia() {
               onSelect={handleSelectConversa}
               onNew={handleNewConversa}
             />
+          }
+          topBar={
+            activeConversaId !== null ? (
+              <ConversaOperacaoBar
+                conversaId={activeConversaId}
+                operacaoId={activeConversa?.operacaoId ?? null}
+                onChanged={() => utils.excambia.getConversa.invalidate({ conversaId: activeConversaId })}
+              />
+            ) : null
           }
         />
 
