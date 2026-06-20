@@ -15,13 +15,14 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Link2, Link2Off, ExternalLink, ChevronDown, Workflow } from "lucide-react";
+import { Link2, Link2Off, ExternalLink, ChevronDown, Workflow, Plus, Loader2 } from "lucide-react";
 import { STAGE_META, type Estagio } from "@/lib/stageLabels";
 import { toast } from "sonner";
 
 interface Props {
   conversaId: number;
   operacaoId: number | null;
+  conversaTitulo?: string;
   onChanged: () => void;
 }
 
@@ -30,7 +31,7 @@ const STATUS_LABEL: Record<string, string> = {
   concluida: "Concluída", perdida: "Perdida", pausada: "Pausada",
 };
 
-export function ConversaOperacaoBar({ conversaId, operacaoId, onChanged }: Props) {
+export function ConversaOperacaoBar({ conversaId, operacaoId, conversaTitulo, onChanged }: Props) {
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const { data: operacoes } = trpc.operations.list.useQuery();
@@ -48,12 +49,28 @@ export function ConversaOperacaoBar({ conversaId, operacaoId, onChanged }: Props
     onError: (e) => toast.error(e.message),
   });
 
+  const createOp = trpc.operations.create.useMutation({
+    onError: (e) => toast.error(e.message || "Erro ao criar operação"),
+  });
+
   function handleLink(opId: number, estagio?: Estagio) {
     link.mutate({ conversaId, operacaoId: opId, estagio });
   }
   function handleUnlink() {
     link.mutate({ conversaId, operacaoId: null });
     toast.success("Conversa desvinculada da operação");
+  }
+
+  // Transforma a conversa atual numa operação rastreada (chat → Painel) e vincula.
+  async function handleCreateOp() {
+    const op = await createOp.mutateAsync({
+      titulo: (conversaTitulo || "Operação do chat").slice(0, 255),
+    });
+    if (op?.id) {
+      link.mutate({ conversaId, operacaoId: op.id, estagio: op.estagioAtual as Estagio });
+      utils.operations.list.invalidate();
+      toast.success("Operação criada e vinculada à conversa");
+    }
   }
 
   const op = detail?.operacao;
@@ -67,6 +84,18 @@ export function ConversaOperacaoBar({ conversaId, operacaoId, onChanged }: Props
           <Workflow className="h-3.5 w-3.5" />
           Conversa sem operação vinculada
         </span>
+        <div className="flex items-center gap-1.5">
+        <Button
+          variant="default" size="sm"
+          className="h-7 gap-1 bg-gradient-to-r from-[#311260] to-[#682ABA] text-xs hover:opacity-90"
+          onClick={handleCreateOp}
+          disabled={createOp.isPending || link.isPending}
+        >
+          {createOp.isPending || link.isPending
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            : <Plus className="h-3.5 w-3.5" />}
+          Criar operação
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="h-7 gap-1 text-xs">
@@ -89,6 +118,7 @@ export function ConversaOperacaoBar({ conversaId, operacaoId, onChanged }: Props
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
     );
   }

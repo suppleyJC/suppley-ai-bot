@@ -700,6 +700,7 @@ export default function Excambia() {
               <ConversaOperacaoBar
                 conversaId={activeConversaId}
                 operacaoId={activeConversa?.operacaoId ?? null}
+                conversaTitulo={activeConversa?.titulo}
                 onChanged={() => utils.excambia.getConversa.invalidate({ conversaId: activeConversaId })}
               />
             ) : null
