@@ -47,6 +47,14 @@ export const operationsRouter = router({
     }))
     .mutation(({ ctx, input }) => svc.updateOperacao({ userId: ctx.user.id, ...input })),
 
+  delete: protectedProcedure
+    .input(z.object({ operacaoId: z.number() }))
+    .mutation(({ ctx, input }) => svc.deleteOperacao(ctx.user.id, input.operacaoId)),
+
+  duplicate: protectedProcedure
+    .input(z.object({ operacaoId: z.number() }))
+    .mutation(({ ctx, input }) => svc.duplicateOperacao(ctx.user.id, input.operacaoId)),
+
   advanceStage: protectedProcedure
     .input(z.object({
       operacaoId: z.number(),

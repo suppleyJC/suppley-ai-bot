@@ -14,7 +14,7 @@ import { and, desc, eq, like, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   operacoes, operacaoEventos, operacaoEstagios, operacaoAnexos, operacaoFinanceiro, operacaoMarcos, demandas,
-  quotations, importCalculations, suppliers,
+  quotations, importCalculations, suppliers, conversas,
   type InsertOperacao, type Operacao,
 } from "../../drizzle/schema";
 
@@ -553,6 +553,58 @@ export async function listarMarcos(userId: number, operacaoId: number) {
   return db.select().from(operacaoMarcos)
     .where(eq(operacaoMarcos.operacaoId, operacaoId))
     .orderBy(operacaoMarcos.dataReferencia);
+}
+
+// ---------------------------------------------------------------------------
+// Excluir operação (e toda a sua descendência) — Fase 3.
+// Remove eventos, estágios, anexos, financeiro e marcos antes da própria
+// operação. Validando posse. Não há "soft delete": a esteira é apagada.
+// ---------------------------------------------------------------------------
+export async function deleteOperacao(userId: number, operacaoId: number) {
+  const db = await getDb();
+  if (!db) return { ok: false, message: "sem conexão" };
+
+  const [op] = await db.select().from(operacoes)
+    .where(and(eq(operacoes.id, operacaoId), eq(operacoes.userId, userId)))
+    .limit(1);
+  if (!op) return { ok: false, message: "operação não encontrada" };
+
+  await db.delete(operacaoMarcos).where(eq(operacaoMarcos.operacaoId, operacaoId));
+  await db.delete(operacaoFinanceiro).where(eq(operacaoFinanceiro.operacaoId, operacaoId));
+  await db.delete(operacaoAnexos).where(eq(operacaoAnexos.operacaoId, operacaoId));
+  await db.delete(operacaoEventos).where(eq(operacaoEventos.operacaoId, operacaoId));
+  await db.delete(operacaoEstagios).where(eq(operacaoEstagios.operacaoId, operacaoId));
+  // Conversas ligadas à operação ficam órfãs → desvincula (não apaga o chat).
+  await db.update(conversas).set({ operacaoId: null }).where(eq(conversas.operacaoId, operacaoId));
+  await db.delete(operacoes).where(eq(operacoes.id, operacaoId));
+
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Duplicar operação — Fase 3.
+// Cria uma operação NOVA copiando só os metadados de planejamento (título,
+// cliente, fornecedor, regime, prioridade, origem). Não copia a esteira
+// (eventos, cálculo, cotação, marcos): a cópia começa do zero no estágio demand.
+// ---------------------------------------------------------------------------
+export async function duplicateOperacao(userId: number, operacaoId: number): Promise<Operacao | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [src] = await db.select().from(operacoes)
+    .where(and(eq(operacoes.id, operacaoId), eq(operacoes.userId, userId)))
+    .limit(1);
+  if (!src) throw new Error("operação não encontrada");
+
+  return createOperacao({
+    userId,
+    titulo: `${src.titulo} (cópia)`,
+    clienteNome: src.clienteNome ?? undefined,
+    origemPais: src.origemPais ?? undefined,
+    regimeTributario: src.regimeTributario ?? undefined,
+    prioridade: (src.prioridade ?? undefined) as Prioridade | undefined,
+    origemDesejada: src.origemDesejada ?? undefined,
+  });
 }
 
 // ---------------------------------------------------------------------------

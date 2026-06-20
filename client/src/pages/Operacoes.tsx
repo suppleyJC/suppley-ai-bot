@@ -10,11 +10,18 @@
  *   import Operacoes from "@/pages/Operacoes";
  *   <Route path="/operacoes" component={Operacoes} />
  */
-import React from "react";
+import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ClipboardList, Plus, Loader2, ArrowRight } from "lucide-react";
+import { ClipboardList, Plus, Loader2, ArrowRight, MoreVertical, Copy, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { STAGE_ORDER, STAGE_META, type Estagio } from "@/lib/stageLabels";
 import { getPriorityMeta, type Prioridade } from "@/lib/priorityLabels";
 
@@ -58,12 +65,32 @@ export default function Operacoes() {
   const utils = trpc.useUtils();
   const { data, isLoading, error } = trpc.operations.list.useQuery();
 
+  const [delTarget, setDelTarget] = useState<OperacaoRow | null>(null);
+
   const create = trpc.operations.create.useMutation({
     onSuccess: (op) => {
       utils.operations.list.invalidate();
       if (op?.id) navigate(`/operacao/${op.id}`);
     },
     onError: (e) => toast.error(e.message || "Erro ao criar operação"),
+  });
+
+  const duplicate = trpc.operations.duplicate.useMutation({
+    onSuccess: (op) => {
+      utils.operations.list.invalidate();
+      toast.success("Operação duplicada");
+      if (op?.id) navigate(`/operacao/${op.id}`);
+    },
+    onError: (e) => toast.error(e.message || "Erro ao duplicar operação"),
+  });
+
+  const remove = trpc.operations.delete.useMutation({
+    onSuccess: () => {
+      utils.operations.list.invalidate();
+      setDelTarget(null);
+      toast.success("Operação excluída");
+    },
+    onError: (e) => toast.error(e.message || "Erro ao excluir operação"),
   });
 
   const operacoes = (data ?? []) as OperacaoRow[];
@@ -139,7 +166,15 @@ export default function Operacoes() {
                     {itens.length === 0 ? (
                       <p className="px-1 py-4 text-center text-xs text-slate-300">—</p>
                     ) : (
-                      itens.map((o) => <OperacaoCard key={o.id} op={o} onClick={() => navigate(`/operacao/${o.id}`)} />)
+                      itens.map((o) => (
+                        <OperacaoCard
+                          key={o.id}
+                          op={o}
+                          onClick={() => navigate(`/operacao/${o.id}`)}
+                          onDuplicate={() => duplicate.mutate({ operacaoId: o.id })}
+                          onDelete={() => setDelTarget(o)}
+                        />
+                      ))
                     )}
                   </div>
                 </div>
@@ -155,24 +190,63 @@ export default function Operacoes() {
               </h2>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {encerradas.map((o) => (
-                  <OperacaoCard key={o.id} op={o} onClick={() => navigate(`/operacao/${o.id}`)} />
+                  <OperacaoCard
+                    key={o.id}
+                    op={o}
+                    onClick={() => navigate(`/operacao/${o.id}`)}
+                    onDuplicate={() => duplicate.mutate({ operacaoId: o.id })}
+                    onDelete={() => setDelTarget(o)}
+                  />
                 ))}
               </div>
             </section>
           )}
         </>
       )}
+
+      {/* Confirmação de exclusão */}
+      <AlertDialog open={!!delTarget} onOpenChange={(o) => !o && setDelTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir operação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A operação <strong>{delTarget?.codigo} — {delTarget?.titulo}</strong> e toda a sua
+              esteira (eventos, anexos, financeiro, marcos) serão removidos permanentemente.
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => delTarget && remove.mutate({ operacaoId: delTarget.id })}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
-function OperacaoCard({ op, onClick }: { op: OperacaoRow; onClick: () => void }) {
+function OperacaoCard({
+  op, onClick, onDuplicate, onDelete,
+}: {
+  op: OperacaoRow;
+  onClick: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}) {
   const st = STATUS_LABEL[op.status] ?? { txt: op.status, cls: "bg-slate-100 text-slate-500" };
   const prio = getPriorityMeta(op.prioridade);
   return (
-    <button
+    <div
       onClick={onClick}
-      className="group w-full rounded-xl border border-slate-200 bg-white p-3 text-left transition-all hover:border-violet-300 hover:shadow-sm"
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick(); }}
+      className="group w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-3 text-left transition-all hover:border-violet-300 hover:shadow-sm"
     >
       <div className="flex items-center justify-between gap-2">
         <p className="font-mono text-[10px] text-slate-400">{op.codigo}</p>
@@ -184,6 +258,24 @@ function OperacaoCard({ op, onClick }: { op: OperacaoRow; onClick: () => void })
             </span>
           )}
           <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${st.cls}`}>{st.txt}</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <button
+                className="rounded-md p-0.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100 data-[state=open]:opacity-100"
+                aria-label="Ações da operação"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={onDuplicate}>
+                <Copy className="mr-2 h-4 w-4" /> Duplicar
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={onDelete}>
+                <Trash2 className="mr-2 h-4 w-4" /> Excluir
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       <p className="mt-1 line-clamp-2 text-sm font-semibold text-slate-800">{op.titulo}</p>
@@ -198,6 +290,6 @@ function OperacaoCard({ op, onClick }: { op: OperacaoRow; onClick: () => void })
           Abrir <ArrowRight className="h-3 w-3" />
         </span>
       </div>
-    </button>
+    </div>
   );
 }
