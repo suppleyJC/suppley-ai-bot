@@ -161,6 +161,24 @@ docker restart suppley-app
 9. **COMANDO 9** — Validar coesão: mesma ação no Painel e na Excambia gera o mesmo evento.
 10. **Validar o cálculo real** do NCM 7308.40.00 (II 25%) pela aba de cálculo (pendente desde antes).
 
+### FASE 3 — UI conversacional (em andamento, branch `claude/manus-migration-independent-1kfrll`)
+
+Migração de banco: **`scripts/apply-fase3-migrations.sh`** (aplica `0024_conversas.sql`).
+Rodar ANTES do deploy do código novo (igual à Fase 2). Aditiva e backward-compatible.
+
+| # | Item | Status |
+|---|---|---|
+| 10 | Tabela `conversas` + `conversaId` em `sofia_chat_messages` + CRUD (conversaDb) + endpoints tRPC | ✅ Completo (migration 0024) |
+| 11 | Sidebar de conversas na Excambia (nova/retomar/renomear/arquivar/excluir) + histórico legado | ✅ Completo (`ConversationSidebar.tsx`) |
+| 12 | Excluir/duplicar operação no Painel (cascata + desvincula conversas; cópia começa em `demand`) | ✅ Completo (`Operacoes.tsx`, service `delete/duplicateOperacao`) |
+| 13 | Sincronização chat ↔ Painel: barra de contexto da operação, `agentChat` recebe `operacaoId/estagio` | ✅ Completo (`ConversaOperacaoBar.tsx`) |
+| 14 | Ação "Criar operação desta conversa" (chat → Painel, cria e vincula) | ✅ Completo |
+| 15 | Botões de ação DENTRO das mensagens do chat (sugestões/confirmações por mensagem) | ⏳ Pendente — escopo a confirmar com o usuário |
+
+> A conversa criada no 1º envio herda o título do texto; o vínculo com operação é
+> opcional. Quando vinculada, as tools da Excambia gravam eventos na MESMA timeline
+> do Painel (autor=`excambia`) — coesão garantida pelo teste `coesao.test.ts`.
+
 ### Status de Produção — ✅ FASE 2 NO AR (deploy concluído 2026-06-19)
 
 Deploy validado em produção: `suppley_app` e `suppley_db` Up (healthy), 11.023 NCMs,
