@@ -15,13 +15,22 @@
 #   bash scripts/apply-fase3-migrations.sh
 set -euo pipefail
 
-DB_CONTAINER="${DB_CONTAINER:-suppley_db}"
-DB_USER="${DB_USER:-suppley}"
-DB_PASSWORD="${DB_PASSWORD:-SuppleyDb2024}"
-DB_NAME="${DB_NAME:-suppley_calc}"
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DRIZZLE_DIR="${SCRIPT_DIR}/../drizzle"
+
+# Carrega credenciais do .env (mesma fonte do docker-compose), se existir,
+# para que usuário/senha/banco batam com o container em execução.
+if [ -f "${SCRIPT_DIR}/../.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "${SCRIPT_DIR}/../.env"
+  set +a
+fi
+
+DB_CONTAINER="${DB_CONTAINER:-suppley-mysql}"
+DB_USER="${DB_USER:-suppley}"
+DB_PASSWORD="${DB_PASSWORD:-changeme}"
+DB_NAME="${DB_NAME:-suppley_calc}"
 
 MIGRATIONS=(
   "0024_conversas.sql"
