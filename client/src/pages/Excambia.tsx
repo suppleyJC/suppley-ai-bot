@@ -27,6 +27,9 @@ interface ChatMessage {
   toolsUsed?: string[];
   /** Operação vinculada no momento da resposta (para o botão "Ver no Painel"). */
   linkedOperacaoId?: number | null;
+  /** Arquivo gerado (planilha/PDF) para download direto na mensagem. */
+  downloadUrl?: string;
+  downloadName?: string;
 }
 
 /** Mensagem de boas-vindas exibida em conversas novas (sem histórico). */
@@ -271,12 +274,20 @@ export default function Excambia() {
         : "";
       const content = (data.reply || "") + toolNote;
 
+      // Arquivo gerado pela tool de relatório → botão de download na mensagem.
+      const relatorio = (data.toolResults ?? []).find(
+        (t) => t.name === "gerar_relatorio_calculo" && t.ok && t.data,
+      );
+      const dl = relatorio?.data as { url?: string; fileName?: string } | undefined;
+
       const assistantMessage = {
         role: "assistant" as const,
         content,
         timestamp: new Date(),
         toolsUsed: tools,
         linkedOperacaoId: linkedOpIdRef.current,
+        downloadUrl: dl?.url,
+        downloadName: dl?.fileName,
       };
       setMessages((prev) => [...prev, assistantMessage]);
       persistAssistant(content);

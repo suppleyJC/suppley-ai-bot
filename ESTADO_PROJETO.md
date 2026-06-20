@@ -179,6 +179,29 @@ Rodar ANTES do deploy do código novo (igual à Fase 2). Aditiva e backward-comp
 > opcional. Quando vinculada, as tools da Excambia gravam eventos na MESMA timeline
 > do Painel (autor=`excambia`) — coesão garantida pelo teste `coesao.test.ts`.
 
+| 16 | Tool `gerar_relatorio_calculo` (Excel com fórmulas vivas / PDF) entregue pela Excambia no chat com link + botão de download | ✅ Completo — roda o motor certificado, gera o arquivo, sobe ao storage, registra anexo na operação (autor=excambia). Mapeamento de parâmetros compartilhado com `montar_calculo` (`calcParams.ts`). |
+
+> **Capacidades reais da Excambia (auditoria):** IA agêntica (function calling, guardrails,
+> auditável) ✅ · cálculo certificado (`montar_calculo`) ✅ · **gera planilha/PDF no chat**
+> (`gerar_relatorio_calculo`) ✅ · sourcing/RFQ/cotação/comparação ✅ · classificação NCM ✅.
+> Parciais (ver plano abaixo): **desenvolvimento de produto** e **desenvolvimento de fornecedor**.
+
+### Plano — Desenvolvimento de Produto e de Fornecedor (próxima rodada)
+
+**Desenvolvimento de Produto** (hoje só `classificar_ncm`):
+- `ficha_tecnica_produto`: estrutura especificações (material, dimensões, tolerâncias, normas, certificações exigidas) a partir de desenho/PDF enviado.
+- `analise_viabilidade_produto`: cruza NCM + alíquotas + câmbio + MOQ para indicar se o produto "fecha conta" antes de procurar fornecedor.
+- `requisitos_homologacao`: lista exigências regulatórias (INMETRO, ANVISA, ANATEL) por NCM/uso.
+
+**Desenvolvimento de Fornecedor** (hoje `enviar_rfq`/`registrar_cotacao`/`comparar_cotacoes`):
+- `score_fornecedor`: pontua fornecedor por histórico (preço, prazo, qualidade, conformidade) usando dados já no banco.
+- `onboarding_fornecedor`: checklist de qualificação (documentos, amostras, auditoria, capacidade).
+- `historico_relacionamento`: consolida cotações/operações/marcos por fornecedor para negociação informada.
+- `comparar_fornecedores_multicriterio`: além de preço, compara lead time, MOQ, score e risco.
+
+> Todas seguem o mesmo padrão: tool fina → serviço determinístico → evento na timeline
+> (autor=excambia). Schema/serviço definidos aqui; migrações (se houver) aditivas.
+
 ### Status de Produção — ✅ FASE 2 NO AR (deploy concluído 2026-06-19)
 
 Deploy validado em produção: `suppley_app` e `suppley_db` Up (healthy), 11.023 NCMs,

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TabsContent } from "@/components/ui/tabs";
 import {
-  Send, Loader2, Upload, ExternalLink, Plus,
+  Send, Loader2, Upload, ExternalLink, Plus, Download,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 
@@ -13,6 +13,8 @@ interface ChatMessage {
   timestamp?: Date;
   toolsUsed?: string[];
   linkedOperacaoId?: number | null;
+  downloadUrl?: string;
+  downloadName?: string;
 }
 
 interface QuickAction {
@@ -129,6 +131,16 @@ export function ChatTab({
                   {/* Botões de ação na mensagem (Fase 3): guiados pelas tools
                       acionadas. Só navegam (Ver no Painel) ou criam+vinculam
                       uma operação (aditivo) — nada destrutivo automático. */}
+                  {msg.role === "assistant" && msg.downloadUrl && (
+                    <div className="mt-2 border-t border-slate-100 dark:border-slate-700 pt-2">
+                      <a href={msg.downloadUrl} target="_blank" rel="noreferrer" download={msg.downloadName}>
+                        <Button variant="default" size="sm" className="h-7 gap-1 bg-emerald-600 text-xs hover:bg-emerald-700">
+                          <Download className="h-3.5 w-3.5" /> Baixar {msg.downloadName ?? "arquivo"}
+                        </Button>
+                      </a>
+                    </div>
+                  )}
+
                   {msg.role === "assistant" && (msg.toolsUsed?.length ?? 0) > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5 border-t border-slate-100 dark:border-slate-700 pt-2">
                       {msg.linkedOperacaoId ? (

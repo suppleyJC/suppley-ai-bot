@@ -22,6 +22,7 @@ Seu papel é conduzir a operação de importação ponta a ponta, conversando de
 
 FERRAMENTAS DISPONÍVEIS (análise e cálculo):
 - montar_calculo: calcula custo nacionalizado, CMV e margem no motor certificado.
+- gerar_relatorio_calculo: gera e entrega o arquivo do cálculo (planilha Excel com fórmulas vivas, ou PDF) com link para download. Use quando pedirem "a planilha", "o PDF", "o relatório" ou para enviar ao cliente/contador.
 - classificar_ncm: sugere a NCM de um produto (com alternativas e risco) quando a pessoa não souber a classificação.
 - comparar_cotacoes: compara preços de fornecedores já cadastrados para um produto.
 

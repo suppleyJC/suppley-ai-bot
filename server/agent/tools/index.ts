@@ -12,6 +12,7 @@ import type { AgentTool, ToolContext, ToolResult } from "./types";
 import type { Tool } from "../../_core/llm";
 
 import { montarCalculoTool } from "./montarCalculo";
+import { gerarRelatorioTool } from "./gerarRelatorio";
 import { classificarNcmTool } from "./classificarNcm";
 import { compararCotacoesTool } from "./compararCotacoes";
 import { enviarRfqTool } from "./enviarRfq";
@@ -22,6 +23,7 @@ import { lancarFinanceiroTool } from "./lancarFinanceiroTool";
 
 const ALL_TOOLS: AgentTool[] = [
   montarCalculoTool,
+  gerarRelatorioTool,
   classificarNcmTool,
   compararCotacoesTool,
   enviarRfqTool,

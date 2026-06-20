@@ -20,6 +20,7 @@
  */
 import { defineSchema, type AgentTool, type ToolContext, type ToolResult } from "./types";
 import { applyFiscalGuardrail } from "../guardrails/fiscal";
+import { CALC_SCHEMA_PROPERTIES, mapArgsToEstimativaInput, type ItemArg } from "./calcParams";
 
 // Serviços existentes
 import * as estimativaService from "../../services/estimativaService";
@@ -32,54 +33,10 @@ const schema = defineSchema(
   "frete, câmbio e regime tributário. NÃO invente alíquotas — o motor as aplica.",
   {
     type: "object",
-    properties: {
-      ncm: { type: "string", description: "Código NCM de 8 dígitos (ex: 7308.40.00)" },
-      itens: {
-        type: "array",
-        description: "Itens da importação",
-        items: {
-          type: "object",
-          properties: {
-            descricao: { type: "string" },
-            quantidade: { type: "number" },
-            precoFobUnitarioUsd: { type: "number", description: "Preço FOB unitário em USD" },
-          },
-          required: ["quantidade", "precoFobUnitarioUsd"],
-        },
-      },
-      freteUsd: { type: "number", description: "Frete internacional total em USD" },
-      seguroUsd: { type: "number", description: "Seguro em USD (opcional)" },
-      cambioBrl: { type: "number", description: "Taxa de câmbio USD→BRL (PTAX)" },
-      regimeTributario: {
-        type: "string",
-        enum: ["lucro_real", "lucro_presumido", "simples_nacional"],
-        description: "Regime tributário do importador",
-      },
-      estadoDestino: { type: "string", description: "UF de destino (ex: SC)" },
-      ttdFase: {
-        type: "string",
-        description: "Fase do TTD/benefício estadual de SC: 'primeiros_36m' (2,6%) ou 'apos_36m' (1,0%)",
-      },
-    },
+    properties: CALC_SCHEMA_PROPERTIES,
     required: ["itens", "cambioBrl", "regimeTributario"],
   },
 );
-
-interface ItemArg {
-  descricao?: string;
-  quantidade: number;
-  precoFobUnitarioUsd: number;
-  ncm?: string;
-}
-
-/** Mapeia a fase TTD textual vinda do LLM para o enum esperado pelo motor. */
-function mapTtdPhase(ttdFase?: unknown): "primeiros_36m" | "apos_36m" | undefined {
-  if (typeof ttdFase !== "string") return undefined;
-  const f = ttdFase.toLowerCase();
-  if (f.includes("primeiros") || f.includes("2.6") || f.includes("2,6")) return "primeiros_36m";
-  if (f.includes("apos") || f.includes("após") || f.includes("1.0") || f.includes("1,0") || f === "1%") return "apos_36m";
-  return undefined;
-}
 
 export const montarCalculoTool: AgentTool = {
   name: "montar_calculo",
@@ -103,21 +60,7 @@ export const montarCalculoTool: AgentTool = {
     }
 
     // 3) ADAPTADOR: nomes do LLM (pt) → interface real do serviço (en)
-    const ncmTopo = typeof args.ncm === "string" ? args.ncm : "";
-    const estimativaInput: estimativaService.EstimativaInput = {
-      products: itens.map((i) => ({
-        productName: i.descricao ?? "Item",
-        ncmCode: i.ncm ?? ncmTopo,
-        quantity: Number(i.quantidade),
-        unitPrice: Number(i.precoFobUnitarioUsd),
-      })),
-      exchangeRate: args.cambioBrl as number,
-      currency: "USD",
-      freight: typeof args.freteUsd === "number" ? args.freteUsd : undefined,
-      insurance: typeof args.seguroUsd === "number" ? args.seguroUsd : undefined,
-      taxRegime: args.regimeTributario as estimativaService.EstimativaInput["taxRegime"],
-      ttdPhase: mapTtdPhase(args.ttdFase),
-    };
+    const estimativaInput = mapArgsToEstimativaInput(args);
 
     // 4) Delega ao MOTOR CERTIFICADO (determinístico)
     let resultado: estimativaService.EstimativaResult;
