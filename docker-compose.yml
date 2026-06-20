@@ -43,9 +43,11 @@ services:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootchangeme}
       MYSQL_USER: ${DB_USER:-suppley}
       MYSQL_PASSWORD: ${DB_PASSWORD:-changeme}
-    ports:
-      # Only expose for development, remove in production behind firewall
-      - "3306:3306"
+    # DB NÃO é exposto no host (postura de produção): o app conecta pela rede
+    # interna do Docker (db:3306). Para acesso manual: docker exec -it suppley-mysql mysql -u suppley -p
+    # Para expor em dev, descomente abaixo (ajuste a porta se 3306 estiver ocupada):
+    #   ports:
+    #     - "3306:3306"
     volumes:
       # Persist database data
       - db-data:/var/lib/mysql
