@@ -13,6 +13,7 @@ import {
   ArrowDownRight, Minus, Globe, DollarSign, Package, Users, Settings2
 } from "lucide-react";
 import { ChatTab } from "@/components/excambia/ChatTab";
+import { ConversationSidebar } from "@/components/excambia/ConversationSidebar";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
 
@@ -21,6 +22,24 @@ interface ChatMessage {
   content: string;
   timestamp?: Date;
 }
+
+/** Mensagem de boas-vindas exibida em conversas novas (sem histórico). */
+const WELCOME_MESSAGE: ChatMessage = {
+  role: "assistant",
+  content: `Olá! 👋 Sou a **Excambia** — Inteligência Agêntica para Comércio Exterior.
+
+Sou sua consultora especialista em comércio exterior, integrada a todas as funções do Excambia. Posso ajudá-lo com:
+
+🔮 **Análise Preditiva** — Correlações de mercado e janelas de oportunidade
+📊 **Análise de Cotações** — Envie documentos para extração e análise automática
+💰 **Viabilidade Financeira** — Verifico se o preço FOB é viável para seu negócio
+🤝 **Estratégias de Negociação** — Sugiro argumentos para negociar com fornecedores
+📈 **Insights de BI** — Identifico padrões no seu histórico de importações
+⚡ **Alertas Inteligentes** — Monitoro câmbio e oportunidades em tempo real
+
+Como posso ajudá-lo hoje?`,
+  timestamp: new Date(),
+};
 
 interface MarketIndicator {
   name: string;
@@ -72,24 +91,7 @@ interface SystemicAnalysis {
 }
 
 export default function Excambia() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      role: "assistant",
-      content: `Olá! 👋 Sou a **Excambia** — Inteligência Agêntica para Comércio Exterior.
-
-Sou sua consultora especialista em comércio exterior, integrada a todas as funções do Excambia. Posso ajudá-lo com:
-
-🔮 **Análise Preditiva** — Correlações de mercado e janelas de oportunidade
-📊 **Análise de Cotações** — Envie documentos para extração e análise automática
-💰 **Viabilidade Financeira** — Verifico se o preço FOB é viável para seu negócio
-🤝 **Estratégias de Negociação** — Sugiro argumentos para negociar com fornecedores
-📈 **Insights de BI** — Identifico padrões no seu histórico de importações
-⚡ **Alertas Inteligentes** — Monitoro câmbio e oportunidades em tempo real
-
-Como posso ajudá-lo hoje?`,
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
   const [inputMessage, setInputMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -99,27 +101,75 @@ Como posso ajudá-lo hoje?`,
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const utils = trpc.useUtils();
-  const [historyLoaded, setHistoryLoaded] = useState(false);
 
-  // Load chat history from database
-  const { data: chatHistory } = trpc.excambia.getChatHistory.useQuery(undefined, {
-    enabled: !historyLoaded,
+  // ── Conversas (Fase 3) ──────────────────────────────────────────────────
+  // `activeConversaId === null` → histórico legado (mensagens pré-Fase 3) ou
+  // conversa nova ainda não persistida. O ref espelha o estado para os callbacks
+  // das mutations (que rodam fora do ciclo de render).
+  const [activeConversaId, setActiveConversaIdState] = useState<number | null>(null);
+  const activeConversaIdRef = useRef<number | null>(null);
+  const setActiveConversaId = (id: number | null) => {
+    activeConversaIdRef.current = id;
+    setActiveConversaIdState(id);
+  };
+  const [legacyLoaded, setLegacyLoaded] = useState(false);
+
+  // Histórico legado (mensagens sem conversa) — carregado só quando se está na
+  // visão "Histórico anterior" (activeConversaId === null).
+  const { data: legacyHistory } = trpc.excambia.getChatHistory.useQuery(undefined, {
+    enabled: activeConversaId === null && !legacyLoaded,
   });
 
-  // Load saved messages on mount
   useEffect(() => {
-    if (chatHistory && chatHistory.length > 0 && !historyLoaded) {
-      const savedMessages: ChatMessage[] = chatHistory.map((msg) => ({
+    if (activeConversaId !== null || legacyLoaded) return;
+    if (legacyHistory && legacyHistory.length > 0) {
+      setMessages(legacyHistory.map((msg) => ({
         role: msg.role as "user" | "assistant",
         content: msg.content,
         timestamp: new Date(msg.createdAt),
-      }));
-      setMessages(savedMessages);
-      setHistoryLoaded(true);
-    } else if (chatHistory && chatHistory.length === 0 && !historyLoaded) {
-      setHistoryLoaded(true);
+      })));
+      setLegacyLoaded(true);
+    } else if (legacyHistory && legacyHistory.length === 0) {
+      setLegacyLoaded(true);
     }
-  }, [chatHistory, historyLoaded]);
+  }, [legacyHistory, legacyLoaded, activeConversaId]);
+
+  // Mensagens da conversa selecionada.
+  const { data: conversaMessages } = trpc.excambia.getConversaMessages.useQuery(
+    { conversaId: activeConversaId ?? 0 },
+    { enabled: activeConversaId !== null },
+  );
+
+  useEffect(() => {
+    if (activeConversaId === null || !conversaMessages) return;
+    if (conversaMessages.length > 0) {
+      setMessages(conversaMessages.map((msg) => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+        timestamp: new Date(msg.createdAt),
+      })));
+    } else {
+      setMessages([WELCOME_MESSAGE]);
+    }
+  }, [conversaMessages, activeConversaId]);
+
+  // Trocar de conversa: abre uma conversa existente (ou o histórico legado).
+  const handleSelectConversa = (id: number | null) => {
+    setActiveConversaId(id);
+    if (id === null) {
+      setLegacyLoaded(false); // recarrega o histórico legado
+      setMessages([WELCOME_MESSAGE]);
+    }
+  };
+
+  // Nova conversa: limpa a tela. A conversa só é persistida no primeiro envio.
+  const handleNewConversa = () => {
+    setActiveConversaId(null);
+    setLegacyLoaded(true); // não puxa o histórico legado numa conversa nova
+    setMessages([WELCOME_MESSAGE]);
+  };
+
+  const createConversaMutation = trpc.excambia.createConversa.useMutation();
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -151,6 +201,17 @@ Como posso ajudá-lo hoje?`,
   // Save message mutation
   const saveMessageMutation = trpc.excambia.saveChatMessage.useMutation();
 
+  // Persiste a resposta do assistente na conversa ativa (se já houver uma).
+  const persistAssistant = (content: string) => {
+    const conversaId = activeConversaIdRef.current;
+    saveMessageMutation.mutate({
+      role: "assistant",
+      content,
+      ...(conversaId ? { conversaId } : {}),
+    });
+    if (conversaId) utils.excambia.listConversas.invalidate();
+  };
+
   // Chat mutation — orquestrador agêntico da Excambia (function calling + motor certificado)
   const chatMutation = trpc.excambia.agentChat.useMutation({
     onMutate: () => setIsTyping(true),
@@ -168,11 +229,7 @@ Como posso ajudá-lo hoje?`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
-      // Save assistant response to database
-      saveMessageMutation.mutate({
-        role: "assistant",
-        content,
-      });
+      persistAssistant(content);
     },
     onError: (error) => {
       toast.error(error.message || "Erro ao processar mensagem");
@@ -190,11 +247,7 @@ Como posso ajudá-lo hoje?`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
-      // Save assistant response to database
-      saveMessageMutation.mutate({
-        role: "assistant",
-        content: data.analysis,
-      });
+      persistAssistant(data.analysis);
     },
     onError: (error) => {
       toast.error(error.message || "Erro ao analisar documento");
@@ -247,22 +300,42 @@ Como posso ajudá-lo hoje?`,
     },
   });
 
+  // Garante que exista uma conversa persistida antes de salvar mensagens.
+  // Numa conversa nova (activeConversaId === null e não é o histórico legado),
+  // cria a conversa usando o texto como título. Devolve o conversaId (ou null
+  // se não houver conexão/DB).
+  const ensureConversa = async (firstText: string): Promise<number | null> => {
+    if (activeConversaIdRef.current) return activeConversaIdRef.current;
+    const titulo = firstText.trim().slice(0, 60) || "Nova conversa";
+    const conv = await createConversaMutation.mutateAsync({ titulo });
+    const id = conv?.id ?? null;
+    if (id) {
+      setActiveConversaId(id);
+      utils.excambia.listConversas.invalidate();
+    }
+    return id;
+  };
+
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isTyping) return;
 
+    const text = inputMessage;
     const userMessage: ChatMessage = {
       role: "user",
-      content: inputMessage,
+      content: text,
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInputMessage("");
-    
+
+    const conversaId = await ensureConversa(text);
+
     // Save user message to database
     saveMessageMutation.mutate({
       role: "user",
-      content: inputMessage,
+      content: text,
+      ...(conversaId ? { conversaId } : {}),
     });
 
     chatMutation.mutate({
@@ -318,11 +391,14 @@ Como posso ajudá-lo hoje?`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, userMessage]);
-      
+
+      const conversaId = await ensureConversa(`Análise: ${file.name}`);
+
       // Save user message to database
       saveMessageMutation.mutate({
         role: "user",
         content: userMessage.content,
+        ...(conversaId ? { conversaId } : {}),
       });
 
       analyzeMutation.mutate({
@@ -592,6 +668,13 @@ Como posso ajudá-lo hoje?`,
           onFileUpload={handleFileUpload}
           onKeyPress={handleKeyPress}
           quickActions={quickActions}
+          sidebar={
+            <ConversationSidebar
+              activeConversaId={activeConversaId}
+              onSelect={handleSelectConversa}
+              onNew={handleNewConversa}
+            />
+          }
         />
 
         {/* Predictive Tab */}

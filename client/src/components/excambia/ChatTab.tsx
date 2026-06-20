@@ -30,6 +30,8 @@ interface ChatTabProps {
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onKeyPress: (e: React.KeyboardEvent) => void;
   quickActions: QuickAction[];
+  /** Sidebar de conversas (Fase 3) — renderizada à esquerda no desktop. */
+  sidebar?: React.ReactNode;
 }
 
 export function ChatTab({
@@ -42,6 +44,7 @@ export function ChatTab({
   onFileUpload,
   onKeyPress,
   quickActions,
+  sidebar,
 }: ChatTabProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -60,6 +63,12 @@ export function ChatTab({
       className="flex-1 flex flex-col overflow-hidden m-0 p-0"
       style={{ height: 'calc(100vh - 240px)', minHeight: '400px' }}
     >
+     <div className="flex h-full min-h-0">
+      {sidebar && (
+        <aside className="hidden md:flex w-64 shrink-0 h-full min-h-0">
+          {sidebar}
+        </aside>
+      )}
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
         {/* Messages Area - responsive padding and max-width */}
         <div
@@ -205,6 +214,7 @@ export function ChatTab({
           </div>
         </div>
       </div>
+     </div>
     </TabsContent>
   );
 }
