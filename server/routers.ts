@@ -27,6 +27,7 @@ import { messagingRouter } from "./routers/messagingRouter";
 import { estimativaRouter } from "./routers/estimativaRouter";
 import { operationsRouter } from "./routers/operationsRouter";
 import { marketRouter } from "./routers/marketRouter";
+import { conversasRouter } from "./routers/conversasRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -53,6 +54,8 @@ export const appRouter = router({
   reform: reformRouter,
   rfq: rfqRouter,
   messaging: messagingRouter,
+  // Conversas persistentes da Excambia
+  conversas: conversasRouter,
   // Motor V2 endpoints (paralelos ao sistema existente)
   estimativa: estimativaRouter,
   operations: operationsRouter,

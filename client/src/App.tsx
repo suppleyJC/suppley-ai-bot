@@ -23,7 +23,7 @@ import Suppliers from "./pages/Suppliers";
 import Products from "./pages/Products";
 import Settings from "./pages/Settings";
 
-import Excambia from "./pages/Excambia";
+import ExcambiaChat from "./pages/ExcambiaChat";
 import ExcambiaMarket from "./pages/ExcambiaMarket";
 import ReformDashboard from "./pages/ReformDashboard";
 import RfqDashboard from "./pages/RfqDashboard";
@@ -50,7 +50,7 @@ function AuthenticatedRoutes() {
         <Route path="/suppliers" component={Suppliers} />
         <Route path="/products" component={Products} />
         <Route path="/settings" component={Settings} />
-        <Route path="/excambia" component={Excambia} />
+        <Route path="/excambia" component={ExcambiaChat} />
         <Route path="/excambia/market" component={ExcambiaMarket} />
         <Route path="/industries" component={Industries} />
         <Route path="/industries/:id">{(params: any) => <IndustryDetail id={params.id} />}</Route>

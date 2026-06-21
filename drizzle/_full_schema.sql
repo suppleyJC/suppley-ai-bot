@@ -1,5 +1,5 @@
 -- Schema COMPLETO gerado a partir de schema.ts + rfqSchema.ts (drizzle-kit export).
--- Fonte da verdade do banco: corresponde exatamente ao que o app espera.
+-- Inclui conversaMensagens e todos os endpoints.
 -- Regenerar: DATABASE_URL=dummy npx drizzle-kit export --config ./drizzle.config.ts
 -- NÃO editar à mão.
 
@@ -121,6 +121,17 @@ CREATE TABLE `company_settings` (
 	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `company_settings_id` PRIMARY KEY(`id`),
 	CONSTRAINT `company_settings_userId_unique` UNIQUE(`userId`)
+);
+
+CREATE TABLE `conversa_mensagens` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`conversaId` int NOT NULL,
+	`role` enum('user','assistant','system','tool') NOT NULL,
+	`content` text NOT NULL,
+	`toolsUsed` json,
+	`toolResults` json,
+	`criadaEm` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `conversa_mensagens_id` PRIMARY KEY(`id`)
 );
 
 CREATE TABLE `conversas` (
@@ -1079,6 +1090,7 @@ CREATE TABLE `supplier_quotes` (
 	CONSTRAINT `supplier_quotes_id` PRIMARY KEY(`id`)
 );
 
+CREATE INDEX `idx_conversa_msgs` ON `conversa_mensagens` (`conversaId`);
 CREATE INDEX `idx_conversas_user` ON `conversas` (`userId`);
 CREATE INDEX `idx_conversas_operacao` ON `conversas` (`operacaoId`);
 CREATE INDEX `idx_demandas_user` ON `demandas` (`userId`);

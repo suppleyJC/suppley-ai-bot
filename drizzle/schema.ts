@@ -640,6 +640,27 @@ export type Conversa = typeof conversas.$inferSelect;
 export type InsertConversa = typeof conversas.$inferInsert;
 
 /**
+ * Mensagens dentro de uma conversa - histórico persistente com metadados agênticos
+ */
+export const conversaMensagens = mysqlTable("conversa_mensagens", {
+  id: int("id").autoincrement().primaryKey(),
+  conversaId: int("conversaId").notNull(),
+
+  role: mysqlEnum("role", ["user", "assistant", "system", "tool"]).notNull(),
+  content: text("content").notNull(),
+
+  // Se a mensagem do assistente usou ferramentas (coesão com a camada agêntica)
+  toolsUsed: json("toolsUsed"),       // string[] | null
+  toolResults: json("toolResults"),   // [{name, ok, data}] | null
+
+  criadaEm: timestamp("criadaEm").defaultNow().notNull(),
+}, (t) => ({
+  byConversa: index("idx_conversa_msgs").on(t.conversaId),
+}));
+export type ConversaMensagem = typeof conversaMensagens.$inferSelect;
+export type InsertConversaMensagem = typeof conversaMensagens.$inferInsert;
+
+/**
  * Excambia Learning Context - Aprendizado persistente da IA
  */
 export const sofiaLearningContext = mysqlTable("excambia_learning_context", {
