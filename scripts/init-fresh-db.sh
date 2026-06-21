@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
 #
-# Inicializa o banco MySQL do ZERO, aplicando TODAS as migrations (0000→0024)
-# em ordem. Use para um deploy limpo, sem dados anteriores.
+# Inicializa o banco MySQL do ZERO aplicando o schema completo gerado a partir
+# de schema.ts (drizzle/_full_schema.sql). Use para um deploy limpo, sem dados.
 #
-# Por que existe: as migrations 0000-0016 foram geradas pelo drizzle-kit (com
-# marcadores '--> statement-breakpoint', que não são SQL válido via pipe) e as
-# 0017-0024 foram escritas à mão. Este script normaliza tudo e aplica via
-# `docker exec ... mysql`, garantindo o schema completo num banco recém-criado.
+# Por que NÃO as migrations SQL numeradas: elas estão dessincronizadas do
+# schema.ts (faltam colunas que o app usa, ex: users.passwordHash). O arquivo
+# _full_schema.sql vem de `drizzle-kit export` e corresponde exatamente ao que
+# o app espera — é a fonte da verdade.
 #
 # Importante:
-#   - Usa SOMENTE as migrations rastreadas pelo git (ignora arquivos .sql órfãos
-#     que possam existir no diretório drizzle/ de deploys antigos).
 #   - RESETA o banco (dropa todas as tabelas) antes de aplicar — é re-executável.
 #
 # USO (no servidor, em /opt/suppley/suppley-ai-bot):
@@ -59,23 +57,21 @@ else
   echo "[INIT]   banco já estava vazio"
 fi
 
-# Aplica SOMENTE as migrations rastreadas pelo git, em ordem.
-echo "[INIT] Aplicando migrations rastreadas pelo git ..."
-MIGRATIONS=$(git -C "$REPO_DIR" ls-files 'drizzle/*.sql' | sort)
-if [ -z "$MIGRATIONS" ]; then
-  echo "ERRO: nenhuma migration rastreada encontrada em drizzle/" >&2
+# Aplica o schema COMPLETO gerado de schema.ts (drizzle/_full_schema.sql).
+#
+# Por que não as migrations SQL numeradas: elas estão dessincronizadas do
+# schema.ts (ex: faltam as colunas de auth local em `users` — passwordHash,
+# isEmailVerified, etc.), o que quebra login/cadastro. O arquivo _full_schema.sql
+# é gerado por `drizzle-kit export` e corresponde EXATAMENTE ao que o app espera.
+SCHEMA_FILE="${REPO_DIR}/drizzle/_full_schema.sql"
+if [ ! -f "$SCHEMA_FILE" ]; then
+  echo "ERRO: não encontrei ${SCHEMA_FILE}" >&2
   exit 1
 fi
-
-while IFS= read -r REL; do
-  [ -z "$REL" ] && continue
-  NAME=$(basename "$REL")
-  echo "[INIT] → aplicando ${NAME} ..."
-  # Remove os marcadores '--> statement-breakpoint' do drizzle antes de aplicar.
-  grep -v "statement-breakpoint" "${REPO_DIR}/${REL}" | docker exec -i "$DB_CONTAINER" \
-    mysql -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME"
-  echo "[INIT]   ok"
-done <<< "$MIGRATIONS"
+echo "[INIT] Aplicando schema completo (drizzle/_full_schema.sql) ..."
+docker exec -i "$DB_CONTAINER" \
+  mysql -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < "$SCHEMA_FILE"
+echo "[INIT]   ok"
 
 AFTER=$(mysql_exec -N -s -e \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}';" \
@@ -86,7 +82,12 @@ echo "[INIT] Tabelas-chave presentes:"
 mysql_exec -N -s -e "SHOW TABLES;" | grep -E \
   "^(users|operacoes|sofia_chat_messages|conversas|company_settings)$" || true
 echo ""
-echo "[INIT] Coluna conversaId em sofia_chat_messages (esperado: 1):"
+echo "[INIT] Colunas críticas (esperado: 1 em cada):"
+echo -n "  users.passwordHash:            "
+mysql_exec -N -s -e \
+  "SELECT COUNT(*) FROM information_schema.columns \
+   WHERE table_schema='${DB_NAME}' AND table_name='users' AND column_name='passwordHash';"
+echo -n "  sofia_chat_messages.conversaId: "
 mysql_exec -N -s -e \
   "SELECT COUNT(*) FROM information_schema.columns \
    WHERE table_schema='${DB_NAME}' AND table_name='sofia_chat_messages' \
