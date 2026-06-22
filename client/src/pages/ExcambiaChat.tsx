@@ -48,7 +48,15 @@ export default function ExcambiaChat() {
       const res = await create.mutateAsync({ titulo: text.slice(0, 40) });
       id = res.id; setActiveId(id);
     }
-    send.mutate({ conversaId: id!, content: text });
+    const messages = [
+      ...mensagens.map(m => ({ role: m.role, content: m.content })),
+      { role: "user" as const, content: text }
+    ];
+    send.mutate({
+      conversaId: id!,
+      messages,
+      ...(conv?.operacaoId && { operacaoId: conv.operacaoId }),
+    });
   }
 
   const mensagens = conv?.mensagens ?? [];

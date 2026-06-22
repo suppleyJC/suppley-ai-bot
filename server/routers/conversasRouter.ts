@@ -57,6 +57,13 @@ export const conversasRouter = router({
       await conversaDb.deleteConversa(input.id, ctx.user.id);
     }),
 
+  /** Alias para delete */
+  remove: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await conversaDb.deleteConversa(input.id, ctx.user.id);
+    }),
+
   /** Vincula conversa a uma operação */
   linkOperacao: protectedProcedure
     .input(z.object({ id: z.number(), operacaoId: z.number() }))
