@@ -15,34 +15,9 @@ import { trpc } from "@/lib/trpc";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
 import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight } from "lucide-react";
 
-// Ícone orbital SUPPLEY (exato do logo): círculo + 2 órbitas + 3 nós, gradiente violeta→teal
+// Ícone oficial SUPPLEY (símbolo recortado do logo, fundo transparente)
 const LogoIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 100 100" fill="none" className={className ?? "h-full w-full"} aria-label="Excambia">
-    <defs>
-      <linearGradient id="suppleyOrbit" x1="10" y1="10" x2="90" y2="90">
-        <stop offset="0%" stopColor="#6d28d9" />
-        <stop offset="100%" stopColor="#14b8a6" />
-      </linearGradient>
-    </defs>
-    {/* Círculo externo */}
-    <circle cx="50" cy="50" r="36" stroke="url(#suppleyOrbit)" strokeWidth="5" fill="none" strokeLinecap="round"/>
-
-    {/* Órbita elíptica 1 (0°) */}
-    <ellipse cx="50" cy="50" rx="36" ry="12" stroke="url(#suppleyOrbit)" strokeWidth="4.5" fill="none"/>
-
-    {/* Órbita elíptica 2 (45°, rotacionada) */}
-    <ellipse cx="50" cy="50" rx="36" ry="12" stroke="url(#suppleyOrbit)" strokeWidth="4.5" fill="none" transform="rotate(45 50 50)"/>
-
-    {/* 3 nós nas órbitas */}
-    {/* Nó 1: topo-direita */}
-    <circle cx="75" cy="30" r="6" fill="url(#suppleyOrbit)"/>
-
-    {/* Nó 2: esquerda-meio */}
-    <circle cx="20" cy="50" r="6" fill="url(#suppleyOrbit)"/>
-
-    {/* Nó 3: base-direita */}
-    <circle cx="70" cy="72" r="6" fill="url(#suppleyOrbit)"/>
-  </svg>
+  <img src="/suppley-icon.png" alt="Excambia" className={className ?? "h-full w-full object-contain"} />
 );
 
 export default function ExcambiaChat() {

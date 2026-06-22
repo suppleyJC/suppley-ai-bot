@@ -158,6 +158,7 @@ CREATE TABLE `conversas` (
 	`userId` int NOT NULL,
 	`titulo` varchar(255) NOT NULL,
 	`status` enum('ativa','arquivada') NOT NULL DEFAULT 'ativa',
+	`fixada` boolean NOT NULL DEFAULT false,
 	`operacaoId` int,
 	`estagio` enum('demand','source','analyze','execute','finance','closed','lost'),
 	`ultimaMensagemEm` timestamp,

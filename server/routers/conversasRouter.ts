@@ -42,6 +42,13 @@ export const conversasRouter = router({
       await conversaDb.renameConversa(input.id, ctx.user.id, input.titulo);
     }),
 
+  /** Fixa/desafixa conversa no topo */
+  setPinned: protectedProcedure
+    .input(z.object({ id: z.number(), fixada: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      await conversaDb.setPinnedConversa(input.id, ctx.user.id, input.fixada);
+    }),
+
   /** Arquiva conversa */
   archive: protectedProcedure
     .input(z.object({ id: z.number() }))

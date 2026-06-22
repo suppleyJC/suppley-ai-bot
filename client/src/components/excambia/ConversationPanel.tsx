@@ -2,14 +2,21 @@
  * ConversationPanel — o painel de conversas da Excambia (estilo Claude).
  *
  * Dois grupos: "Operações" (conversas vinculadas a operação) e "Conversas" (avulsas).
- * Recolhível. Busca. Ações por item (renomear/arquivar/excluir).
+ * Recolhível. Busca. Menu de ações por item (Fixar / Mudar o nome / Arquivar / Apagar).
  *
- * Dados: consome trpc.conversas.list / create / rename / archive / remove.
+ * Dados: consome trpc.conversas.list / create / rename / setPinned / archive / remove.
  * Estilo: Tailwind com tokens da marca (roxo #682ABA, turquesa #28E7C5).
  */
 import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, MoreHorizontal, ChevronLeft, Clock } from "lucide-react";
+import { Plus, Search, MoreHorizontal, ChevronLeft, Pin, PinOff, Pencil, Archive, Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 interface Props {
   activeId?: number;
@@ -32,9 +39,11 @@ export default function ConversationPanel({
   const { data, isLoading } = trpc.conversas.list.useQuery();
   const utils = trpc.useUtils();
 
-  const rename = trpc.conversas.rename.useMutation({ onSuccess: () => utils.conversas.list.invalidate() });
-  const archive = trpc.conversas.archive.useMutation({ onSuccess: () => utils.conversas.list.invalidate() });
-  const remove = trpc.conversas.remove.useMutation({ onSuccess: () => utils.conversas.list.invalidate() });
+  const invalidate = () => utils.conversas.list.invalidate();
+  const rename = trpc.conversas.rename.useMutation({ onSuccess: invalidate });
+  const setPinned = trpc.conversas.setPinned.useMutation({ onSuccess: invalidate });
+  const archive = trpc.conversas.archive.useMutation({ onSuccess: invalidate });
+  const remove = trpc.conversas.remove.useMutation({ onSuccess: invalidate });
 
   if (collapsed) {
     return (
@@ -55,10 +64,18 @@ export default function ConversationPanel({
   const operacoes = filtra(data?.operacoes);
   const avulsas = filtra(data?.avulsas);
 
-  function itemMenu(id: number, titulo: string) {
+  // Renomear via prompt simples (UX leve; o menu chama isto).
+  function pedirNovoNome(id: number, titulo: string) {
     const novo = window.prompt("Renomear conversa:", titulo);
-    if (novo && novo !== titulo) rename.mutate({ id, titulo: novo });
+    if (novo && novo.trim() && novo !== titulo) rename.mutate({ id, titulo: novo.trim() });
   }
+
+  const acoes = {
+    pin: (id: number, fixada: boolean) => setPinned.mutate({ id, fixada: !fixada }),
+    rename: pedirNovoNome,
+    archive: (id: number) => archive.mutate({ id }),
+    remove: (id: number) => { if (confirm("Apagar esta conversa? Ela sairá da lista.")) remove.mutate({ id }); },
+  };
 
   return (
     <div className="hidden sm:flex w-64 md:w-80 flex-shrink-0 flex-col border-r border-slate-200 bg-white">
@@ -95,11 +112,8 @@ export default function ConversationPanel({
             </div>
             {operacoes.map((c) => (
               <ConvItem key={c.id} c={c} active={c.id === activeId}
-                dot={STAGE_DOT[c.estagioAtual ?? "demand"] ?? "#cbd5e1"}
-                onSelect={() => onSelect(c.id)}
-                onMenu={() => itemMenu(c.id, c.titulo)}
-                onArchive={() => archive.mutate({ id: c.id })}
-                onRemove={() => { if (confirm("Excluir esta conversa?")) remove.mutate({ id: c.id }); }} />
+                dot={STAGE_DOT[c.estagio ?? "demand"] ?? "#cbd5e1"}
+                onSelect={() => onSelect(c.id)} acoes={acoes} />
             ))}
           </>
         )}
@@ -112,10 +126,7 @@ export default function ConversationPanel({
             </div>
             {avulsas.map((c) => (
               <ConvItem key={c.id} c={c} active={c.id === activeId} dot="#d8d2e6" avulsa
-                onSelect={() => onSelect(c.id)}
-                onMenu={() => itemMenu(c.id, c.titulo)}
-                onArchive={() => archive.mutate({ id: c.id })}
-                onRemove={() => { if (confirm("Excluir esta conversa?")) remove.mutate({ id: c.id }); }} />
+                onSelect={() => onSelect(c.id)} acoes={acoes} />
             ))}
           </>
         )}
@@ -130,11 +141,23 @@ export default function ConversationPanel({
   );
 }
 
-function ConvItem({ c, active, dot, avulsa, onSelect, onMenu, onArchive, onRemove }: any) {
+interface AcoesConv {
+  pin: (id: number, fixada: boolean) => void;
+  rename: (id: number, titulo: string) => void;
+  archive: (id: number) => void;
+  remove: (id: number) => void;
+}
+
+function ConvItem({ c, active, dot, avulsa, onSelect, acoes }: {
+  c: any; active: boolean; dot: string; avulsa?: boolean;
+  onSelect: () => void; acoes: AcoesConv;
+}) {
   return (
     <div onClick={onSelect}
       className={`group relative flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-2.5 ${active ? "bg-violet-50" : "hover:bg-slate-50"}`}>
-      <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: dot }} />
+      {c.fixada
+        ? <Pin className="h-3 w-3 flex-shrink-0 text-violet-500" fill="currentColor" />
+        : <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: dot }} />}
       <div className="min-w-0 flex-1">
         <div className={`truncate text-[12.5px] text-slate-800 ${avulsa ? "font-medium" : "font-semibold"}`}>
           {c.titulo}
@@ -143,10 +166,35 @@ function ConvItem({ c, active, dot, avulsa, onSelect, onMenu, onArchive, onRemov
           {c.operacaoId ? `OP-${String(c.operacaoId).padStart(4, "0")}` : "consulta"}
         </div>
       </div>
-      <button onClick={(e) => { e.stopPropagation(); onMenu(); }}
-        className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-slate-500">
-        <MoreHorizontal className="h-4 w-4" />
-      </button>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button onClick={(e) => e.stopPropagation()}
+            className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 text-slate-300 hover:text-slate-600 rounded p-0.5">
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44" onClick={(e) => e.stopPropagation()}>
+          <DropdownMenuItem onClick={() => acoes.pin(c.id, !!c.fixada)}>
+            {c.fixada ? <PinOff className="mr-2 h-4 w-4" /> : <Pin className="mr-2 h-4 w-4" />}
+            {c.fixada ? "Desafixar" : "Fixar"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => acoes.rename(c.id, c.titulo)}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Mudar o nome
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => acoes.archive(c.id)}>
+            <Archive className="mr-2 h-4 w-4" />
+            Arquivar
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => acoes.remove(c.id)}
+            className="text-red-600 focus:text-red-600 focus:bg-red-50">
+            <Trash2 className="mr-2 h-4 w-4" />
+            Apagar
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

@@ -650,6 +650,9 @@ export const conversas = mysqlTable(
     titulo: varchar("titulo", { length: 255 }).notNull(),
     status: mysqlEnum("status", ["ativa", "arquivada"]).default("ativa").notNull(),
 
+    // Conversa fixada no topo da sidebar.
+    fixada: boolean("fixada").default(false).notNull(),
+
     // Vínculo opcional com uma operação (sincronização bidirecional chat ↔ Painel).
     operacaoId: int("operacaoId"),
 

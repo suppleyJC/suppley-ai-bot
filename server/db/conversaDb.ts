@@ -18,7 +18,7 @@ export async function listConversas(userId: number) {
     .select()
     .from(conversas)
     .where(and(eq(conversas.userId, userId), eq(conversas.status, "ativa")))
-    .orderBy(desc(conversas.ultimaMensagemEm));
+    .orderBy(desc(conversas.fixada), desc(conversas.ultimaMensagemEm));
 
   return {
     operacoes: rows.filter((c) => c.operacaoId != null),
@@ -69,6 +69,15 @@ export async function renameConversa(id: number, userId: number, titulo: string)
   await db
     .update(conversas)
     .set({ titulo })
+    .where(and(eq(conversas.id, id), eq(conversas.userId, userId)));
+}
+
+export async function setPinnedConversa(id: number, userId: number, fixada: boolean) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(conversas)
+    .set({ fixada })
     .where(and(eq(conversas.id, id), eq(conversas.userId, userId)));
 }
 
