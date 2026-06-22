@@ -36,6 +36,20 @@ export const suppliers = mysqlTable("suppliers", {
   contactPhone: varchar("contactPhone", { length: 50 }),
   notes: text("notes"),
   isMercosul: boolean("isMercosul").default(false).notNull(),
+
+  // ===== FASE 5: Fornecedores / Fabricantes (ampliação aditiva) =====
+  tipo: mysqlEnum("tipo", [
+    "fabrica", "trading", "distribuidor", "exportador", "representante",
+    "fornecedor_nacional", "fabricante_nacional", "importador_local", "distribuidor_brasileiro",
+  ]).default("fabrica"),
+  origem: mysqlEnum("origem", ["nacional", "internacional"]).default("internacional"),
+  categorias: json("categorias"),              // string[] de categorias atendidas
+  moedas: json("moedas"),                      // string[] de moedas usadas
+  incotermsPraticados: json("incotermsPraticados"),
+  leadTimeMedioDias: int("leadTimeMedioDias"),
+  ratingScore: int("ratingScore"),             // 0-100 (Agente de Rating)
+  ratingClasse: mysqlEnum("ratingClasse", ["A", "B", "C", "D"]),
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -56,6 +70,24 @@ export const products = mysqlTable("products", {
   unit: varchar("unit", { length: 20 }).default("UN").notNull(),
   weightKg: int("weightKg"), // Weight in grams (to avoid decimals)
   volumeM3: int("volumeM3"), // Volume in cm³ (to avoid decimals)
+
+  // ===== FASE 5: Ativos & Insumos (ampliação aditiva) =====
+  categoria: varchar("categoria", { length: 120 }),
+  aplicacao: varchar("aplicacao", { length: 255 }),
+  material: varchar("material", { length: 120 }),
+  dimensoes: varchar("dimensoes", { length: 120 }),
+  // NCM já existe como ncmCode; este campo guarda o estado de validação:
+  ncmStatus: mysqlEnum("ncmStatus", ["sugerido", "validado"]).default("sugerido"),
+  origem: mysqlEnum("origem", [
+    "nacional", "internacional", "ambos", "importado_antes", "cotado_nao_importado",
+  ]).default("cotado_nao_importado"),
+  paisOrigem: varchar("paisOrigem", { length: 100 }),
+  moqPadrao: int("moqPadrao"),
+  leadTimeMedioDias: int("leadTimeMedioDias"),
+  // comparativo nacional × importado (snapshot calculado):
+  custoNacionalRefCents: bigint("custoNacionalRefCents", { mode: "number" }),
+  custoImportadoRefCents: bigint("custoImportadoRefCents", { mode: "number" }),
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -1152,7 +1184,15 @@ export const industries = mysqlTable("industries", {
   
   // Vínculo com tabela antiga de suppliers (migração)
   legacySupplierId: int("legacySupplierId"),
-  
+
+  // ===== FASE 5: Compradores nacionais / Setores (benchmark) =====
+  segmento: varchar("segmento", { length: 120 }),
+  regiao: varchar("regiao", { length: 120 }),
+  perfilDemanda: mysqlEnum("perfilDemanda", ["recorrente", "eventual", "projeto", "spot"]),
+  sensibilidadePreco: mysqlEnum("sensibilidadePreco", ["alta", "media", "baixa"]),
+  volumeEstimadoMensal: int("volumeEstimadoMensal"),
+  potencialComercial: mysqlEnum("potencialComercial", ["alto", "medio", "baixo"]),
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -1718,3 +1758,76 @@ export const etlRuns = mysqlTable("etl_runs", {
   finishedAt: timestamp("finishedAt"),
 });
 export type EtlRun = typeof etlRuns.$inferSelect;
+
+/* ============================================================
+ * FASE 5 — Tabelas novas (vínculos, histórico e ingestão)
+ * Tudo aditivo. FKs lógicas (sem constraint física) para flexibilidade.
+ * ============================================================ */
+
+/** Histórico de preços do ativo (nacional e internacional) */
+export const ativoPrecos = mysqlTable("ativo_precos", {
+  id: int("id").autoincrement().primaryKey(),
+  ativoId: int("ativoId").notNull(),          // → products.id
+  origem: mysqlEnum("origem", ["nacional", "internacional"]).notNull(),
+  fornecedorId: int("fornecedorId"),           // → suppliers.id
+  precoCents: bigint("precoCents", { mode: "number" }).notNull(),
+  moeda: varchar("moeda", { length: 3 }).default("BRL").notNull(),
+  incoterm: varchar("incoterm", { length: 10 }),
+  moq: int("moq"),
+  fonte: mysqlEnum("fonte", ["proforma", "invoice", "cotacao", "manual", "mercado"]).notNull(),
+  documentoId: int("documentoId"),             // → fase5_documentos.id
+  registradoEm: timestamp("registradoEm").defaultNow().notNull(),
+}, (t) => ({
+  byAtivo: index("idx_ativo_precos_ativo").on(t.ativoId),
+}));
+export type AtivoPreco = typeof ativoPrecos.$inferSelect;
+export type InsertAtivoPreco = typeof ativoPrecos.$inferInsert;
+
+/** Vínculo ativo ↔ fornecedor (muitos-para-muitos, com origem) */
+export const ativoFornecedor = mysqlTable("ativo_fornecedor", {
+  id: int("id").autoincrement().primaryKey(),
+  ativoId: int("ativoId").notNull(),
+  fornecedorId: int("fornecedorId").notNull(),
+  origem: mysqlEnum("origem", ["nacional", "internacional"]).notNull(),
+  criadoEm: timestamp("criadoEm").defaultNow().notNull(),
+}, (t) => ({
+  byAtivo: index("idx_ativo_fornecedor_ativo").on(t.ativoId),
+  byFornecedor: index("idx_ativo_fornecedor_forn").on(t.fornecedorId),
+}));
+export type AtivoFornecedor = typeof ativoFornecedor.$inferSelect;
+export type InsertAtivoFornecedor = typeof ativoFornecedor.$inferInsert;
+
+/** Ocorrências / não conformidades do fornecedor */
+export const fornecedorOcorrencias = mysqlTable("fornecedor_ocorrencias", {
+  id: int("id").autoincrement().primaryKey(),
+  fornecedorId: int("fornecedorId").notNull(),
+  tipo: mysqlEnum("tipo", ["nao_conformidade", "atraso", "elogio", "observacao"]).notNull(),
+  descricao: text("descricao"),
+  criadoEm: timestamp("criadoEm").defaultNow().notNull(),
+}, (t) => ({
+  byFornecedor: index("idx_forn_ocorr_forn").on(t.fornecedorId),
+}));
+export type FornecedorOcorrencia = typeof fornecedorOcorrencias.$inferSelect;
+export type InsertFornecedorOcorrencia = typeof fornecedorOcorrencias.$inferInsert;
+
+/** Documentos ingeridos — base do pipeline de ingestão (Fatia 3) */
+export const fase5Documentos = mysqlTable("fase5_documentos", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  tipo: mysqlEnum("tipo", ["proforma", "invoice", "cotacao", "planilha", "pdf_outro"]).notNull(),
+  nomeArquivo: varchar("nomeArquivo", { length: 255 }).notNull(),
+  storageKey: varchar("storageKey", { length: 512 }).notNull(),
+  status: mysqlEnum("status", [
+    "recebido", "extraindo", "extraido", "em_revisao", "aprovado", "erro",
+  ]).default("recebido").notNull(),
+  // resultado bruto da extração (antes da aprovação humana):
+  extracao: json("extracao"),
+  // nível de confiança geral da extração (0-100):
+  confianca: int("confianca"),
+  operacaoId: int("operacaoId"),               // se veio de uma operação
+  criadoEm: timestamp("criadoEm").defaultNow().notNull(),
+}, (t) => ({
+  byUser: index("idx_fase5_docs_user").on(t.userId),
+}));
+export type Fase5Documento = typeof fase5Documentos.$inferSelect;
+export type InsertFase5Documento = typeof fase5Documentos.$inferInsert;

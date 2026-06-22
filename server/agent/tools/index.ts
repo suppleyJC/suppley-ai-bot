@@ -20,6 +20,7 @@ import { registrarCotacaoTool } from "./registrarCotacao";
 import { registrarMarcoProducaoTool } from "./registrarMarcoProducao";
 import { registrarNacionalizacaoTool } from "./registrarNacionalizacao";
 import { lancarFinanceiroTool } from "./lancarFinanceiroTool";
+import { buscarAtivoTool, compararOrigemTool, benchmarkMercadoTool } from "./fase5Tools";
 
 const ALL_TOOLS: AgentTool[] = [
   montarCalculoTool,
@@ -31,6 +32,10 @@ const ALL_TOOLS: AgentTool[] = [
   registrarMarcoProducaoTool,
   registrarNacionalizacaoTool,
   lancarFinanceiroTool,
+  // Fase 5 — buscas (lado leitura do ciclo de inteligência)
+  buscarAtivoTool,
+  compararOrigemTool,
+  benchmarkMercadoTool,
 ];
 
 const byName = new Map<string, AgentTool>(ALL_TOOLS.map((t) => [t.name, t]));

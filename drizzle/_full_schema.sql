@@ -1,7 +1,6 @@
--- Schema COMPLETO gerado a partir de schema.ts + rfqSchema.ts (drizzle-kit export).
--- Inclui conversaMensagens e todos os endpoints.
--- Regenerar: DATABASE_URL=dummy npx drizzle-kit export --config ./drizzle.config.ts
--- NÃO editar à mão.
+Reading schema files:
+/home/user/suppley-ai-bot/drizzle/schema.ts
+/home/user/suppley-ai-bot/drizzle/rfqSchema.ts
 
 CREATE TABLE `agent_actions` (
 	`id` int AUTO_INCREMENT NOT NULL,
@@ -59,6 +58,30 @@ CREATE TABLE `ai_chat_messages` (
 	`tokensUsed` int,
 	`createdAt` timestamp NOT NULL DEFAULT (now()),
 	CONSTRAINT `ai_chat_messages_id` PRIMARY KEY(`id`)
+);
+
+CREATE TABLE `ativo_fornecedor` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`ativoId` int NOT NULL,
+	`fornecedorId` int NOT NULL,
+	`origem` enum('nacional','internacional') NOT NULL,
+	`criadoEm` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `ativo_fornecedor_id` PRIMARY KEY(`id`)
+);
+
+CREATE TABLE `ativo_precos` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`ativoId` int NOT NULL,
+	`origem` enum('nacional','internacional') NOT NULL,
+	`fornecedorId` int,
+	`precoCents` bigint NOT NULL,
+	`moeda` varchar(3) NOT NULL DEFAULT 'BRL',
+	`incoterm` varchar(10),
+	`moq` int,
+	`fonte` enum('proforma','invoice','cotacao','manual','mercado') NOT NULL,
+	`documentoId` int,
+	`registradoEm` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `ativo_precos_id` PRIMARY KEY(`id`)
 );
 
 CREATE TABLE `calculation_items` (
@@ -226,6 +249,20 @@ CREATE TABLE `exchange_rates` (
 	CONSTRAINT `exchange_rates_id` PRIMARY KEY(`id`)
 );
 
+CREATE TABLE `fase5_documentos` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`userId` int NOT NULL,
+	`tipo` enum('proforma','invoice','cotacao','planilha','pdf_outro') NOT NULL,
+	`nomeArquivo` varchar(255) NOT NULL,
+	`storageKey` varchar(512) NOT NULL,
+	`status` enum('recebido','extraindo','extraido','em_revisao','aprovado','erro') NOT NULL DEFAULT 'recebido',
+	`extracao` json,
+	`confianca` int,
+	`operacaoId` int,
+	`criadoEm` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `fase5_documentos_id` PRIMARY KEY(`id`)
+);
+
 CREATE TABLE `fiscal_benefits` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`name` varchar(255) NOT NULL,
@@ -244,6 +281,15 @@ CREATE TABLE `fiscal_benefits` (
 	`createdAt` timestamp NOT NULL DEFAULT (now()),
 	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `fiscal_benefits_id` PRIMARY KEY(`id`)
+);
+
+CREATE TABLE `fornecedor_ocorrencias` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`fornecedorId` int NOT NULL,
+	`tipo` enum('nao_conformidade','atraso','elogio','observacao') NOT NULL,
+	`descricao` text,
+	`criadoEm` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `fornecedor_ocorrencias_id` PRIMARY KEY(`id`)
 );
 
 CREATE TABLE `icms_rates` (
@@ -378,6 +424,12 @@ CREATE TABLE `industries` (
 	`notes` text,
 	`tags` text,
 	`legacySupplierId` int,
+	`segmento` varchar(120),
+	`regiao` varchar(120),
+	`perfilDemanda` enum('recorrente','eventual','projeto','spot'),
+	`sensibilidadePreco` enum('alta','media','baixa'),
+	`volumeEstimadoMensal` int,
+	`potencialComercial` enum('alto','medio','baixo'),
 	`createdAt` timestamp NOT NULL DEFAULT (now()),
 	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `industries_id` PRIMARY KEY(`id`)
@@ -684,6 +736,17 @@ CREATE TABLE `products` (
 	`unit` varchar(20) NOT NULL DEFAULT 'UN',
 	`weightKg` int,
 	`volumeM3` int,
+	`categoria` varchar(120),
+	`aplicacao` varchar(255),
+	`material` varchar(120),
+	`dimensoes` varchar(120),
+	`ncmStatus` enum('sugerido','validado') DEFAULT 'sugerido',
+	`origem` enum('nacional','internacional','ambos','importado_antes','cotado_nao_importado') DEFAULT 'cotado_nao_importado',
+	`paisOrigem` varchar(100),
+	`moqPadrao` int,
+	`leadTimeMedioDias` int,
+	`custoNacionalRefCents` bigint,
+	`custoImportadoRefCents` bigint,
 	`createdAt` timestamp NOT NULL DEFAULT (now()),
 	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `products_id` PRIMARY KEY(`id`)
@@ -837,6 +900,14 @@ CREATE TABLE `suppliers` (
 	`contactPhone` varchar(50),
 	`notes` text,
 	`isMercosul` boolean NOT NULL DEFAULT false,
+	`tipo` enum('fabrica','trading','distribuidor','exportador','representante','fornecedor_nacional','fabricante_nacional','importador_local','distribuidor_brasileiro') DEFAULT 'fabrica',
+	`origem` enum('nacional','internacional') DEFAULT 'internacional',
+	`categorias` json,
+	`moedas` json,
+	`incotermsPraticados` json,
+	`leadTimeMedioDias` int,
+	`ratingScore` int,
+	`ratingClasse` enum('A','B','C','D'),
 	`createdAt` timestamp NOT NULL DEFAULT (now()),
 	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `suppliers_id` PRIMARY KEY(`id`)
@@ -1090,10 +1161,15 @@ CREATE TABLE `supplier_quotes` (
 	CONSTRAINT `supplier_quotes_id` PRIMARY KEY(`id`)
 );
 
+CREATE INDEX `idx_ativo_fornecedor_ativo` ON `ativo_fornecedor` (`ativoId`);
+CREATE INDEX `idx_ativo_fornecedor_forn` ON `ativo_fornecedor` (`fornecedorId`);
+CREATE INDEX `idx_ativo_precos_ativo` ON `ativo_precos` (`ativoId`);
 CREATE INDEX `idx_conversa_msgs` ON `conversa_mensagens` (`conversaId`);
 CREATE INDEX `idx_conversas_user` ON `conversas` (`userId`);
 CREATE INDEX `idx_conversas_operacao` ON `conversas` (`operacaoId`);
 CREATE INDEX `idx_demandas_user` ON `demandas` (`userId`);
+CREATE INDEX `idx_fase5_docs_user` ON `fase5_documentos` (`userId`);
+CREATE INDEX `idx_forn_ocorr_forn` ON `fornecedor_ocorrencias` (`fornecedorId`);
 CREATE INDEX `uq_market_ref` ON `market_reference_ncm` (`ncmCode`,`flow`,`countryCode`,`periodFrom`,`periodTo`);
 CREATE INDEX `idx_market_ref_ncm` ON `market_reference_ncm` (`ncmCode`);
 CREATE INDEX `uq_market_trend` ON `market_trend_ncm` (`ncmCode`,`flow`,`yearMonth`);

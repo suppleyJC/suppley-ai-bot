@@ -31,14 +31,15 @@ const menuItems = [
   // INTELIGÊNCIA
   { icon: Sparkles, label: "Excambia", path: "/excambia", section: "inteligencia" },
   { icon: Sparkles, label: "Inteligência de mercado", path: "/excambia/market", section: "inteligencia" },
+  // Fase 5: "Indústrias / Clientes" passa a ser base de benchmark dentro de Inteligência
+  { icon: Factory, label: "Compradores nacionais / Setores", path: "/industries", section: "inteligencia" },
 
   // OPERAÇÕES
   { icon: Workflow, label: "Painel de operações", path: "/operacoes", section: "operacoes" },
 
-  // BASE (Cadastros)
-  { icon: Factory, label: "Indústrias / Clientes", path: "/industries", section: "base" },
-  { icon: Building2, label: "Fornecedores", path: "/suppliers", section: "base" },
-  { icon: Package, label: "Produtos / Insumos", path: "/products", section: "base" },
+  // BASE OPERACIONAL (Cadastros) — rótulos ampliados da Fase 5
+  { icon: Building2, label: "Fornecedores / Fabricantes", path: "/suppliers", section: "base" },
+  { icon: Package, label: "Ativos & Insumos", path: "/products", section: "base" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
