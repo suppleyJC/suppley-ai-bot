@@ -15,29 +15,33 @@ import { trpc } from "@/lib/trpc";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
 import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight } from "lucide-react";
 
-// Símbolo orbital da Excambia (gradiente violeta → teal), desenhado inline em SVG
-// para ficar nítido em qualquer tamanho e herdar a cor de fundo do container.
+// Ícone orbital SUPPLEY (exato do logo): círculo + 2 órbitas + 3 nós, gradiente violeta→teal
 const LogoIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 100 100" fill="none" className={className ?? "h-full w-full"} aria-label="Excambia">
     <defs>
-      <linearGradient id="excambiaGrad" x1="15" y1="15" x2="85" y2="85" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stopColor="#7c3aed" />
-        <stop offset="1" stopColor="#0d9488" />
+      <linearGradient id="suppleyOrbit" x1="10" y1="10" x2="90" y2="90">
+        <stop offset="0%" stopColor="#6d28d9" />
+        <stop offset="100%" stopColor="#14b8a6" />
       </linearGradient>
     </defs>
-    <g stroke="url(#excambiaGrad)" strokeWidth="4.5">
-      {/* círculo principal */}
-      <circle cx="50" cy="50" r="34" />
-      {/* duas órbitas elípticas cruzadas */}
-      <ellipse cx="50" cy="50" rx="34" ry="14" transform="rotate(45 50 50)" />
-      <ellipse cx="50" cy="50" rx="34" ry="14" transform="rotate(-45 50 50)" />
-    </g>
-    {/* nós sobre as órbitas */}
-    <circle cx="74" cy="32" r="5.5" fill="url(#excambiaGrad)" />
-    <circle cx="68" cy="74" r="5.5" fill="url(#excambiaGrad)" />
-    {/* marca central "X" */}
-    <path d="M40 44 L48 50 L40 56 M52 44 L52 56" stroke="url(#excambiaGrad)" strokeWidth="4.5"
-      strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    {/* Círculo externo */}
+    <circle cx="50" cy="50" r="36" stroke="url(#suppleyOrbit)" strokeWidth="5" fill="none" strokeLinecap="round"/>
+
+    {/* Órbita elíptica 1 (0°) */}
+    <ellipse cx="50" cy="50" rx="36" ry="12" stroke="url(#suppleyOrbit)" strokeWidth="4.5" fill="none"/>
+
+    {/* Órbita elíptica 2 (45°, rotacionada) */}
+    <ellipse cx="50" cy="50" rx="36" ry="12" stroke="url(#suppleyOrbit)" strokeWidth="4.5" fill="none" transform="rotate(45 50 50)"/>
+
+    {/* 3 nós nas órbitas */}
+    {/* Nó 1: topo-direita */}
+    <circle cx="75" cy="30" r="6" fill="url(#suppleyOrbit)"/>
+
+    {/* Nó 2: esquerda-meio */}
+    <circle cx="20" cy="50" r="6" fill="url(#suppleyOrbit)"/>
+
+    {/* Nó 3: base-direita */}
+    <circle cx="70" cy="72" r="6" fill="url(#suppleyOrbit)"/>
   </svg>
 );
 
