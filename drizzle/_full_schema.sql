@@ -1,7 +1,3 @@
-Reading schema files:
-/home/user/suppley-ai-bot/drizzle/schema.ts
-/home/user/suppley-ai-bot/drizzle/rfqSchema.ts
-
 CREATE TABLE `agent_actions` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
