@@ -15,9 +15,30 @@ import { trpc } from "@/lib/trpc";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
 import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight } from "lucide-react";
 
-// Logo oficial da SUPPLEY (servida de client/public/logo-suppley.png)
-const LogoIcon = () => (
-  <img src="/logo-suppley.png" alt="SUPPLEY" className="h-full w-full object-contain" />
+// Símbolo orbital da Excambia (gradiente violeta → teal), desenhado inline em SVG
+// para ficar nítido em qualquer tamanho e herdar a cor de fundo do container.
+const LogoIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 100 100" fill="none" className={className ?? "h-full w-full"} aria-label="Excambia">
+    <defs>
+      <linearGradient id="excambiaGrad" x1="15" y1="15" x2="85" y2="85" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stopColor="#7c3aed" />
+        <stop offset="1" stopColor="#0d9488" />
+      </linearGradient>
+    </defs>
+    <g stroke="url(#excambiaGrad)" strokeWidth="4.5">
+      {/* círculo principal */}
+      <circle cx="50" cy="50" r="34" />
+      {/* duas órbitas elípticas cruzadas */}
+      <ellipse cx="50" cy="50" rx="34" ry="14" transform="rotate(45 50 50)" />
+      <ellipse cx="50" cy="50" rx="34" ry="14" transform="rotate(-45 50 50)" />
+    </g>
+    {/* nós sobre as órbitas */}
+    <circle cx="74" cy="32" r="5.5" fill="url(#excambiaGrad)" />
+    <circle cx="68" cy="74" r="5.5" fill="url(#excambiaGrad)" />
+    {/* marca central "X" */}
+    <path d="M40 44 L48 50 L40 56 M52 44 L52 56" stroke="url(#excambiaGrad)" strokeWidth="4.5"
+      strokeLinecap="round" strokeLinejoin="round" fill="none" />
+  </svg>
 );
 
 export default function ExcambiaChat() {
@@ -136,9 +157,7 @@ export default function ExcambiaChat() {
 function Welcome({ onPick }: { onPick: (t: string) => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-3 sm:px-6 py-8 sm:py-12 text-center min-h-0">
-      <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-white border border-slate-200 shadow-sm mb-4 sm:mb-5 flex-shrink-0 p-2.5">
-        <LogoIcon />
-      </div>
+      <LogoIcon className="h-14 w-14 sm:h-16 sm:w-16 mb-4 sm:mb-5 flex-shrink-0" />
       <h1 className="mb-2 sm:mb-2.5 text-xl sm:text-2xl md:text-[26px] font-semibold tracking-tight text-slate-800">
         Olá, Jean. O que vamos{" "}
         <span className="bg-gradient-to-r from-violet-600 to-teal-600 bg-clip-text text-transparent">importar</span> hoje?
