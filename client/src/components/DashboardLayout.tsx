@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Calculator, Building2, Package, Settings, History, FileText, ChevronRight, Sparkles, Scale, ClipboardList, Factory, MessageSquare, Workflow } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Calculator, Building2, Package, Settings, History, FileText, ChevronRight, Sparkles, Scale, ClipboardList, MessageSquare, Workflow } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -31,14 +31,12 @@ const menuItems = [
   // INTELIGÊNCIA
   { icon: Sparkles, label: "Excambia", path: "/excambia", section: "inteligencia" },
   { icon: Sparkles, label: "Inteligência de mercado", path: "/excambia/market", section: "inteligencia" },
-  // Fase 5: "Indústrias / Clientes" passa a ser base de benchmark dentro de Inteligência
-  { icon: Factory, label: "Compradores nacionais / Setores", path: "/industries", section: "inteligencia" },
 
   // OPERAÇÕES
   { icon: Workflow, label: "Painel de operações", path: "/operacoes", section: "operacoes" },
 
-  // BASE OPERACIONAL (Cadastros) — rótulos ampliados da Fase 5
-  { icon: Building2, label: "Fornecedores / Fabricantes", path: "/suppliers", section: "base" },
+  // BASE OPERACIONAL (Cadastros) — ambiente unificado: fornecedores + compradores
+  { icon: Building2, label: "Fornecedores & Compradores", path: "/suppliers", section: "base" },
   { icon: Package, label: "Ativos & Insumos", path: "/products", section: "base" },
 ];
 

@@ -19,7 +19,7 @@ import CalculateMultiple from "./pages/CalculateMultiple";
 import Calculations from "./pages/Calculations";
 import Quotations from "./pages/Quotations";
 import QuotationDetail from "./pages/QuotationDetail";
-import Suppliers from "./pages/Suppliers";
+import Marketplace from "./pages/Marketplace";
 import Products from "./pages/Products";
 import Settings from "./pages/Settings";
 
@@ -29,7 +29,6 @@ import ReformDashboard from "./pages/ReformDashboard";
 import RfqDashboard from "./pages/RfqDashboard";
 import RfqCreate from "./pages/RfqCreate";
 import RfqDetail from "./pages/RfqDetail";
-import Industries from "./pages/Industries";
 import IndustryDetail from "./pages/IndustryDetail";
 import Messaging from "./pages/Messaging";
 import Operacoes from "./pages/Operacoes";
@@ -47,12 +46,12 @@ function AuthenticatedRoutes() {
         <Route path="/calculations/:id" component={QuotationDetail} />
         <Route path="/quotations" component={Quotations} />
         <Route path="/quotations/:id" component={QuotationDetail} />
-        <Route path="/suppliers" component={Suppliers} />
+        <Route path="/suppliers" component={Marketplace} />
         <Route path="/products" component={Products} />
         <Route path="/settings" component={Settings} />
         <Route path="/excambia" component={ExcambiaChat} />
         <Route path="/excambia/market" component={ExcambiaMarket} />
-        <Route path="/industries" component={Industries} />
+        <Route path="/industries" component={Marketplace} />
         <Route path="/industries/:id">{(params: any) => <IndustryDetail id={params.id} />}</Route>
         <Route path="/rfq" component={RfqDashboard} />
         <Route path="/rfq/new" component={RfqCreate} />
