@@ -1,14 +1,19 @@
 /**
  * Operações de banco de dados para CONVERSAS da Excambia.
  * Camada de abstração sobre Drizzle — torna conversasRouter agnóstico ao banco.
+ *
+ * Nota: a distinção "operação × avulsa" é derivada de `operacaoId`
+ * (com operação vinculada = operação; sem = avulsa). Não há coluna `tipo`.
  */
-import { getDb } from "./config";
+import { getDb } from "./connection";
 import { conversas, conversaMensagens } from "../../drizzle/schema";
 import { and, eq, desc } from "drizzle-orm";
 import type { InsertConversa, InsertConversaMensagem } from "../../drizzle/schema";
 
 export async function listConversas(userId: number) {
-  const db = getDb();
+  const db = await getDb();
+  if (!db) return { operacoes: [], avulsas: [] };
+
   const rows = await db
     .select()
     .from(conversas)
@@ -16,13 +21,15 @@ export async function listConversas(userId: number) {
     .orderBy(desc(conversas.ultimaMensagemEm));
 
   return {
-    operacoes: rows.filter((c: any) => c.tipo === "operacao"),
-    avulsas: rows.filter((c: any) => c.tipo === "avulsa"),
+    operacoes: rows.filter((c) => c.operacaoId != null),
+    avulsas: rows.filter((c) => c.operacaoId == null),
   };
 }
 
 export async function getConversa(id: number, userId: number) {
-  const db = getDb();
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível");
+
   const [conv] = await db
     .select()
     .from(conversas)
@@ -33,29 +40,32 @@ export async function getConversa(id: number, userId: number) {
   const mensagens = await db
     .select()
     .from(conversaMensagens)
-    .where(eq(conversaMensagens.conversaId, id));
+    .where(eq(conversaMensagens.conversaId, id))
+    .orderBy(conversaMensagens.criadaEm);
 
   return { ...conv, mensagens };
 }
 
 export async function createConversa(
   userId: number,
-  input: { titulo?: string; operacaoId?: number; tipo?: "avulsa" | "operacao" }
+  input: { titulo?: string; operacaoId?: number }
 ) {
-  const db = getDb();
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível");
+
   const values = {
     userId,
     titulo: input.titulo || "Nova conversa",
     operacaoId: input.operacaoId,
-    tipo: input.tipo || "avulsa",
   } as InsertConversa;
-  
+
   const result = await db.insert(conversas).values(values);
-  return result;
+  return { id: Number(result[0].insertId) };
 }
 
 export async function renameConversa(id: number, userId: number, titulo: string) {
-  const db = getDb();
+  const db = await getDb();
+  if (!db) return;
   await db
     .update(conversas)
     .set({ titulo })
@@ -63,7 +73,8 @@ export async function renameConversa(id: number, userId: number, titulo: string)
 }
 
 export async function archiveConversa(id: number, userId: number) {
-  const db = getDb();
+  const db = await getDb();
+  if (!db) return;
   await db
     .update(conversas)
     .set({ status: "arquivada" })
@@ -71,7 +82,8 @@ export async function archiveConversa(id: number, userId: number) {
 }
 
 export async function deleteConversa(id: number, userId: number) {
-  const db = getDb();
+  const db = await getDb();
+  if (!db) return;
   await db
     .update(conversas)
     .set({ status: "arquivada" })
@@ -85,15 +97,17 @@ export async function addMessage(
   toolsUsed?: string[],
   toolResults?: any
 ) {
-  const db = getDb();
+  const db = await getDb();
+  if (!db) return;
+
   const values = {
     conversaId,
     role,
     content,
-    toolsUsed: toolsUsed ? JSON.stringify(toolsUsed) : null,
-    toolResults: toolResults ? JSON.stringify(toolResults) : null,
+    toolsUsed: toolsUsed ?? null,
+    toolResults: toolResults ?? null,
   } as InsertConversaMensagem;
-  
+
   await db.insert(conversaMensagens).values(values);
 
   await db
@@ -107,9 +121,10 @@ export async function linkConversaToOperacao(
   userId: number,
   operacaoId: number
 ) {
-  const db = getDb();
+  const db = await getDb();
+  if (!db) return;
   await db
     .update(conversas)
-    .set({ operacaoId, tipo: "operacao" })
+    .set({ operacaoId })
     .where(and(eq(conversas.id, id), eq(conversas.userId, userId)));
 }

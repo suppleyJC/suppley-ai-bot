@@ -32,7 +32,6 @@ export const conversasRouter = router({
       return conversaDb.createConversa(ctx.user.id, {
         titulo: input.titulo,
         operacaoId: input.operacaoId,
-        tipo: input.operacaoId ? "operacao" : "avulsa",
       });
     }),
 

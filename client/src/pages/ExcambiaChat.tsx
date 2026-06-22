@@ -13,10 +13,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
-import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Zap } from "lucide-react";
+import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight } from "lucide-react";
 
-// Logo: ícone Zap (raio) em gradiente — representa "inteligência rápida"
-const LogoIcon = () => <Zap className="h-full w-full text-white" />;
+// Logo oficial da SUPPLEY (servida de client/public/logo-suppley.png)
+const LogoIcon = () => (
+  <img src="/logo-suppley.png" alt="SUPPLEY" className="h-full w-full object-contain" />
+);
 
 export default function ExcambiaChat() {
   const [activeId, setActiveId] = useState<number | undefined>(undefined);
@@ -27,9 +29,7 @@ export default function ExcambiaChat() {
   const create = trpc.conversas.create.useMutation({
     onSuccess: ({ id }) => { setActiveId(id); utils.conversas.list.invalidate(); },
   });
-  const send = trpc.conversas.send.useMutation({
-    onSuccess: () => { if (activeId) utils.conversas.get.invalidate({ id: activeId }); },
-  });
+  const send = trpc.conversas.send.useMutation();
   const { data: conv } = trpc.conversas.get.useQuery(
     { id: activeId! }, { enabled: activeId != null },
   );
@@ -43,20 +43,32 @@ export default function ExcambiaChat() {
     const text = draft.trim();
     if (!text) return;
     setDraft("");
-    let id = activeId;
-    if (!id) {
-      const res = await create.mutateAsync({ titulo: text.slice(0, 40) });
-      id = res.id; setActiveId(id);
+    try {
+      let id = activeId;
+      let operacaoId = conv?.operacaoId;
+      if (!id) {
+        const res = await create.mutateAsync({ titulo: text.slice(0, 40) });
+        id = res.id; setActiveId(id);
+        operacaoId = undefined;
+      }
+      // Histórico só com papéis aceitos pelo orquestrador (exclui "tool")
+      const history = mensagens
+        .filter((m: any) => m.role === "user" || m.role === "assistant" || m.role === "system")
+        .map((m: any) => ({ role: m.role, content: m.content }));
+      const messages = [...history, { role: "user" as const, content: text }];
+
+      await send.mutateAsync({
+        conversaId: id!,
+        messages,
+        ...(operacaoId ? { operacaoId } : {}),
+      });
+
+      utils.conversas.get.invalidate({ id: id! });
+      utils.conversas.list.invalidate();
+    } catch (err: any) {
+      console.error("Falha ao enviar mensagem:", err);
+      setDraft(text); // devolve o texto para não perder a mensagem
     }
-    const messages = [
-      ...mensagens.map(m => ({ role: m.role, content: m.content })),
-      { role: "user" as const, content: text }
-    ];
-    send.mutate({
-      conversaId: id!,
-      messages,
-      ...(conv?.operacaoId && { operacaoId: conv.operacaoId }),
-    });
   }
 
   const mensagens = conv?.mensagens ?? [];
@@ -124,7 +136,7 @@ export default function ExcambiaChat() {
 function Welcome({ onPick }: { onPick: (t: string) => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-3 sm:px-6 py-8 sm:py-12 text-center min-h-0">
-      <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-teal-600 mb-4 sm:mb-5 flex-shrink-0">
+      <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-white border border-slate-200 shadow-sm mb-4 sm:mb-5 flex-shrink-0 p-2.5">
         <LogoIcon />
       </div>
       <h1 className="mb-2 sm:mb-2.5 text-xl sm:text-2xl md:text-[26px] font-semibold tracking-tight text-slate-800">
@@ -171,7 +183,7 @@ function Message({ role, content }: { role: string; content: string }) {
   if (role === "assistant") {
     return (
       <div className="flex items-start gap-2 sm:gap-3 w-full">
-        <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-teal-600 p-1">
+        <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white border border-slate-200 p-1">
           <LogoIcon />
         </span>
         <div className="pt-0.5 text-sm sm:text-[14px] leading-relaxed text-slate-800 whitespace-pre-wrap">{content}</div>
