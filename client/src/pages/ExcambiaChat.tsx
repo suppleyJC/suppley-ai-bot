@@ -13,10 +13,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
-import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight } from "lucide-react";
+import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Zap } from "lucide-react";
 
-// logo (idealmente importar de assets do projeto; aqui referência ao arquivo público)
-const LOGO = "/suppley-symbol.png";
+// Logo: ícone Zap (raio) em gradiente — representa "inteligência rápida"
+const LogoIcon = () => <Zap className="h-full w-full text-white" />;
 
 export default function ExcambiaChat() {
   const [activeId, setActiveId] = useState<number | undefined>(undefined);
@@ -62,9 +62,9 @@ export default function ExcambiaChat() {
       />
 
       {/* CHAT */}
-      <div className="flex flex-1 flex-col bg-[#faf9fc]">
+      <div className="flex flex-1 flex-col bg-[#faf9fc] min-h-0">
         {/* topbar fina */}
-        <div className="flex h-[54px] items-center gap-3 px-6">
+        <div className="flex h-[54px] items-center gap-3 px-3 sm:px-6">
           <span className="text-sm font-semibold text-slate-800">Excambia</span>
           <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
             <FxRate />
@@ -72,11 +72,11 @@ export default function ExcambiaChat() {
         </div>
 
         {/* área de conversa */}
-        <div ref={scrollRef} className="flex flex-1 flex-col items-center overflow-y-auto">
+        <div ref={scrollRef} className="flex flex-1 flex-col items-center overflow-y-auto min-h-0">
           {vazio ? (
             <Welcome onPick={(t) => setDraft(t)} />
           ) : (
-            <div className="flex w-full max-w-[720px] flex-col gap-5 px-6 pt-6">
+            <div className="flex w-full max-w-xs sm:max-w-sm md:max-w-xl lg:max-w-2xl flex-col gap-3 sm:gap-5 px-3 sm:px-6 pt-4 sm:pt-6">
               {mensagens.map((m: any) => (
                 <Message key={m.id} role={m.role} content={m.content} />
               ))}
@@ -86,24 +86,24 @@ export default function ExcambiaChat() {
         </div>
 
         {/* composer */}
-        <div className="flex w-full justify-center bg-gradient-to-t from-[#faf9fc] px-6 pb-6 pt-3.5">
-          <div className="w-full max-w-[700px]">
-            <div className="flex items-end gap-2.5 rounded-[18px] border border-[#e2def0] bg-white p-2.5 pl-4 shadow-[0_4px_20px_rgba(49,18,96,0.05)] focus-within:border-violet-500">
-              <button className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50">
-                <Paperclip className="h-[18px] w-[18px]" />
+        <div className="flex w-full justify-center bg-gradient-to-t from-[#faf9fc] px-3 sm:px-6 pb-4 sm:pb-6 pt-2.5 sm:pt-3.5">
+          <div className="w-full max-w-xs sm:max-w-sm md:max-w-xl lg:max-w-2xl">
+            <div className="flex items-end gap-2 sm:gap-2.5 rounded-[18px] border border-[#e2def0] bg-white p-2 sm:p-2.5 pl-3 sm:pl-4 shadow-[0_4px_20px_rgba(49,18,96,0.05)] focus-within:border-violet-500">
+              <button className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 flex-shrink-0">
+                <Paperclip className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
               </button>
               <textarea
                 value={draft} onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                rows={1} placeholder='Ex.: "preciso de 5.400 escoras galvanizadas da China"…'
-                className="flex-1 resize-none bg-transparent py-1.5 text-[14px] text-slate-700 outline-none placeholder:text-slate-400"
+                rows={1} placeholder='Ex.: "5.400 escoras galvanizadas da China"…'
+                className="flex-1 resize-none bg-transparent py-1.5 text-sm sm:text-[14px] text-slate-700 outline-none placeholder:text-slate-400"
               />
               <button onClick={handleSend}
-                className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-violet-600 text-white hover:bg-violet-700">
-                <SendHorizontal className="h-[18px] w-[18px]" />
+                className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-[10px] bg-violet-600 text-white hover:bg-violet-700 flex-shrink-0">
+                <SendHorizontal className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
               </button>
             </div>
-            <p className="mt-2 text-center text-[11px] text-slate-400">
+            <p className="mt-1.5 sm:mt-2 text-center text-[10px] sm:text-[11px] text-slate-400 px-2">
               A Excambia conduz a operação ponta a ponta · cálculo pelo motor certificado
             </p>
           </div>
@@ -115,16 +115,18 @@ export default function ExcambiaChat() {
 
 function Welcome({ onPick }: { onPick: (t: string) => void }) {
   return (
-    <div className="flex min-h-[60vh] flex-1 flex-col items-center justify-center px-6 text-center">
-      <img src={LOGO} alt="" className="mb-5 h-[50px] w-[50px] object-contain opacity-95" />
-      <h1 className="mb-2.5 text-[26px] font-semibold tracking-tight text-slate-800">
+    <div className="flex flex-1 flex-col items-center justify-center px-3 sm:px-6 py-8 sm:py-12 text-center min-h-0">
+      <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-teal-600 mb-4 sm:mb-5 flex-shrink-0">
+        <LogoIcon />
+      </div>
+      <h1 className="mb-2 sm:mb-2.5 text-xl sm:text-2xl md:text-[26px] font-semibold tracking-tight text-slate-800">
         Olá, Jean. O que vamos{" "}
         <span className="bg-gradient-to-r from-violet-600 to-teal-600 bg-clip-text text-transparent">importar</span> hoje?
       </h1>
-      <p className="mb-7 max-w-[430px] text-[14px] leading-relaxed text-slate-500">
+      <p className="mb-6 sm:mb-7 max-w-xs sm:max-w-sm text-sm sm:text-[14px] leading-relaxed text-slate-500">
         Descreva o que precisa, suba uma cotação ou abra uma operação na lista ao lado.
       </p>
-      <div className="flex w-full max-w-[500px] flex-col gap-2.5">
+      <div className="flex w-full max-w-xs sm:max-w-sm flex-col gap-2 sm:gap-2.5">
         <Suggestion icon={<Plus />} title="Nova importação" sub="descrever um produto ou subir um PDF"
           onClick={() => onPick("Quero iniciar uma nova importação: ")} />
         <Suggestion icon={<TrendingUp />} title="Ver o mercado" sub="preço médio e tendência de um NCM"
@@ -137,15 +139,15 @@ function Welcome({ onPick }: { onPick: (t: string) => void }) {
 function Suggestion({ icon, title, sub, onClick }: any) {
   return (
     <button onClick={onClick}
-      className="flex items-center gap-3.5 rounded-[13px] border border-slate-200 bg-white px-4 py-3.5 text-left transition hover:-translate-y-px hover:border-violet-200 hover:shadow-[0_4px_14px_rgba(104,42,186,0.06)]">
-      <span className="flex h-[33px] w-[33px] flex-shrink-0 items-center justify-center rounded-[9px] bg-violet-50 text-violet-600 [&_svg]:h-[18px] [&_svg]:w-[18px]">
+      className="flex items-center gap-2.5 sm:gap-3.5 rounded-[13px] border border-slate-200 bg-white px-3 sm:px-4 py-2.5 sm:py-3.5 text-left transition hover:-translate-y-px hover:border-violet-200 hover:shadow-[0_4px_14px_rgba(104,42,186,0.06)]">
+      <span className="flex h-8 w-8 sm:h-[33px] sm:w-[33px] flex-shrink-0 items-center justify-center rounded-[9px] bg-violet-50 text-violet-600 [&_svg]:h-4 sm:[&_svg]:h-[18px] [&_svg]:w-4 sm:[&_svg]:w-[18px]">
         {icon}
       </span>
-      <span className="flex-1">
-        <span className="block text-[13px] font-semibold text-slate-800">{title}</span>
-        <span className="text-[11.5px] text-slate-500">{sub}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-xs sm:text-[13px] font-semibold text-slate-800">{title}</span>
+        <span className="text-[10px] sm:text-[11.5px] text-slate-500">{sub}</span>
       </span>
-      <ChevronRight className="h-4 w-4 text-slate-300" />
+      <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
     </button>
   );
 }
@@ -153,18 +155,18 @@ function Suggestion({ icon, title, sub, onClick }: any) {
 function Message({ role, content }: { role: string; content: string }) {
   if (role === "user") {
     return (
-      <div className="max-w-[80%] self-end rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-[14px] leading-relaxed text-slate-800">
+      <div className="max-w-[85%] sm:max-w-[75%] self-end rounded-2xl border border-slate-200 bg-white px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-[14px] leading-relaxed text-slate-800">
         {content}
       </div>
     );
   }
   if (role === "assistant") {
     return (
-      <div className="flex items-start gap-3">
-        <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-teal-600 p-1.5">
-          <img src={LOGO} alt="" className="h-full w-full object-contain brightness-0 invert" />
+      <div className="flex items-start gap-2 sm:gap-3 w-full">
+        <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-teal-600 p-1">
+          <LogoIcon />
         </span>
-        <div className="pt-0.5 text-[14px] leading-relaxed text-slate-800 whitespace-pre-wrap">{content}</div>
+        <div className="pt-0.5 text-sm sm:text-[14px] leading-relaxed text-slate-800 whitespace-pre-wrap">{content}</div>
       </div>
     );
   }

@@ -38,12 +38,12 @@ export default function ConversationPanel({
 
   if (collapsed) {
     return (
-      <div className="flex w-12 flex-shrink-0 flex-col items-center border-r border-slate-200 bg-white py-4">
-        <button onClick={onToggleCollapse} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" title="Abrir conversas">
-          <Search className="h-5 w-5" />
+      <div className="flex w-10 sm:w-12 flex-shrink-0 flex-col items-center border-r border-slate-200 bg-white py-3 sm:py-4 gap-2">
+        <button onClick={onToggleCollapse} className="rounded-lg p-1.5 sm:p-2 text-slate-500 hover:bg-slate-100" title="Abrir conversas">
+          <Search className="h-4 w-4 sm:h-5 sm:w-5" />
         </button>
-        <button onClick={onNew} className="mt-2 rounded-lg p-2 text-violet-600 hover:bg-violet-50" title="Nova conversa">
-          <Plus className="h-5 w-5" />
+        <button onClick={onNew} className="rounded-lg p-1.5 sm:p-2 text-violet-600 hover:bg-violet-50" title="Nova conversa">
+          <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
         </button>
       </div>
     );
@@ -61,23 +61,23 @@ export default function ConversationPanel({
   }
 
   return (
-    <div className="flex w-[268px] flex-shrink-0 flex-col border-r border-slate-200 bg-white">
+    <div className="hidden sm:flex w-64 md:w-80 flex-shrink-0 flex-col border-r border-slate-200 bg-white">
       {/* header */}
-      <div className="flex items-center gap-2 p-4 pb-2.5">
+      <div className="flex items-center gap-2 p-3 sm:p-4 pb-2 sm:pb-2.5">
         <button onClick={onNew}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-violet-700">
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white hover:bg-violet-700">
           <Plus className="h-4 w-4" /> Nova conversa
         </button>
         <button onClick={onToggleCollapse}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title="Recolher">
+          className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title="Recolher">
           <ChevronLeft className="h-4 w-4" />
         </button>
       </div>
 
       {/* busca */}
-      <div className="mx-4 mb-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-        <Search className="h-4 w-4 text-slate-400" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar conversa…"
+      <div className="mx-3 sm:mx-4 mb-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 sm:px-3 py-1.5 sm:py-2">
+        <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…"
           className="w-full bg-transparent text-sm text-slate-600 outline-none placeholder:text-slate-400" />
       </div>
 
