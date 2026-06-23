@@ -1196,6 +1196,13 @@ export const industries = mysqlTable("industries", {
   volumeEstimadoMensal: int("volumeEstimadoMensal"),
   potencialComercial: mysqlEnum("potencialComercial", ["alto", "medio", "baixo"]),
 
+  // ===== FASE 0.5: Discriminador da base unificada =====
+  // A mesma tabela atende fornecedores/fabricantes e compradores/setores.
+  tipoEntidade: mysqlEnum("tipoEntidade", [
+    "fornecedor",   // Fabricante ou fornecedor (internacional ou nacional)
+    "comprador",    // Comprador nacional / setor (benchmark de demanda)
+  ]).default("fornecedor").notNull(),
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -1834,3 +1841,96 @@ export const fase5Documentos = mysqlTable("fase5_documentos", {
 }));
 export type Fase5Documento = typeof fase5Documentos.$inferSelect;
 export type InsertFase5Documento = typeof fase5Documentos.$inferInsert;
+
+/**
+ * ===== FASE 0.5: PROFORMAS & INVOICES =====
+ *
+ * Resultado ESTRUTURADO de uma proforma/invoice processada pela Excambia.
+ * Tabela dedicada (aditiva, sem conflito com supplier_quotes do fluxo RFQ).
+ *
+ * Fluxo de COESÃO:
+ *   upload/manual → Excambia extrai → proforma (rascunho) → revisão humana →
+ *   distribuição: fornecedor → industries (tipoEntidade=fornecedor)
+ *                 itens/preços → products (Ativos & Insumos)
+ */
+export const proformas = mysqlTable("proformas", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+
+  // Identificação do documento
+  numero: varchar("numero", { length: 50 }),            // auto: PF-2026-0001
+  tipo: mysqlEnum("tipo", ["proforma", "invoice"]).default("proforma").notNull(),
+
+  // Vínculo opcional ao documento bruto ingerido (pipeline Fase 5)
+  documentoId: int("documentoId"),
+
+  // Fornecedor (vínculo opcional à base unificada)
+  industriaId: int("industriaId"),                       // FK lógica → industries (fornecedor)
+  supplierName: varchar("supplierName", { length: 255 }),
+  supplierCountry: varchar("supplierCountry", { length: 100 }),
+  supplierEmail: varchar("supplierEmail", { length: 320 }),
+  supplierPhone: varchar("supplierPhone", { length: 50 }),
+
+  // Condições comerciais
+  currency: varchar("currency", { length: 3 }).default("USD").notNull(),
+  incoterm: varchar("incoterm", { length: 5 }).default("FOB"),
+  paymentTerms: varchar("paymentTerms", { length: 255 }),
+  leadTimeDays: int("leadTimeDays"),
+  moq: int("moq"),
+  totalFobCents: bigint("totalFobCents", { mode: "number" }),
+  validUntil: timestamp("validUntil"),
+
+  // Vínculo opcional a operação/RFQ (proforma pode ser avulsa)
+  operacaoId: int("operacaoId"),
+  rfqId: int("rfqId"),
+
+  // Documento original
+  fileUrl: varchar("fileUrl", { length: 512 }),
+  fileName: varchar("fileName", { length: 255 }),
+
+  // Extração IA (antes da aprovação humana)
+  extractionConfidence: int("extractionConfidence"),     // 0-100
+  rawExtraction: json("rawExtraction"),
+
+  // Ciclo de vida
+  status: mysqlEnum("status", [
+    "rascunho",     // criada, dados incompletos
+    "extraida",     // IA extraiu, aguardando revisão
+    "revisada",     // humano revisou/aprovou
+    "distribuida",  // dados enviados para a base (industries + products)
+    "arquivada",
+  ]).default("rascunho").notNull(),
+  distributedAt: timestamp("distributedAt"),
+
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  byUser: index("idx_proformas_user").on(t.userId),
+  byIndustria: index("idx_proformas_industria").on(t.industriaId),
+}));
+export type Proforma = typeof proformas.$inferSelect;
+export type InsertProforma = typeof proformas.$inferInsert;
+
+export const proformaItems = mysqlTable("proforma_items", {
+  id: int("id").autoincrement().primaryKey(),
+  proformaId: int("proformaId").notNull(),
+
+  // Produto
+  productName: varchar("productName", { length: 255 }).notNull(),
+  ncmCode: varchar("ncmCode", { length: 10 }),
+  quantity: int("quantity").notNull(),
+  unit: varchar("unit", { length: 20 }).default("UN").notNull(),
+  unitPriceCents: bigint("unitPriceCents", { mode: "number" }).notNull(),
+  totalPriceCents: bigint("totalPriceCents", { mode: "number" }),
+
+  // Pós-distribuição / cálculo
+  productId: int("productId"),                           // FK lógica → products (Ativos & Insumos)
+  nationalizedUnitCostCents: bigint("nationalizedUnitCostCents", { mode: "number" }),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+  byProforma: index("idx_proforma_items_proforma").on(t.proformaId),
+}));
+export type ProformaItem = typeof proformaItems.$inferSelect;
+export type InsertProformaItem = typeof proformaItems.$inferInsert;

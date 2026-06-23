@@ -33,6 +33,7 @@ import IndustryDetail from "./pages/IndustryDetail";
 import Messaging from "./pages/Messaging";
 import Operacoes from "./pages/Operacoes";
 import OperacaoDetail from "./pages/OperacaoDetail";
+import Proformas from "./pages/Proformas";
 import Diagnostics from "./pages/Diagnostics";
 
 function AuthenticatedRoutes() {
@@ -60,6 +61,7 @@ function AuthenticatedRoutes() {
         <Route path="/messaging" component={Messaging} />
         <Route path="/operacoes" component={Operacoes} />
         <Route path="/operacao/:id" component={OperacaoDetail} />
+        <Route path="/proformas" component={Proformas} />
         <Route path="/reform" component={ReformDashboard} />
         <Route path="/diagnostics" component={Diagnostics} />
         <Route path="/404" component={NotFound} />

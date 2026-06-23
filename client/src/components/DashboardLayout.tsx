@@ -34,6 +34,7 @@ const menuItems = [
 
   // OPERAÇÕES
   { icon: Workflow, label: "Painel de operações", path: "/operacoes", section: "operacoes" },
+  { icon: FileText, label: "Proformas", path: "/proformas", section: "operacoes" },
 
   // BASE OPERACIONAL (Cadastros) — ambiente unificado: fornecedores + compradores
   { icon: Building2, label: "Fornecedores & Compradores", path: "/suppliers", section: "base" },
