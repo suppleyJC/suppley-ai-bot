@@ -55,9 +55,24 @@ export async function getChatHistoryBySession(userId: number, sessionId: string)
 export async function clearChatHistory(userId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
-  
+
   await db.delete(sofiaChatMessages).where(eq(sofiaChatMessages.userId, userId));
   return true;
+}
+
+/**
+ * Conta as mensagens do histórico legado (chat antigo, sem conversa estruturada).
+ * Usado pela sidebar para sinalizar que existe histórico anterior à migração.
+ */
+export async function countLegacyMessages(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const [row] = await db
+    .select({ total: sql<number>`count(*)` })
+    .from(sofiaChatMessages)
+    .where(eq(sofiaChatMessages.userId, userId));
+  return Number(row?.total ?? 0);
 }
 
 // ==================== LEARNING CONTEXT FUNCTIONS ====================

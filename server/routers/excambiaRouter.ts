@@ -207,7 +207,7 @@ clearChatHistory: protectedProcedure.mutation(async ({ ctx }) => {
 listConversas: protectedProcedure
   .input(z.object({ status: z.enum(["ativa", "arquivada"]).optional() }).optional())
   .query(async ({ ctx, input }) => {
-    const conversas = await db.listConversas(ctx.user.id, { status: input?.status });
+    const conversas = await db.listConversasFlat(ctx.user.id, { status: input?.status });
     const legacyCount = await db.countLegacyMessages(ctx.user.id);
     return { conversas, legacyCount };
   }),
@@ -219,8 +219,7 @@ createConversa: protectedProcedure
     estagio: z.enum(["demand", "source", "analyze", "execute", "finance", "closed", "lost"]).optional(),
   }).optional())
   .mutation(async ({ ctx, input }) => {
-    return db.createConversa({
-      userId: ctx.user.id,
+    return db.createConversa(ctx.user.id, {
       titulo: input?.titulo,
       operacaoId: input?.operacaoId,
       estagio: input?.estagio,

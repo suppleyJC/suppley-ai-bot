@@ -168,7 +168,7 @@ export default function Excambia() {
         ? conversaMessages.map((msg) => ({
             role: msg.role as "user" | "assistant",
             content: msg.content,
-            timestamp: new Date(msg.createdAt),
+            timestamp: new Date(msg.criadaEm),
           }))
         : [WELCOME_MESSAGE],
     );

@@ -72,4 +72,79 @@ export const operationsRouter = router({
       payload: z.unknown().optional(),
     }))
     .mutation(({ input }) => svc.addEvento({ ...input } as any)),
+
+  // Atualiza metadados de planejamento (prioridade, prazo, cliente, etc.)
+  update: protectedProcedure
+    .input(z.object({
+      operacaoId: z.number(),
+      titulo: z.string().optional(),
+      clienteNome: z.string().optional(),
+      origemPais: z.string().optional(),
+      origemDesejada: z.string().optional(),
+      regimeTributario: z.enum(["lucro_real", "lucro_presumido", "simples_nacional"]).optional(),
+      prioridade: z.enum(["baixa", "media", "alta", "critica"]).optional(),
+      prazoDesejado: z.date().nullable().optional(),
+      responsavelId: z.number().nullable().optional(),
+    }))
+    .mutation(({ ctx, input }) => svc.updateOperacao({ userId: ctx.user.id, ...input })),
+
+  // Duplica a operação (copia só metadados de planejamento, começa em demand)
+  duplicate: protectedProcedure
+    .input(z.object({ operacaoId: z.number() }))
+    .mutation(({ ctx, input }) => svc.duplicateOperacao(ctx.user.id, input.operacaoId)),
+
+  // Exclui a operação e toda a sua esteira
+  delete: protectedProcedure
+    .input(z.object({ operacaoId: z.number() }))
+    .mutation(({ ctx, input }) => svc.deleteOperacao(ctx.user.id, input.operacaoId)),
+
+  // ----- Anexos -----
+  addAnexo: protectedProcedure
+    .input(z.object({
+      operacaoId: z.number(),
+      tipo: z.enum(["desenho", "pdf", "imagem", "especificacao", "catalogo", "cotacao", "outro"]).optional(),
+      nome: z.string().min(1),
+      fileKey: z.string(),
+      fileUrl: z.string(),
+      contentType: z.string().optional(),
+      tamanhoBytes: z.number().optional(),
+      descricao: z.string().optional(),
+    }))
+    .mutation(({ ctx, input }) => svc.anexarDocumento({ userId: ctx.user.id, ...input })),
+
+  removeAnexo: protectedProcedure
+    .input(z.object({ anexoId: z.number() }))
+    .mutation(({ ctx, input }) => svc.removerAnexo(ctx.user.id, input.anexoId)),
+
+  // ----- Financeiro -----
+  lancarFinanceiro: protectedProcedure
+    .input(z.object({
+      operacaoId: z.number(),
+      tipo: z.enum(["cambio", "pagamento_fornecedor", "imposto", "frete", "seguro", "despesa_local", "comissao", "receita", "outro"]).optional(),
+      direcao: z.enum(["entrada", "saida"]).optional(),
+      status: z.enum(["previsto", "realizado", "cancelado"]).optional(),
+      descricao: z.string().optional(),
+      valorCents: z.number(),
+      moeda: z.string().optional(),
+      valorBrlCents: z.number().optional(),
+      cambioRate: z.number().optional(),
+      dataReferencia: z.date().optional(),
+      vencimento: z.date().optional(),
+    }))
+    .mutation(({ ctx, input }) => svc.lancarFinanceiro({ userId: ctx.user.id, ...input })),
+
+  removeFinanceiro: protectedProcedure
+    .input(z.object({ lancamentoId: z.number() }))
+    .mutation(({ ctx, input }) => svc.removerFinanceiro(ctx.user.id, input.lancamentoId)),
+
+  // ----- Marcos -----
+  registrarMarco: protectedProcedure
+    .input(z.object({
+      operacaoId: z.number(),
+      tipo: z.enum(["pedido_confirmado", "producao_iniciada", "produto_embarcado", "di_registrada", "nacionalizado", "entregue"]),
+      status: z.enum(["planejado", "realizado", "cancelado"]).optional(),
+      descricao: z.string().optional(),
+      dataReferencia: z.date().optional(),
+    }))
+    .mutation(({ ctx, input }) => svc.registrarMarco({ userId: ctx.user.id, ...input })),
 });
