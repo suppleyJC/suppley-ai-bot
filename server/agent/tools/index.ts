@@ -21,6 +21,7 @@ import { registrarMarcoProducaoTool } from "./registrarMarcoProducao";
 import { registrarNacionalizacaoTool } from "./registrarNacionalizacao";
 import { lancarFinanceiroTool } from "./lancarFinanceiroTool";
 import { buscarAtivoTool, compararOrigemTool, benchmarkMercadoTool } from "./fase5Tools";
+import { coletarDadosFaltantesTool } from "./coletar_dados_faltantes";
 
 const ALL_TOOLS: AgentTool[] = [
   montarCalculoTool,
@@ -32,6 +33,8 @@ const ALL_TOOLS: AgentTool[] = [
   registrarMarcoProducaoTool,
   registrarNacionalizacaoTool,
   lancarFinanceiroTool,
+  // Completude — detecta gaps e coleta dados
+  coletarDadosFaltantesTool,
   // Fase 5 — buscas (lado leitura do ciclo de inteligência)
   buscarAtivoTool,
   compararOrigemTool,
