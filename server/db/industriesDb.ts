@@ -64,6 +64,35 @@ export async function getIndustriesBySector(userId: number, sector: string) {
   ).orderBy(desc(industries.overallRating));
 }
 
+export async function getIndustriesByUserAndType(userId: number, tipoEntidade: "fornecedor" | "comprador") {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(industries).where(
+    and(eq(industries.userId, userId), eq(industries.tipoEntidade, tipoEntidade))
+  ).orderBy(desc(industries.updatedAt));
+}
+
+export async function searchIndustriesByType(userId: number, tipoEntidade: "fornecedor" | "comprador", query: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(industries).where(
+    and(
+      eq(industries.userId, userId),
+      eq(industries.tipoEntidade, tipoEntidade),
+      sql`(${industries.name} LIKE ${`%${query}%`} OR ${industries.country} LIKE ${`%${query}%`} OR ${industries.tags} LIKE ${`%${query}%`})`
+    )
+  ).orderBy(desc(industries.overallRating));
+}
+
+export async function countIndustriesByType(userId: number, tipoEntidade: "fornecedor" | "comprador") {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select({ count: sql`COUNT(*)` }).from(industries).where(
+    and(eq(industries.userId, userId), eq(industries.tipoEntidade, tipoEntidade))
+  );
+  return (result[0]?.count as number) || 0;
+}
+
 // ============================================================
 // INDUSTRY CONTACTS - CRUD helpers
 // ============================================================
