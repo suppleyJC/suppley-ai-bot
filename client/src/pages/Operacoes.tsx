@@ -13,37 +13,20 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ClipboardList, Plus, Loader2, ArrowRight, MoreVertical, Copy, Trash2 } from "lucide-react";
+import { ClipboardList, Plus, Loader2, Copy, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { STAGE_ORDER, STAGE_META, type Estagio } from "@/lib/stageLabels";
-import { getPriorityMeta, type Prioridade } from "@/lib/priorityLabels";
+import OperationCard from "@/components/OperationCard";
 
 const COLUNAS = STAGE_ORDER.map((key) => ({
   key,
   label: STAGE_META[key].label,
   Icon: STAGE_META[key].Icon,
 }));
-
-const STATUS_LABEL: Record<string, { txt: string; cls: string }> = {
-  ativa:     { txt: "Ativa",     cls: "bg-violet-50 text-violet-700" },
-  go:        { txt: "GO",        cls: "bg-teal-50 text-teal-700" },
-  no_go:     { txt: "NO-GO",     cls: "bg-red-50 text-red-700" },
-  concluida: { txt: "Concluída", cls: "bg-teal-50 text-teal-700" },
-  perdida:   { txt: "Perdida",   cls: "bg-slate-100 text-slate-500" },
-  pausada:   { txt: "Pausada",   cls: "bg-amber-50 text-amber-700" },
-};
-
-function fmtBRL(cents?: number | null) {
-  if (cents == null) return "—";
-  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
 
 interface OperacaoRow {
   id: number;
@@ -53,11 +36,12 @@ interface OperacaoRow {
   status: string;
   clienteNome?: string | null;
   fornecedorNome?: string | null;
-  valorEstimadoBrl?: number | null;
+  valorEstimadoBrlCents?: number | null;
   margemEstimada?: number | null;
-  prioridade?: Prioridade | null;
+  prioridade?: string | null;
   prazoDesejado?: string | Date | null;
   origemDesejada?: string | null;
+  atualizadaEm?: Date | null;
 }
 
 export default function Operacoes() {
@@ -167,12 +151,33 @@ export default function Operacoes() {
                       <p className="px-1 py-4 text-center text-xs text-slate-300">—</p>
                     ) : (
                       itens.map((o) => (
-                        <OperacaoCard
+                        <OperationCard
                           key={o.id}
-                          op={o}
+                          entity={{
+                            id: o.id,
+                            title: o.titulo,
+                            code: o.codigo,
+                            clientName: o.clienteNome ?? undefined,
+                            supplierName: o.fornecedorNome ?? undefined,
+                            status: o.status,
+                            stage: o.estagioAtual,
+                            estimatedValue: o.valorEstimadoBrlCents,
+                            margin: o.margemEstimada,
+                            priority: o.prioridade ?? undefined,
+                            deadline: o.prazoDesejado,
+                            origin: o.origemDesejada ?? undefined,
+                            lastUpdated: o.atualizadaEm,
+                            avatar: {
+                              initials: o.codigo.substring(0, 2).toUpperCase(),
+                              color: "violet",
+                            },
+                          }}
+                          compact={true}
                           onClick={() => navigate(`/operacao/${o.id}`)}
-                          onDuplicate={() => duplicate.mutate({ operacaoId: o.id })}
-                          onDelete={() => setDelTarget(o)}
+                          actions={[
+                            { label: "Duplicar", icon: <Copy className="h-4 w-4" />, onClick: () => duplicate.mutate({ operacaoId: o.id }) },
+                            { label: "Excluir", icon: <Trash2 className="h-4 w-4" />, onClick: () => setDelTarget(o), variant: "destructive" },
+                          ]}
                         />
                       ))
                     )}
@@ -190,12 +195,33 @@ export default function Operacoes() {
               </h2>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {encerradas.map((o) => (
-                  <OperacaoCard
+                  <OperationCard
                     key={o.id}
-                    op={o}
+                    entity={{
+                      id: o.id,
+                      title: o.titulo,
+                      code: o.codigo,
+                      clientName: o.clienteNome ?? undefined,
+                      supplierName: o.fornecedorNome ?? undefined,
+                      status: o.status,
+                      stage: o.estagioAtual,
+                      estimatedValue: o.valorEstimadoBrlCents,
+                      margin: o.margemEstimada,
+                      priority: o.prioridade ?? undefined,
+                      deadline: o.prazoDesejado,
+                      origin: o.origemDesejada ?? undefined,
+                      lastUpdated: o.atualizadaEm,
+                      avatar: {
+                        initials: o.codigo.substring(0, 2).toUpperCase(),
+                        color: "violet",
+                      },
+                    }}
+                    compact={false}
                     onClick={() => navigate(`/operacao/${o.id}`)}
-                    onDuplicate={() => duplicate.mutate({ operacaoId: o.id })}
-                    onDelete={() => setDelTarget(o)}
+                    actions={[
+                      { label: "Duplicar", icon: <Copy className="h-4 w-4" />, onClick: () => duplicate.mutate({ operacaoId: o.id }) },
+                      { label: "Excluir", icon: <Trash2 className="h-4 w-4" />, onClick: () => setDelTarget(o), variant: "destructive" },
+                    ]}
                   />
                 ))}
               </div>
@@ -226,70 +252,6 @@ export default function Operacoes() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-function OperacaoCard({
-  op, onClick, onDuplicate, onDelete,
-}: {
-  op: OperacaoRow;
-  onClick: () => void;
-  onDuplicate: () => void;
-  onDelete: () => void;
-}) {
-  const st = STATUS_LABEL[op.status] ?? { txt: op.status, cls: "bg-slate-100 text-slate-500" };
-  const prio = getPriorityMeta(op.prioridade);
-  return (
-    <div
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick(); }}
-      className="group w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-3 text-left transition-all hover:border-violet-300 hover:shadow-sm"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <p className="font-mono text-[10px] text-slate-400">{op.codigo}</p>
-        <div className="flex items-center gap-1.5">
-          {/* mostra prioridade só quando relevante (alta/crítica) para não poluir */}
-          {(op.prioridade === "alta" || op.prioridade === "critica") && (
-            <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${prio.cls}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${prio.dot}`} /> {prio.label}
-            </span>
-          )}
-          <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${st.cls}`}>{st.txt}</span>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <button
-                className="rounded-md p-0.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100 data-[state=open]:opacity-100"
-                aria-label="Ações da operação"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuItem onClick={onDuplicate}>
-                <Copy className="mr-2 h-4 w-4" /> Duplicar
-              </DropdownMenuItem>
-              <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={onDelete}>
-                <Trash2 className="mr-2 h-4 w-4" /> Excluir
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-      <p className="mt-1 line-clamp-2 text-sm font-semibold text-slate-800">{op.titulo}</p>
-      {(op.clienteNome || op.fornecedorNome) && (
-        <p className="mt-0.5 truncate text-xs text-slate-400">
-          {[op.clienteNome, op.fornecedorNome].filter(Boolean).join(" · ")}
-        </p>
-      )}
-      <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
-        <span className="text-xs font-semibold text-slate-600">{fmtBRL(op.valorEstimadoBrl)}</span>
-        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-violet-600 opacity-0 transition-opacity group-hover:opacity-100">
-          Abrir <ArrowRight className="h-3 w-3" />
-        </span>
-      </div>
     </div>
   );
 }

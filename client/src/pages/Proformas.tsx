@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { FileText, Upload, Sparkles, Trash2, Plus, ArrowRight, Loader2, CheckCircle2, Building2, Package } from "lucide-react";
+import { FileText, Upload, Sparkles, Trash2, Plus, ArrowRight, Loader2, CheckCircle2, Building2, Package, Copy, Edit } from "lucide-react";
+import OperationCard from "@/components/OperationCard";
 
 type ItemDraft = {
   productName: string;
@@ -388,28 +389,31 @@ export default function Proformas() {
               <p className="text-sm">Nenhuma proforma ainda. Suba a primeira acima.</p>
             </div>
           ) : (
-            <div className="divide-y">
-              {proformas.map((p) => {
-                const st = STATUS_LABEL[p.status] ?? STATUS_LABEL.rascunho;
-                return (
-                  <div key={p.id} className="flex items-center justify-between py-3">
-                    <div>
-                      <p className="font-medium">
-                        {p.numero || `#${p.id}`} · {p.supplierName || "Fornecedor não informado"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {p.supplierCountry || "—"} · {p.currency} · {p.incoterm || "FOB"}
-                        {p.distributedAt && (
-                          <span className="ml-2 inline-flex items-center text-green-600">
-                            <CheckCircle2 className="h-3 w-3 mr-1" /> distribuída
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <Badge className={st.color}>{st.label}</Badge>
-                  </div>
-                );
-              })}
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {proformas.map((p) => (
+                <OperationCard
+                  key={p.id}
+                  entity={{
+                    id: p.id,
+                    title: `PF-${p.numero || p.id}`,
+                    supplierName: p.supplierName ?? undefined,
+                    status: p.status,
+                    estimatedValue: p.totalFobCents,
+                    origin: p.supplierCountry ?? undefined,
+                    itemCount: (p.items as any[])?.length ?? 0,
+                    lastUpdated: p.updatedAt,
+                    avatar: {
+                      initials: (p.supplierName || "PF").substring(0, 2).toUpperCase(),
+                      color: "teal",
+                    },
+                  }}
+                  compact={false}
+                  actions={[
+                    { label: "Revisar", icon: <Edit className="h-4 w-4" />, onClick: () => alert("Abrir edição de " + p.id) },
+                    { label: "Distribuir", onClick: () => distributeMutation.mutate({ proformaId: p.id }) },
+                  ]}
+                />
+              ))}
             </div>
           )}
         </CardContent>
