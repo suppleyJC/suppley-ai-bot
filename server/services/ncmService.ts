@@ -455,7 +455,14 @@ Responda em JSON com o formato especificado.`;
 
     const content = response.choices[0]?.message?.content;
     if (content && typeof content === "string") {
-      const result: NCMOptimizationResult = JSON.parse(content);
+      // Claude às vezes embrulha o JSON em cercas markdown (```json ... ```).
+      // Removemos as cercas antes do parse para evitar SyntaxError.
+      const cleaned = content
+        .trim()
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
+      const result: NCMOptimizationResult = JSON.parse(cleaned);
 
       // Enriquecer com dados do banco em paralelo (não sequencial)
       const allCodes = [
