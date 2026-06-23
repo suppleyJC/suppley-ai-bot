@@ -227,7 +227,19 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     tool_choice,
     maxTokens,
     max_tokens,
+    responseFormat,
+    response_format,
+    outputSchema,
+    output_schema,
   } = params;
+
+  // A Anthropic não tem "response_format: json_schema" como a OpenAI. Para obter
+  // saída estruturada de forma confiável, convertemos o schema numa ferramenta
+  // forçada (tool_choice fixo): o Claude é obrigado a preencher os campos do
+  // schema, e devolvemos o input da tool como conteúdo JSON.
+  const rf = responseFormat ?? response_format;
+  const structuredSchema: JsonSchema | undefined =
+    rf && rf.type === "json_schema" ? rf.json_schema : (outputSchema ?? output_schema);
 
   // Texto plano de um conteúdo qualquer (usado para system e tool_result)
   const asPlainText = (content: MessageContent | MessageContent[]): string =>
@@ -311,6 +323,9 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.system = systemPrompt;
   }
 
+  // Nome da tool sintética usada para saída estruturada (se aplicável).
+  let structuredToolName: string | undefined;
+
   if (toolList && toolList.length > 0) {
     payload.tools = toolList;
 
@@ -330,6 +345,19 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
         name: (normalizedToolChoice as any).function.name,
       };
     }
+  } else if (structuredSchema) {
+    // Sem tools explícitas, mas com schema de saída: cria uma tool sintética e
+    // força o Claude a chamá-la, garantindo o formato estruturado.
+    structuredToolName = structuredSchema.name || "structured_output";
+    payload.tools = [
+      {
+        name: structuredToolName,
+        description:
+          "Retorne o resultado preenchendo EXATAMENTE os campos do schema.",
+        input_schema: structuredSchema.schema,
+      },
+    ];
+    payload.tool_choice = { type: "tool", name: structuredToolName };
   }
 
   // Chamar API Anthropic
@@ -364,9 +392,21 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       },
     })) || [];
 
-  const textContent = result.content
+  let textContent = result.content
     ?.find((block: any) => block.type === "text")
     ?.text || "";
+
+  // Saída estruturada: o JSON vem como input da tool sintética. Devolvemos como
+  // string em content (e limpamos tool_calls) para o chamador fazer JSON.parse.
+  if (structuredToolName) {
+    const structuredBlock = result.content?.find(
+      (block: any) => block.type === "tool_use" && block.name === structuredToolName
+    );
+    if (structuredBlock) {
+      textContent = JSON.stringify(structuredBlock.input);
+      toolCalls.length = 0;
+    }
+  }
 
   return {
     id: result.id,
