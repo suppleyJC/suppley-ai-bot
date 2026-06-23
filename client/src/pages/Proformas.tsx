@@ -398,9 +398,8 @@ export default function Proformas() {
                     title: `PF-${p.numero || p.id}`,
                     supplierName: p.supplierName ?? undefined,
                     status: p.status,
-                    estimatedValue: p.totalFobCents,
+                    estimatedValue: p.totalFobCents ?? undefined,
                     origin: p.supplierCountry ?? undefined,
-                    itemCount: (p.items as any[])?.length ?? 0,
                     lastUpdated: p.updatedAt,
                     avatar: {
                       initials: (p.supplierName || "PF").substring(0, 2).toUpperCase(),

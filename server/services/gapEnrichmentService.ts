@@ -1,5 +1,9 @@
 import * as operacaoService from "./operacaoService";
-import type { ConversaMensagem } from "../db/conversaDb";
+
+export interface ChatMsg {
+  author: "user" | "excambia" | "assistant" | string;
+  content: string;
+}
 
 export interface EnrichmentResult {
   updated: Record<string, any>;
@@ -9,75 +13,51 @@ export interface EnrichmentResult {
 export async function enrichOperacaoFromChat(
   userId: number,
   operacaoId: number,
-  chatMessages: ConversaMensagem[]
+  chatMessages: ChatMsg[]
 ): Promise<EnrichmentResult> {
-  const operacao = await operacaoService.getOperacao(userId, operacaoId);
-  if (!operacao) throw new Error("Operação não encontrada");
+  const result = await operacaoService.getOperacao(userId, operacaoId);
+  if (!result) throw new Error("Operação não encontrada");
 
+  const op = result.operacao;
   const updated: Record<string, any> = {};
   const enrichedAt = new Date();
 
-  // Procura resposta para NCM nas mensagens do usuário
-  const ncmResponse = extractFromMessages(chatMessages, ["ncm", "código", "classific"]);
-  if (ncmResponse && !operacao.ncmProvavel) {
-    await operacaoService.updateOperacao({
-      userId,
-      operacaoId,
-      data: {
-        ncmProvavel: ncmResponse,
-        ncmValidated: false,
-      },
-    });
-    updated.ncm = ncmResponse;
+  // Cliente
+  const clienteResp = extractFromMessages(chatMessages, ["cliente", "comprador", "vender para"]);
+  if (clienteResp && !op.clienteNome) {
+    await operacaoService.updateOperacao({ userId, operacaoId, clienteNome: clienteResp });
+    updated.cliente = clienteResp;
   }
 
-  // Procura resposta para quantidade
-  const quantityResponse = extractNumberFromMessages(chatMessages, ["quantidade", "unidade", "pç", "pc"]);
-  if (quantityResponse && !operacao.quantidadeDesejada) {
-    await operacaoService.updateOperacao({
-      userId,
-      operacaoId,
-      data: {
-        quantidadeDesejada: quantityResponse,
-      },
-    });
-    updated.quantity = quantityResponse;
+  // Origem
+  const origemResp = extractFromMessages(chatMessages, ["país", "origem", "importar de"]);
+  if (origemResp && !op.origemPais && !op.origemDesejada) {
+    await operacaoService.updateOperacao({ userId, operacaoId, origemDesejada: origemResp });
+    updated.origem = origemResp;
   }
 
-  // Procura resposta para prazo
-  const deadlineResponse = extractDateFromMessages(chatMessages, ["prazo", "entrega", "dia"]);
-  if (deadlineResponse && !operacao.prazoDesejado) {
-    await operacaoService.updateOperacao({
-      userId,
-      operacaoId,
-      data: {
-        prazoDesejado: deadlineResponse,
-      },
-    });
-    updated.deadline = deadlineResponse;
+  // Prazo
+  const prazoResp = extractDateFromMessages(chatMessages, ["prazo", "entrega", "dia"]);
+  if (prazoResp && !op.prazoDesejado) {
+    await operacaoService.updateOperacao({ userId, operacaoId, prazoDesejado: prazoResp });
+    updated.prazo = prazoResp;
   }
 
-  // Procura resposta para país/origem
-  const originResponse = extractFromMessages(chatMessages, ["país", "origem", "para importar"]);
-  if (originResponse && !operacao.origemDesejada) {
-    await operacaoService.updateOperacao({
-      userId,
-      operacaoId,
-      data: {
-        origemDesejada: originResponse,
-      },
-    });
-    updated.origin = originResponse;
+  // Regime tributário
+  const regimeResp = extractRegimeFromMessages(chatMessages);
+  if (regimeResp && !op.regimeTributario) {
+    await operacaoService.updateOperacao({ userId, operacaoId, regimeTributario: regimeResp });
+    updated.regime = regimeResp;
   }
 
-  // Registra enriquecimento como evento
+  // Registra enriquecimento como evento (nota interna na timeline)
   if (Object.keys(updated).length > 0) {
     await operacaoService.addEvento({
-      userId,
       operacaoId,
-      tipo: "dados_enriquecidos",
+      tipo: "nota_interna",
+      estagio: op.estagioAtual,
       autor: "excambia",
-      descricao: `Dados enriquecidos via chat: ${Object.keys(updated).join(", ")}`,
+      titulo: `Dados enriquecidos via chat: ${Object.keys(updated).join(", ")}`,
       payload: updated,
     });
   }
@@ -85,38 +65,20 @@ export async function enrichOperacaoFromChat(
   return { updated, enrichedAt };
 }
 
-function extractFromMessages(messages: ConversaMensagem[], keywords: string[]): string | null {
+function extractFromMessages(messages: ChatMsg[], keywords: string[]): string | null {
   const userMessages = messages.filter((m) => m.author === "user");
   const combined = userMessages.map((m) => m.content.toLowerCase()).join(" ");
 
-  const keywordMatches = keywords.filter((kw) => combined.includes(kw.toLowerCase()));
-  if (keywordMatches.length === 0) return null;
+  const hasKeyword = keywords.some((kw) => combined.includes(kw.toLowerCase()));
+  if (!hasKeyword) return null;
 
   const lastUserMsg = userMessages[userMessages.length - 1];
   if (!lastUserMsg) return null;
 
-  const words = lastUserMsg.content.split(/\s+/);
-  return words.slice(0, 10).join(" ");
+  return lastUserMsg.content.split(/\s+/).slice(0, 10).join(" ");
 }
 
-function extractNumberFromMessages(messages: ConversaMensagem[], keywords: string[]): number | null {
-  const userMessages = messages.filter((m) => m.author === "user");
-
-  for (const msg of userMessages) {
-    const lowerMsg = msg.content.toLowerCase();
-    const hasKeyword = keywords.some((kw) => lowerMsg.includes(kw.toLowerCase()));
-    if (!hasKeyword) continue;
-
-    const numbers = msg.content.match(/\d+/g);
-    if (numbers && numbers.length > 0) {
-      return parseInt(numbers[numbers.length - 1], 10);
-    }
-  }
-
-  return null;
-}
-
-function extractDateFromMessages(messages: ConversaMensagem[], keywords: string[]): Date | null {
+function extractDateFromMessages(messages: ChatMsg[], keywords: string[]): Date | null {
   const userMessages = messages.filter((m) => m.author === "user");
 
   for (const msg of userMessages) {
@@ -140,6 +102,19 @@ function extractDateFromMessages(messages: ConversaMensagem[], keywords: string[
       return new Date(year > 100 ? year : 2000 + year, month, day);
     }
   }
+
+  return null;
+}
+
+function extractRegimeFromMessages(
+  messages: ChatMsg[]
+): "lucro_real" | "lucro_presumido" | "simples_nacional" | null {
+  const userMessages = messages.filter((m) => m.author === "user");
+  const combined = userMessages.map((m) => m.content.toLowerCase()).join(" ");
+
+  if (combined.includes("lucro real")) return "lucro_real";
+  if (combined.includes("presumido")) return "lucro_presumido";
+  if (combined.includes("simples")) return "simples_nacional";
 
   return null;
 }

@@ -8,6 +8,30 @@ list: protectedProcedure.query(async ({ ctx }) => {
   return db.getIndustriesByUser(ctx.user.id);
 }),
 
+// Lista filtrada por tipo de entidade (fornecedor × comprador)
+listByType: protectedProcedure
+  .input(z.object({ tipoEntidade: z.enum(["fornecedor", "comprador"]) }))
+  .query(async ({ ctx, input }) => {
+    return db.getIndustriesByUserAndType(ctx.user.id, input.tipoEntidade);
+  }),
+
+// Conta entidades por tipo (para badges/headers)
+countByType: protectedProcedure
+  .input(z.object({ tipoEntidade: z.enum(["fornecedor", "comprador"]) }))
+  .query(async ({ ctx, input }) => {
+    return db.countIndustriesByType(ctx.user.id, input.tipoEntidade);
+  }),
+
+// Busca filtrada por tipo
+searchByType: protectedProcedure
+  .input(z.object({
+    tipoEntidade: z.enum(["fornecedor", "comprador"]),
+    query: z.string(),
+  }))
+  .query(async ({ ctx, input }) => {
+    return db.searchIndustriesByType(ctx.user.id, input.tipoEntidade, input.query);
+  }),
+
 get: protectedProcedure
   .input(z.object({ id: z.number() }))
   .query(async ({ ctx, input }) => {
@@ -49,6 +73,7 @@ create: protectedProcedure
     preferredLanguage: z.enum(["pt","en","es","zh","ar","fr","de","it","ja","ko"]).default("en"),
     preferredChannel: z.enum(["email","whatsapp","wechat","phone","alibaba","other"]).default("email"),
     status: z.enum(["active","prospect","inactive","blacklisted"]).default("prospect"),
+    tipoEntidade: z.enum(["fornecedor","comprador"]).default("fornecedor"),
     notes: z.string().optional(),
     tags: z.string().optional(),
   }))
@@ -90,6 +115,7 @@ update: protectedProcedure
     preferredLanguage: z.enum(["pt","en","es","zh","ar","fr","de","it","ja","ko"]).optional(),
     preferredChannel: z.enum(["email","whatsapp","wechat","phone","alibaba","other"]).optional(),
     status: z.enum(["active","prospect","inactive","blacklisted"]).optional(),
+    tipoEntidade: z.enum(["fornecedor","comprador"]).optional(),
     notes: z.string().optional(),
     tags: z.string().optional(),
   }))

@@ -65,7 +65,7 @@ const LANGUAGES = [
   { value: "ko", label: "Coreano" },
 ];
 
-export default function Industries() {
+export default function Industries({ tipoEntidade }: { tipoEntidade?: "fornecedor" | "comprador" } = {}) {
   const [, setLocation] = useLocation();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -74,27 +74,38 @@ export default function Industries() {
   const [sortBy, setSortBy] = useState<string>("name");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
-  const { data: industriesList, isLoading } = trpc.industries.list.useQuery();
+  // Quando recebe tipoEntidade, usa a query unificada filtrada; senão, lista tudo
+  const listAll = trpc.industries.list.useQuery(undefined, { enabled: !tipoEntidade });
+  const listByType = trpc.industries.listByType.useQuery(
+    { tipoEntidade: tipoEntidade ?? "fornecedor" },
+    { enabled: !!tipoEntidade }
+  );
+  const industriesList = tipoEntidade ? listByType.data : listAll.data;
+  const isLoading = tipoEntidade ? listByType.isLoading : listAll.isLoading;
   const { data: stats } = trpc.industries.stats.useQuery();
   const utils = trpc.useUtils();
+
+  const label = tipoEntidade === "comprador" ? "Comprador" : tipoEntidade === "fornecedor" ? "Fornecedor" : "Indústria";
 
   const createMutation = trpc.industries.create.useMutation({
     onSuccess: () => {
       utils.industries.list.invalidate();
+      utils.industries.listByType.invalidate();
       utils.industries.stats.invalidate();
       setShowCreateDialog(false);
-      toast.success("Indústria cadastrada com sucesso!");
+      toast.success(`${label} cadastrado com sucesso!`);
     },
     onError: (err) => {
-      toast.error(err.message || "Erro ao cadastrar indústria");
+      toast.error(err.message || `Erro ao cadastrar ${label.toLowerCase()}`);
     },
   });
 
   const deleteMutation = trpc.industries.delete.useMutation({
     onSuccess: () => {
       utils.industries.list.invalidate();
+      utils.industries.listByType.invalidate();
       utils.industries.stats.invalidate();
-      toast.success("Indústria removida");
+      toast.success(`${label} removido`);
     },
   });
 
@@ -124,22 +135,28 @@ export default function Industries() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Indústrias</h1>
-          <p className="text-muted-foreground">Cadastro e gestão de fábricas e fornecedores</p>
+          <h1 className="text-2xl font-bold">
+            {tipoEntidade === "comprador" ? "Compradores nacionais" : tipoEntidade === "fornecedor" ? "Fornecedores / Fabricantes" : "Indústrias"}
+          </h1>
+          <p className="text-muted-foreground">
+            {tipoEntidade === "comprador"
+              ? "Cadastro e gestão de compradores nacionais / setores"
+              : "Cadastro e gestão de fábricas e fornecedores internacionais"}
+          </p>
         </div>
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
-              Nova Indústria
+              Novo {label}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Cadastrar Nova Indústria</DialogTitle>
+              <DialogTitle>Cadastrar Novo {label}</DialogTitle>
             </DialogHeader>
-            <IndustryForm 
-              onSubmit={(data) => createMutation.mutate(data)} 
+            <IndustryForm
+              onSubmit={(data) => createMutation.mutate({ ...data, ...(tipoEntidade ? { tipoEntidade } : {}) })}
               isLoading={createMutation.isPending}
             />
           </DialogContent>

@@ -1,19 +1,19 @@
 /**
  * Marketplace — ambiente unificado da Base Operacional.
  *
- * Junta num só lugar (com abas) as duas bases que antes eram páginas separadas:
- *   - Fornecedores / Fabricantes (antiga /suppliers)
- *   - Compradores nacionais / Setores (antiga /industries)
+ * Junta num só lugar (com abas) as duas faces da base unificada, AMBAS na tabela
+ * `industries`, discriminadas pelo campo tipoEntidade:
+ *   - Fornecedores / Fabricantes  (tipoEntidade = "fornecedor")
+ *   - Compradores nacionais / Setores (tipoEntidade = "comprador")
  *
- * Reaproveita os componentes de página existentes dentro de cada aba, de modo
- * que TODAS as funções (cadastro, filtros, edição, rating etc.) seguem intactas.
- * A aba inicial vem da query string (?tab=compradores) para deep-link a partir
- * de outros pontos do app.
+ * SPRINT 2 (Pilar 1): a tabela legada `suppliers` foi unificada em `industries`.
+ * Ambas as abas agora renderizam o mesmo componente Industries, parametrizado
+ * por tipoEntidade — cadastro, filtros, edição e rating ficam idênticos.
+ * A aba inicial vem da query string (?tab=compradores) para deep-link.
  */
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Building2, Factory } from "lucide-react";
 import { useLocation } from "wouter";
-import Suppliers from "./Suppliers";
 import Industries from "./Industries";
 
 export default function Marketplace() {
@@ -28,7 +28,7 @@ export default function Marketplace() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Fornecedores &amp; Compradores</h1>
+        <h1 className="text-3xl font-bold">Indústrias &amp; Fornecedores</h1>
         <p className="text-muted-foreground">
           Fornecedores/fabricantes e compradores nacionais/setores num único ambiente
         </p>
@@ -47,10 +47,10 @@ export default function Marketplace() {
         </TabsList>
 
         <TabsContent value="fornecedores" className="mt-6">
-          <Suppliers />
+          <Industries tipoEntidade="fornecedor" />
         </TabsContent>
         <TabsContent value="compradores" className="mt-6">
-          <Industries />
+          <Industries tipoEntidade="comprador" />
         </TabsContent>
       </Tabs>
     </div>
