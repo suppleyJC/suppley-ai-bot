@@ -24,7 +24,8 @@ export default function Register() {
         setStoredToken(data.token);
       }
       toast.success("Conta criada com sucesso!");
-      setLocation("/");
+      // Novo usuário entra direto na Excambia (cérebro do sistema).
+      setLocation("/excambia");
     },
     onError: (error) => {
       toast.error(error.message || "Erro ao criar conta");

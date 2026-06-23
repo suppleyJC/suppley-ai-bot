@@ -22,7 +22,8 @@ export default function Login() {
         setStoredToken(data.token);
       }
       toast.success("Login realizado com sucesso!");
-      setLocation("/");
+      // Excambia é o cérebro do sistema: o usuário cai direto nela ao entrar.
+      setLocation("/excambia");
     },
     onError: (error) => {
       toast.error(error.message || "Erro ao fazer login");

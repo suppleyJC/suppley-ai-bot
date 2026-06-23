@@ -39,7 +39,8 @@ function AuthenticatedRoutes() {
   return (
     <DashboardLayout>
       <Switch>
-        <Route path="/" component={Operacoes} />
+        {/* Excambia é a porta de entrada (cérebro do sistema) */}
+        <Route path="/" component={ExcambiaChat} />
         <Route path="/calculate" component={CalculateMultiple} />
         <Route path="/calculate-single" component={Calculate} />
         <Route path="/calculations" component={Calculations} />
