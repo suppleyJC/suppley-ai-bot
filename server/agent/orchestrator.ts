@@ -64,6 +64,12 @@ export interface OrchestratorOutput {
   toolResults: Array<{ name: string; ok: boolean; data?: unknown }>;
 }
 
+export type StreamChunk =
+  | { type: "thinking"; content: string }
+  | { type: "tool_call"; name: string; args: Record<string, unknown> }
+  | { type: "tool_result"; name: string; ok: boolean; summary: string }
+  | { type: "reply"; reply: string; toolsUsed: string[]; toolResults: OrchestratorOutput["toolResults"] };
+
 const MAX_TURNS = 6; // teto de idas-e-voltas com tools por mensagem
 
 export async function runExcambia(input: OrchestratorInput): Promise<OrchestratorOutput> {
@@ -151,6 +157,114 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
 
   // Esgotou os turns sem resposta final
   return {
+    reply: "Precisei de muitos passos para concluir. Pode reformular ou dar mais detalhes?",
+    toolsUsed,
+    toolResults,
+  };
+}
+
+export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerator<StreamChunk> {
+  const ctx: ToolContext = {
+    userId: input.userId,
+    operacaoId: input.operacaoId,
+    estagio: input.estagio,
+  };
+
+  const toolSchemas = getToolSchemas(input.estagio);
+  const toolsUsed: string[] = [];
+  const toolResults: OrchestratorOutput["toolResults"] = [];
+
+  const conversation: Message[] = [
+    { role: "system", content: EXCAMBIA_SYSTEM_PROMPT },
+    ...input.messages,
+  ];
+
+  let turns = 0;
+  let llmCalls = 0;
+
+  while (turns < MAX_TURNS) {
+    turns++;
+
+    const budget = checkBudget(llmCalls);
+    if (!budget.ok) {
+      yield {
+        type: "reply",
+        reply: budget.reason!,
+        toolsUsed,
+        toolResults,
+      };
+      return;
+    }
+    llmCalls++;
+
+    yield { type: "thinking", content: "Pensando..." };
+
+    const result = await invokeLLM({
+      messages: conversation,
+      tools: toolSchemas.length > 0 ? toolSchemas : undefined,
+      tool_choice: toolSchemas.length > 0 ? "auto" : undefined,
+    });
+
+    const choice = result.choices?.[0]?.message;
+    const toolCalls = choice?.tool_calls ?? [];
+
+    // Sem tool: resposta final em texto
+    if (toolCalls.length === 0) {
+      const reply = typeof choice?.content === "string" ? choice.content : "";
+      yield {
+        type: "reply",
+        reply,
+        toolsUsed,
+        toolResults,
+      };
+      return;
+    }
+
+    conversation.push({
+      role: "assistant",
+      content: typeof choice?.content === "string" ? choice.content : "",
+      tool_calls: toolCalls,
+    } as Message);
+
+    // Executa cada tool e emite evento
+    for (const call of toolCalls) {
+      const name = call.function.name;
+      let args: Record<string, unknown> = {};
+      try {
+        args = JSON.parse(call.function.arguments || "{}");
+      } catch {
+        args = {};
+      }
+
+      yield { type: "tool_call", name, args };
+
+      const toolResult = await runTool(name, args, ctx);
+      toolsUsed.push(name);
+      toolResults.push({ name, ok: toolResult.ok, data: toolResult.data });
+
+      yield {
+        type: "tool_result",
+        name,
+        ok: toolResult.ok,
+        summary: toolResult.summary,
+      };
+
+      conversation.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify({
+          ok: toolResult.ok,
+          summary: toolResult.summary,
+          data: toolResult.data ?? null,
+          error: toolResult.error ?? null,
+        }),
+      } as Message);
+    }
+  }
+
+  // Esgotou os turns sem resposta final
+  yield {
+    type: "reply",
     reply: "Precisei de muitos passos para concluir. Pode reformular ou dar mais detalhes?",
     toolsUsed,
     toolResults,
