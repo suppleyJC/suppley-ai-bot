@@ -17,4 +17,9 @@ export const ENV = {
   get forgeApiUrl() { return process.env.BUILT_IN_FORGE_API_URL ?? ""; },
   get forgeApiKey() { return process.env.BUILT_IN_FORGE_API_KEY ?? ""; },
   get anthropicApiKey() { return process.env.ANTHROPIC_API_KEY ?? ""; },
+  // AWS S3 Storage
+  get awsS3Bucket() { return process.env.AWS_S3_BUCKET ?? ""; },
+  get awsRegion() { return process.env.AWS_REGION ?? "us-east-1"; },
+  get awsAccessKeyId() { return process.env.AWS_ACCESS_KEY_ID ?? ""; },
+  get awsSecretAccessKey() { return process.env.AWS_SECRET_ACCESS_KEY ?? ""; },
 };

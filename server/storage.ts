@@ -1,102 +1,77 @@
-// Preconfigured storage helpers for Manus WebDev templates
-// Uses the Biz-provided storage proxy (Authorization: Bearer <token>)
+/**
+ * Storage abstraction layer using AWS S3
+ *
+ * Replaces legacy Manus Forge storage with AWS S3 for scalability and compliance.
+ * Uses presigned URLs for secure file access without exposing credentials.
+ */
 
-import { ENV } from './_core/env';
+import { s3Client } from './_core/s3Client';
 
-type StorageConfig = { baseUrl: string; apiKey: string };
-
-function getStorageConfig(): StorageConfig {
-  const baseUrl = ENV.forgeApiUrl;
-  const apiKey = ENV.forgeApiKey;
-
-  if (!baseUrl || !apiKey) {
-    throw new Error(
-      "Storage proxy credentials missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY"
-    );
-  }
-
-  return { baseUrl: baseUrl.replace(/\/+$/, ""), apiKey };
-}
-
-function buildUploadUrl(baseUrl: string, relKey: string): URL {
-  const url = new URL("v1/storage/upload", ensureTrailingSlash(baseUrl));
-  url.searchParams.set("path", normalizeKey(relKey));
-  return url;
-}
-
-async function buildDownloadUrl(
-  baseUrl: string,
-  relKey: string,
-  apiKey: string
-): Promise<string> {
-  const downloadApiUrl = new URL(
-    "v1/storage/downloadUrl",
-    ensureTrailingSlash(baseUrl)
-  );
-  downloadApiUrl.searchParams.set("path", normalizeKey(relKey));
-  const response = await fetch(downloadApiUrl, {
-    method: "GET",
-    headers: buildAuthHeaders(apiKey),
-  });
-  return (await response.json()).url;
-}
-
-function ensureTrailingSlash(value: string): string {
-  return value.endsWith("/") ? value : `${value}/`;
-}
-
-function normalizeKey(relKey: string): string {
-  return relKey.replace(/^\/+/, "");
-}
-
-function toFormData(
-  data: Buffer | Uint8Array | string,
-  contentType: string,
-  fileName: string
-): FormData {
-  const blob =
-    typeof data === "string"
-      ? new Blob([data], { type: contentType })
-      : new Blob([data as any], { type: contentType });
-  const form = new FormData();
-  form.append("file", blob, fileName || "file");
-  return form;
-}
-
-function buildAuthHeaders(apiKey: string): HeadersInit {
-  return { Authorization: `Bearer ${apiKey}` };
-}
-
+/**
+ * Upload file to S3 storage
+ * @param relKey - Relative key path (e.g., "quotations/user-123/file.pdf")
+ * @param data - File content as Buffer, Uint8Array, or string
+ * @param contentType - MIME type (default: "application/octet-stream")
+ * @returns Object with storage key and presigned URL (valid for 1 hour)
+ */
 export async function storagePut(
   relKey: string,
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
-  const { baseUrl, apiKey } = getStorageConfig();
   const key = normalizeKey(relKey);
-  const uploadUrl = buildUploadUrl(baseUrl, key);
-  const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
-  const response = await fetch(uploadUrl, {
-    method: "POST",
-    headers: buildAuthHeaders(apiKey),
-    body: formData,
-  });
 
-  if (!response.ok) {
-    const message = await response.text().catch(() => response.statusText);
-    throw new Error(
-      `Storage upload failed (${response.status} ${response.statusText}): ${message}`
-    );
+  try {
+    return await s3Client.upload(key, data, contentType);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Storage upload failed: ${message}`);
   }
-  const url = (await response.json()).url;
-  return { key, url };
 }
 
-export async function storageGet(relKey: string): Promise<{ key: string; url: string; }> {
-  const { baseUrl, apiKey } = getStorageConfig();
+/**
+ * Get presigned URL for downloading file from S3
+ * @param relKey - Relative key path
+ * @param expiresIn - URL expiration time in seconds (default: 1 hour = 3600s)
+ * @returns Object with storage key and presigned URL
+ */
+export async function storageGet(
+  relKey: string,
+  expiresIn: number = 3600
+): Promise<{ key: string; url: string }> {
   const key = normalizeKey(relKey);
-  return {
-    key,
-    url: await buildDownloadUrl(baseUrl, key, apiKey),
-  };
+
+  try {
+    const url = await s3Client.getSignedUrl(key, expiresIn);
+    return { key, url };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to generate download URL: ${message}`);
+  }
+}
+
+/**
+ * Delete file from S3 bucket
+ * @param relKey - Relative key path
+ */
+export async function storageDelete(relKey: string): Promise<void> {
+  const key = normalizeKey(relKey);
+
+  try {
+    await s3Client.delete(key);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Storage delete failed: ${message}`);
+  }
+}
+
+// ============================================================
+// HELPER FUNCTIONS
+// ============================================================
+
+/**
+ * Normalize S3 key by removing leading slashes
+ */
+function normalizeKey(relKey: string): string {
+  return relKey.replace(/^\/+/, "");
 }

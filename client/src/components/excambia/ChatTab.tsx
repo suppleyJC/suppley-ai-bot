@@ -1,4 +1,5 @@
-import { useRef, useEffect } from "react";
+import { useRef } from "react";
+import { Virtuoso } from "virtuoso";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TabsContent } from "@/components/ui/tabs";
@@ -6,6 +7,8 @@ import {
   Send, Loader2, Upload, ExternalLink, Plus, Download,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
+import { LoadingSpinner } from "./LoadingSpinner";
+import { MessageSkeleton } from "./skeletons";
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -61,16 +64,7 @@ export function ChatTab({
   onOpenOperacao,
   onCreateOperacao,
 }: ChatTabProps) {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-    }
-  }, [messages, isTyping]);
 
   return (
     <TabsContent
@@ -86,37 +80,28 @@ export function ChatTab({
       )}
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
         {topBar}
-        {/* Messages Area - responsive padding and max-width */}
-        <div
-          ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 md:px-6 lg:px-8"
-          style={{
-            scrollbarWidth: 'thin',
-            scrollbarColor: '#682ABA transparent',
-          }}
-        >
-          <div className="space-y-3 sm:space-y-4 max-w-3xl mx-auto w-full">
-            {messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
+        {/* Messages Area - Virtualized for performance */}
+        <Virtuoso
+          className="flex-1"
+          data={messages}
+          increaseViewportBy={{ top: 300, bottom: 300 }}
+          autoScrollBehavior="smooth"
+          style={{ overflowX: "hidden" }}
+          itemContent={(index, msg) => (
+              <div className="px-3 py-2 sm:px-4 md:px-6 lg:px-8 w-full flex justify-center">
+                <div className="max-w-3xl w-full">
+                  <div
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
                 <div
                   className={`rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 shadow-sm transition-all ${
                     msg.role === "user"
-                      ? "bg-gradient-to-r from-[#311260] to-[#682ABA] text-white max-w-[85%] sm:max-w-[75%] lg:max-w-[65%]"
-                      : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 max-w-[90%] sm:max-w-[80%] lg:max-w-[75%]"
+                      ? "bg-gradient-to-r from-[#311260] to-[#682ABA] text-white max-w-[95%] sm:max-w-[85%] md:max-w-[75%] lg:max-w-[65%]"
+                      : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 max-w-[95%] sm:max-w-[90%] md:max-w-[80%] lg:max-w-[75%]"
                   }`}
                 >
                   {msg.role === "assistant" && msg.streaming && !msg.content ? (
-                    <div className="flex items-center gap-2">
-                      <div className="flex gap-1">
-                        <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                      </div>
-                      <span className="text-sm text-muted-foreground">{msg.statusText || "Excambia está pensando..."}</span>
-                    </div>
+                    <LoadingSpinner status={msg.statusText} />
                   ) : msg.role === "assistant" ? (
                     <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_pre]:text-xs [&_code]:text-xs">
                       <Streamdown>{msg.content}</Streamdown>
@@ -139,9 +124,6 @@ export function ChatTab({
                     </div>
                   )}
 
-                  {/* Botões de ação na mensagem (Fase 3): guiados pelas tools
-                      acionadas. Só navegam (Ver no Painel) ou criam+vinculam
-                      uma operação (aditivo) — nada destrutivo automático. */}
                   {msg.role === "assistant" && msg.downloadUrl && (
                     <div className="mt-2 border-t border-slate-100 dark:border-slate-700 pt-2">
                       <a href={msg.downloadUrl} target="_blank" rel="noreferrer" download={msg.downloadName}>
@@ -175,26 +157,19 @@ export function ChatTab({
                   )}
                 </div>
               </div>
-            ))}
-
-            {isTyping && !messages.some((m) => m.streaming) && (
-              <div className="flex justify-start">
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                    <span className="text-sm text-muted-foreground ml-1">Excambia está pensando...</span>
-                  </div>
                 </div>
               </div>
             )}
-
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
+          footer={() =>
+            isTyping && !messages.some((m) => m.streaming) ? (
+              <div className="flex justify-start px-3 py-4 sm:px-4 md:px-6 lg:px-8">
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 shadow-sm max-w-3xl mx-auto w-full">
+                  <LoadingSpinner />
+                </div>
+              </div>
+            ) : null
+          }
+        />
 
         {/* Quick Actions - shown only when conversation is fresh */}
         {messages.length <= 1 && (
