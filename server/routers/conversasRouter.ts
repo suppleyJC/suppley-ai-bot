@@ -7,6 +7,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import * as conversaDb from "../db/conversaDb";
 import { runExcambia } from "../agent/orchestrator";
+import { enrichOperacaoFromChat } from "../services/gapEnrichmentService";
 import { TRPCError } from "@trpc/server";
 
 export const conversasRouter = router({
@@ -95,6 +96,24 @@ export const conversasRouter = router({
         await conversaDb.addMessage(input.conversaId, "user", userMsg.content);
       }
 
+      // PILAR 2 — Enriquecimento automático: extrai dados que a pessoa forneceu
+      // no chat (cliente, origem, prazo, regime) e grava na operação ANTES de
+      // chamar o agente, para que a Excambia já enxergue os dados atualizados.
+      // Tolerante a falha: um erro aqui não pode derrubar a conversa.
+      let enriched: Record<string, unknown> = {};
+      if (input.operacaoId) {
+        try {
+          const res = await enrichOperacaoFromChat(
+            ctx.user.id,
+            input.operacaoId,
+            input.messages.map((m) => ({ author: m.role, content: m.content })),
+          );
+          enriched = res.updated;
+        } catch (err) {
+          console.error("[conversas.send] enriquecimento falhou:", err);
+        }
+      }
+
       // Chama o orquestrador
       const result = await runExcambia({
         userId: ctx.user.id,
@@ -116,6 +135,7 @@ export const conversasRouter = router({
         reply: result.reply,
         toolsUsed: result.toolsUsed,
         toolResults: result.toolResults,
+        enriched,
       };
     }),
 });

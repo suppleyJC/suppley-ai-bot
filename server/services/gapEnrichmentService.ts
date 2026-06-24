@@ -30,7 +30,9 @@ export async function enrichOperacaoFromChat(
   }
 
   // Origem
-  const origemResp = extractFromMessages(chatMessages, ["país", "origem", "importar de"]);
+  const origemResp = extractFromMessages(chatMessages, [
+    "país", "origem", "importar de", "importar da", "importar do", "vindo de", "fabricado em",
+  ]);
   if (origemResp && !op.origemPais && !op.origemDesejada) {
     await operacaoService.updateOperacao({ userId, operacaoId, origemDesejada: origemResp });
     updated.origem = origemResp;
@@ -67,15 +69,40 @@ export async function enrichOperacaoFromChat(
 
 function extractFromMessages(messages: ChatMsg[], keywords: string[]): string | null {
   const userMessages = messages.filter((m) => m.author === "user");
-  const combined = userMessages.map((m) => m.content.toLowerCase()).join(" ");
+  // Varre da mensagem mais recente para a mais antiga (o dado mais novo vence).
+  for (let i = userMessages.length - 1; i >= 0; i--) {
+    const value = extractValueAfter(userMessages[i].content, keywords);
+    if (value) return value;
+  }
+  return null;
+}
 
-  const hasKeyword = keywords.some((kw) => combined.includes(kw.toLowerCase()));
-  if (!hasKeyword) return null;
+/**
+ * Extrai o VALOR que aparece logo após uma palavra-chave numa frase,
+ * recortando na próxima cláusula. Ex.: em "o cliente é XYZ Corp, a origem é
+ * China", a chave "cliente" devolve "XYZ Corp" (e não a frase inteira).
+ */
+function extractValueAfter(text: string, keywords: string[]): string | null {
+  const lower = text.toLowerCase();
+  for (const kw of keywords) {
+    const idx = lower.indexOf(kw.toLowerCase());
+    if (idx === -1) continue;
 
-  const lastUserMsg = userMessages[userMessages.length - 1];
-  if (!lastUserMsg) return null;
+    // Trecho após a palavra-chave.
+    let after = text.slice(idx + kw.length);
+    // Remove conectivos/pontuação iniciais (": ", " é ", " = ", " de ", etc.).
+    after = after.replace(/^[\s:=–-]*/, "");
+    after = after.replace(/^(é|eh|e|de|da|do|dos|das|para|pra)\s+/i, "");
 
-  return lastUserMsg.content.split(/\s+/).slice(0, 10).join(" ");
+    // Corta na próxima fronteira de cláusula (vírgula, ponto, ; ou quebra).
+    const m = after.match(/^[^,.;\n]+/);
+    if (!m) continue;
+
+    // Limpa conjunção residual no fim ("... e").
+    const value = m[0].trim().replace(/\s+e$/i, "").trim();
+    if (value) return value;
+  }
+  return null;
 }
 
 function extractDateFromMessages(messages: ChatMsg[], keywords: string[]): Date | null {
