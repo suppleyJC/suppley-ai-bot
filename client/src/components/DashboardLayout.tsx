@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Calculator, Building2, Package, Settings, History, FileText, ChevronRight, Sparkles, Scale, ClipboardList, MessageSquare, Workflow } from "lucide-react";
+import { LogOut, PanelLeft, Building2, Package, Settings, FileText, ChevronRight, Sparkles, Workflow, TrendingUp } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -30,7 +30,7 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 const menuItems = [
   // INTELIGÊNCIA
   { icon: Sparkles, label: "Excambia", path: "/excambia", section: "inteligencia" },
-  { icon: Sparkles, label: "Inteligência de mercado", path: "/excambia/market", section: "inteligencia" },
+  { icon: TrendingUp, label: "Inteligência de mercado", path: "/excambia/market", section: "inteligencia" },
 
   // OPERAÇÕES
   { icon: Workflow, label: "Painel de operações", path: "/operacoes", section: "operacoes" },
@@ -97,12 +97,27 @@ function DashboardLayoutContent({
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
-  const { state, toggleSidebar } = useSidebar();
+  const { state, toggleSidebar, setOpen } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
+
+  // Foco no chat: ao ENTRAR na Excambia, a navegação retrai sozinha (modo ícone),
+  // dando atenção total às conversas; ao SAIR, ela reabre. Só dispara na troca de
+  // rota — assim o usuário ainda pode abrir/fechar manualmente dentro da página.
+  const isExcambia = location.startsWith("/excambia");
+  const wasExcambia = useRef(false);
+  useEffect(() => {
+    if (isMobile) return;
+    if (isExcambia && !wasExcambia.current) {
+      setOpen(false);
+    } else if (!isExcambia && wasExcambia.current) {
+      setOpen(true);
+    }
+    wasExcambia.current = isExcambia;
+  }, [isExcambia, isMobile, setOpen]);
 
   useEffect(() => {
     if (isCollapsed) {
