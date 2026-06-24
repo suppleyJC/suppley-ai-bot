@@ -1,7 +1,6 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { Virtuoso } from "virtuoso";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { TabsContent } from "@/components/ui/tabs";
 import {
   Send, Loader2, Upload, ExternalLink, Plus, Download,
@@ -65,6 +64,22 @@ export function ChatTab({
   onCreateOperacao,
 }: ChatTabProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-grow textarea on input
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const resizeTextarea = () => {
+      textarea.style.height = "auto";
+      const newHeight = Math.min(textarea.scrollHeight, 120); // Max 5 lines
+      textarea.style.height = `${newHeight}px`;
+    };
+
+    textarea.addEventListener("input", resizeTextarea);
+    return () => textarea.removeEventListener("input", resizeTextarea);
+  }, []);
 
   return (
     <TabsContent
@@ -87,7 +102,7 @@ export function ChatTab({
           increaseViewportBy={{ top: 300, bottom: 300 }}
           autoScrollBehavior="smooth"
           style={{ overflowX: "hidden" }}
-          itemContent={(index, msg) => (
+          itemContent={(index: number, msg: ChatMessage) => (
               <div className="px-3 py-2 sm:px-4 md:px-6 lg:px-8 w-full flex justify-center">
                 <div className="max-w-3xl w-full">
                   <div
@@ -193,7 +208,7 @@ export function ChatTab({
         )}
 
         {/* Input Area - sticky bottom with safe area for mobile keyboards */}
-        <div className="shrink-0 p-3 sm:p-4 border-t bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm safe-area-bottom">
+        <div className="shrink-0 p-3 sm:p-4 border-t bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
           <div className="max-w-3xl mx-auto">
             <div className="flex gap-2 items-end">
               <input
@@ -218,13 +233,19 @@ export function ChatTab({
                 )}
               </Button>
               <div className="flex-1 relative">
-                <Input
+                <textarea
+                  ref={textareaRef}
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyPress={onKeyPress}
-                  placeholder="Digite sua mensagem..."
+                  placeholder="Digite sua mensagem... (Shift+Enter para nova linha)"
                   disabled={isTyping}
-                  className="pr-2 h-10 sm:h-10 rounded-xl text-sm sm:text-base"
+                  rows={1}
+                  className="w-full resize-none overflow-y-auto px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-sm sm:text-base border border-slate-200 dark:border-slate-700 bg-transparent dark:bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    maxHeight: "clamp(40px, 20vh, 120px)",
+                    minHeight: "40px",
+                  }}
                 />
               </div>
               <Button
