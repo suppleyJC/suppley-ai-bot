@@ -12,7 +12,7 @@
 import { getDb } from "../db";
 import { ncmTaxRates } from "../../drizzle/schema";
 import { eq, like, sql, or } from "drizzle-orm";
-import { invokeLLM } from "../_core/llm";
+import { invokeLLM, MODELS } from "../_core/llm";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -392,6 +392,8 @@ Responda em JSON com o formato especificado.`;
 
   try {
     const response = await invokeLLM({
+      // NCM é classificação determinística → modelo rápido (custo −90%, latência menor).
+      model: MODELS.fast,
       messages: [
         { role: "system", content: "Você é um especialista em classificação fiscal NCM. Responda sempre em JSON válido. Seja conciso." },
         { role: "user", content: prompt },

@@ -64,11 +64,20 @@ export type InvokeParams = {
   tool_choice?: ToolChoice;
   maxTokens?: number;
   max_tokens?: number;
+  /** Override do modelo. Default: claude-opus-4-8. Use Haiku/Sonnet p/ tarefas simples. */
+  model?: string;
   outputSchema?: OutputSchema;
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
   response_format?: ResponseFormat;
 };
+
+/** IDs de modelo disponíveis para roteamento por complexidade. */
+export const MODELS = {
+  fast: "claude-haiku-4-5-20251001", // tarefas determinísticas/simples (NCM, classificações)
+  balanced: "claude-sonnet-4-6", // análise de complexidade média
+  smart: "claude-opus-4-8", // raciocínio estratégico (orquestrador)
+} as const;
 
 export type ToolCall = {
   id: string;
@@ -227,6 +236,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     tool_choice,
     maxTokens,
     max_tokens,
+    model,
     responseFormat,
     response_format,
     outputSchema,
@@ -314,7 +324,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   // Preparar payload para Anthropic
   const payload: Record<string, unknown> = {
-    model: "claude-opus-4-8",
+    model: model || MODELS.smart,
     max_tokens: max_tokens || maxTokens || 4096,
     messages: anthropicMessages,
   };

@@ -1,11 +1,18 @@
 import { Router, Request, Response } from "express";
-import * as jwt from "jose";
+import { jwtVerify } from "jose";
 import * as conversaDb from "../db/conversaDb";
-import { runExcambiaStream, type StreamChunk } from "../agent/orchestrator";
+import { getUserById } from "../services/authService";
+import { runExcambiaStream } from "../agent/orchestrator";
 import { enrichOperacaoFromChat } from "../services/gapEnrichmentService";
 import type { Message } from "../_core/llm";
 
 const router = Router();
+
+// Mesmo secret e cookie do context.ts (autenticação tRPC) — manter sincronizado.
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET || "suppley-calc-secret-key-2024"
+);
+const SESSION_COOKIE = "suppley_session";
 
 interface StreamPayload {
   conversaId: number;
@@ -14,37 +21,58 @@ interface StreamPayload {
   estagio?: string;
 }
 
-async function verifyJWT(token: string): Promise<{ userId: number } | null> {
+async function verifySessionToken(token: string): Promise<number | null> {
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || "your-secret-key");
-    const verified = await jwt.jwtVerify(token, secret);
-    return { userId: (verified.payload as any).userId };
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    return (payload.userId as number) ?? null;
   } catch {
     return null;
   }
 }
 
+/** Lê o cookie de sessão direto do header (não há cookie-parser registrado). */
+function readSessionCookie(req: Request): string | null {
+  const raw = req.headers.cookie;
+  if (!raw) return null;
+  for (const part of raw.split(";")) {
+    const [name, ...rest] = part.trim().split("=");
+    if (name === SESSION_COOKIE) return decodeURIComponent(rest.join("="));
+  }
+  return null;
+}
+
+/** Resolve o usuário do request: Authorization Bearer (fallback) ou cookie de sessão. */
+async function resolveUserId(req: Request): Promise<number | null> {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    const userId = await verifySessionToken(authHeader.slice(7));
+    if (userId) return userId;
+  }
+  const cookieToken = readSessionCookie(req);
+  if (cookieToken) {
+    const userId = await verifySessionToken(cookieToken);
+    if (userId) return userId;
+  }
+  return null;
+}
+
 router.post("/api/chat/stream", async (req: Request, res: Response) => {
   try {
-    // Autenticação via JWT
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
+    const userId = await resolveUserId(req);
+    if (!userId) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
 
-    const token = authHeader.slice(7);
-    const auth = await verifyJWT(token);
-    if (!auth) {
-      res.status(401).json({ error: "Invalid token" });
+    // Confirma que o usuário existe (espelha o context.ts).
+    const user = await getUserById(userId);
+    if (!user) {
+      res.status(401).json({ error: "Unauthorized" });
       return;
     }
 
-    const userId = auth.userId;
     const payload: StreamPayload = req.body;
-
-    // Validação
-    if (!payload.conversaId || !payload.messages) {
+    if (!payload?.conversaId || !Array.isArray(payload.messages)) {
       res.status(400).json({ error: "Missing conversaId or messages" });
       return;
     }
@@ -55,16 +83,14 @@ router.post("/api/chat/stream", async (req: Request, res: Response) => {
       await conversaDb.addMessage(payload.conversaId, "user", userMsg.content);
     }
 
-    // Enriquecimento automático (Pilar 2)
-    let enriched: Record<string, unknown> = {};
+    // Enriquecimento automático (Pilar 2) — tolerante a falha
     if (payload.operacaoId) {
       try {
-        const res = await enrichOperacaoFromChat(
-          userId,
+        await enrichOperacaoFromChat(
+          user.id,
           payload.operacaoId,
           payload.messages.map((m) => ({ author: m.role, content: m.content })),
         );
-        enriched = res.updated;
       } catch (err) {
         console.error("[chatStream] enriquecimento falhou:", err);
       }
@@ -74,27 +100,24 @@ router.post("/api/chat/stream", async (req: Request, res: Response) => {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
 
-    // Emite chunks do stream
     let fullReply = "";
     let toolsUsed: string[] = [];
     let toolResults: Array<{ name: string; ok: boolean; data?: unknown }> = [];
 
     try {
       for await (const chunk of runExcambiaStream({
-        userId,
+        userId: user.id,
         operacaoId: payload.operacaoId,
         estagio: payload.estagio,
         messages: payload.messages as Message[],
       })) {
-        // Acumula para persistência
         if (chunk.type === "reply") {
           fullReply = chunk.reply;
           toolsUsed = chunk.toolsUsed;
           toolResults = chunk.toolResults;
         }
-
-        // Envia como SSE
         res.write(`data: ${JSON.stringify(chunk)}\n\n`);
       }
 
@@ -107,22 +130,22 @@ router.post("/api/chat/stream", async (req: Request, res: Response) => {
         toolResults,
       );
 
-      // Fecha stream
-      res.write("data: {\"type\":\"done\"}\n\n");
+      res.write('data: {"type":"done"}\n\n');
       res.end();
     } catch (err) {
-      console.error("[chatStream] erro:", err);
+      console.error("[chatStream] erro no stream:", err);
       res.write(
-        `data: ${JSON.stringify({
-          type: "error",
-          message: "Erro ao processar requisição",
-        })}\n\n`
+        `data: ${JSON.stringify({ type: "error", message: "Erro ao processar requisição" })}\n\n`
       );
       res.end();
     }
   } catch (err) {
     console.error("[chatStream] erro geral:", err);
-    res.status(500).json({ error: "Internal server error" });
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal server error" });
+    } else {
+      res.end();
+    }
   }
 });
 

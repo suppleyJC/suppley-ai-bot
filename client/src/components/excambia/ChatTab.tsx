@@ -15,6 +15,8 @@ interface ChatMessage {
   linkedOperacaoId?: number | null;
   downloadUrl?: string;
   downloadName?: string;
+  streaming?: boolean;
+  statusText?: string;
 }
 
 interface QuickAction {
@@ -106,7 +108,16 @@ export function ChatTab({
                       : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 max-w-[90%] sm:max-w-[80%] lg:max-w-[75%]"
                   }`}
                 >
-                  {msg.role === "assistant" ? (
+                  {msg.role === "assistant" && msg.streaming && !msg.content ? (
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1">
+                        <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                      <span className="text-sm text-muted-foreground">{msg.statusText || "Excambia está pensando..."}</span>
+                    </div>
+                  ) : msg.role === "assistant" ? (
                     <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_pre]:text-xs [&_code]:text-xs">
                       <Streamdown>{msg.content}</Streamdown>
                     </div>
@@ -166,7 +177,7 @@ export function ChatTab({
               </div>
             ))}
 
-            {isTyping && (
+            {isTyping && !messages.some((m) => m.streaming) && (
               <div className="flex justify-start">
                 <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 shadow-sm">
                   <div className="flex items-center gap-2">

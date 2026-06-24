@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { getStoredToken } from "@/lib/authToken";
+import type { StreamChunk } from "@/types/stream";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,6 +32,10 @@ interface ChatMessage {
   /** Arquivo gerado (planilha/PDF) para download direto na mensagem. */
   downloadUrl?: string;
   downloadName?: string;
+  /** Em streaming: mensagem provisória sendo construída via SSE. */
+  streaming?: boolean;
+  /** Status transitório durante o streaming ("Pensando...", "Executando: ..."). */
+  statusText?: string;
 }
 
 /** Mensagem de boas-vindas exibida em conversas novas (sem histórico). */
@@ -263,7 +269,8 @@ export default function Excambia() {
     if (conversaId) utils.excambia.listConversas.invalidate();
   };
 
-  // Chat mutation — orquestrador agêntico da Excambia (function calling + motor certificado)
+  // Chat mutation (legado, não-streaming) — mantido como referência/fallback.
+  // O envio principal agora usa streamChat() via SSE (SPRINT 3).
   const chatMutation = trpc.excambia.agentChat.useMutation({
     onMutate: () => setIsTyping(true),
     onSuccess: (data) => {
@@ -380,6 +387,151 @@ export default function Excambia() {
     return id;
   };
 
+  // Rótulos amigáveis das tools para o status de streaming.
+  const toolLabel = (name: string): string => {
+    const map: Record<string, string> = {
+      montar_calculo: "calculando custos",
+      gerar_relatorio_calculo: "gerando relatório",
+      classificar_ncm: "classificando NCM",
+      comparar_cotacoes: "comparando cotações",
+      enviar_rfq: "enviando RFQ",
+      registrar_cotacao: "registrando cotação",
+      registrar_marco_producao: "registrando marco",
+      registrar_nacionalizacao: "registrando nacionalização",
+      lancar_financeiro: "lançando financeiro",
+      coletar_dados_faltantes: "verificando o que falta",
+      buscar_ativo: "buscando ativo",
+      comparar_origem: "comparando origens",
+      benchmark_mercado: "consultando mercado (BCB)",
+    };
+    return map[name] || name;
+  };
+
+  /**
+   * Envio com STREAMING (SPRINT 3): consome /api/chat/stream via SSE, exibindo
+   * o progresso das ferramentas em tempo real até a resposta final. A persistência
+   * (mensagem do usuário e da Excambia) é feita pelo próprio endpoint em
+   * conversaMensagens — a mesma tabela que o histórico lê.
+   */
+  const streamChat = async (
+    conversaId: number,
+    history: ChatMessage[],
+  ): Promise<void> => {
+    setIsTyping(true);
+
+    // Mensagem provisória da Excambia (atualizada conforme os chunks chegam).
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", content: "", streaming: true, statusText: "Pensando...", timestamp: new Date() },
+    ]);
+
+    const updateStreaming = (patch: Partial<ChatMessage>) =>
+      setMessages((prev) => {
+        const next = [...prev];
+        for (let i = next.length - 1; i >= 0; i--) {
+          if (next[i].streaming) {
+            next[i] = { ...next[i], ...patch };
+            break;
+          }
+        }
+        return next;
+      });
+
+    try {
+      const token = getStoredToken();
+      const response = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          conversaId,
+          messages: history.map((m) => ({ role: m.role, content: m.content })),
+          ...(activeConversa?.operacaoId ? { operacaoId: activeConversa.operacaoId } : {}),
+          ...(activeConversa?.estagio ? { estagio: activeConversa.estagio } : {}),
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+
+        for (const event of events) {
+          if (!event.startsWith("data: ")) continue;
+          let chunk: StreamChunk;
+          try {
+            chunk = JSON.parse(event.slice(6));
+          } catch {
+            continue;
+          }
+
+          if (chunk.type === "thinking") {
+            updateStreaming({ statusText: "Pensando..." });
+          } else if (chunk.type === "tool_call") {
+            updateStreaming({ statusText: `Excambia está ${toolLabel(chunk.name)}...` });
+          } else if (chunk.type === "tool_result") {
+            updateStreaming({
+              statusText: chunk.ok
+                ? `✓ ${toolLabel(chunk.name)}`
+                : `⚠️ falha em ${toolLabel(chunk.name)}`,
+            });
+          } else if (chunk.type === "reply") {
+            const tools = chunk.toolsUsed ?? [];
+            const toolNote = tools.length > 0
+              ? `\n\n_⚙️ Ferramentas acionadas: ${tools.join(", ")}_`
+              : "";
+            const relatorio = (chunk.toolResults ?? []).find(
+              (t) => t.name === "gerar_relatorio_calculo" && t.ok && t.data,
+            );
+            const dl = relatorio?.data as { url?: string; fileName?: string } | undefined;
+            updateStreaming({
+              content: (chunk.reply || "") + toolNote,
+              toolsUsed: tools,
+              linkedOperacaoId: linkedOpIdRef.current,
+              downloadUrl: dl?.url,
+              downloadName: dl?.fileName,
+              streaming: false,
+              statusText: undefined,
+            });
+          } else if (chunk.type === "error") {
+            updateStreaming({
+              content: "Tive um problema ao processar. Pode tentar de novo?",
+              streaming: false,
+              statusText: undefined,
+            });
+            toast.error(chunk.message || "Erro ao processar mensagem");
+          }
+        }
+      }
+
+      // Sincroniza a sidebar (ordem por atividade recente) e o histórico persistido.
+      utils.excambia.listConversas.invalidate();
+    } catch (err) {
+      updateStreaming({
+        content: "Não consegui me conectar agora. Tente novamente em instantes.",
+        streaming: false,
+        statusText: undefined,
+      });
+      toast.error(err instanceof Error ? err.message : "Erro de conexão");
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isTyping) return;
 
@@ -390,28 +542,18 @@ export default function Excambia() {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const history = [...messages, userMessage];
+    setMessages(history);
     setInputMessage("");
 
     const conversaId = await ensureConversa(text);
+    if (!conversaId) {
+      toast.error("Não consegui iniciar a conversa. Tente novamente.");
+      return;
+    }
 
-    // Save user message to database
-    saveMessageMutation.mutate({
-      role: "user",
-      content: text,
-      ...(conversaId ? { conversaId } : {}),
-    });
-
-    chatMutation.mutate({
-      messages: [...messages, userMessage].map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-      // Sincronização chat ↔ Painel: quando a conversa está vinculada a uma
-      // operação, a Excambia opera sobre ela (eventos na timeline, autor=excambia).
-      ...(activeConversa?.operacaoId ? { operacaoId: activeConversa.operacaoId } : {}),
-      ...(activeConversa?.estagio ? { estagio: activeConversa.estagio } : {}),
-    });
+    // Streaming (SPRINT 3): o endpoint persiste usuário + resposta em conversaMensagens.
+    await streamChat(conversaId, history);
   };
 
   // Upload mutation
