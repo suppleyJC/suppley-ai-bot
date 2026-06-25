@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -11,6 +12,7 @@ import OperationCard from "@/components/OperationCard";
 
 type ItemDraft = {
   productName: string;
+  description?: string; // especificações técnicas completas
   productNameOriginal?: string;
   ncmCode?: string;
   ncmConfidence?: number;
@@ -98,6 +100,7 @@ export default function Proformas() {
           : undefined,
         items: (items ?? []).map((it) => ({
           productName: it.productName,
+          description: it.description || undefined,
           ncmCode: it.ncmCode || undefined,
           quantity: it.quantity,
           unit: it.unit || "UN",
@@ -157,6 +160,7 @@ export default function Proformas() {
         quotationDate: extracted.quotationDate ?? undefined,
         items: (extracted.items || []).map((it) => ({
           productName: it.productName,
+          description: it.description || undefined,
           productNameOriginal: it.productNameOriginal || undefined,
           ncmCode: it.ncmCode || undefined,
           ncmConfidence: it.ncmConfidence ?? undefined,
@@ -196,6 +200,7 @@ export default function Proformas() {
 
     const items = draft.items.map((i) => ({
       productName: i.productName,
+      description: i.description?.trim() || undefined,
       ncmCode: i.ncmCode || undefined,
       quantity: i.quantity,
       unit: i.unit,
@@ -416,15 +421,16 @@ export default function Proformas() {
                   <Plus className="h-4 w-4 mr-1" /> Item
                 </Button>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {draft.items.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                  <div key={idx} className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+                    <div className="grid grid-cols-12 gap-2 items-end">
                     <div className="col-span-4">
-                      <Label className="text-xs">Produto</Label>
+                      <Label className="text-xs">Produto (nome curto)</Label>
                       <Input
                         value={item.productName}
                         onChange={(e) => updateItem(idx, { productName: e.target.value })}
-                        placeholder="Nome do produto"
+                        placeholder="Ex.: Escora de aço 4m, tubo 60, galv. a fogo"
                       />
                       {item.productNameOriginal && item.productNameOriginal !== item.productName && (
                         <p className="text-[10px] text-muted-foreground mt-0.5 truncate" title={item.productNameOriginal}>
@@ -457,6 +463,17 @@ export default function Proformas() {
                       <Button variant="ghost" size="icon" onClick={() => removeItem(idx)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
+                    </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Especificações técnicas (vão para a descrição do produto)</Label>
+                      <Textarea
+                        value={item.description ?? ""}
+                        onChange={(e) => updateItem(idx, { description: e.target.value })}
+                        placeholder="Ex.: Tubo interno 48x2,2x2200mm; Placa de base 120x120x5mm; Galvanizado a fogo; Peso bruto 13kg"
+                        rows={2}
+                        className="text-sm"
+                      />
                     </div>
                   </div>
                 ))}

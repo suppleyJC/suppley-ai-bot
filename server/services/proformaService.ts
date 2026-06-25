@@ -16,7 +16,10 @@ import type { InsertProforma, InsertProformaItem } from "../../drizzle/schema";
 // ============================================================
 
 export interface ProformaItemInput {
+  /** Nome curto comercial em PT-BR (ex.: "Escora de aço Q235"). */
   productName: string;
+  /** Especificações técnicas completas (medidas, material, acabamento...). */
+  description?: string;
   /** Nome original como aparece no documento (antes da tradução p/ PT-BR). */
   productNameOriginal?: string;
   ncmCode?: string;
@@ -68,7 +71,8 @@ const EXTRACTION_SCHEMA = {
         items: {
           type: "object",
           properties: {
-            productName: { type: "string", description: "Nome do produto TRADUZIDO para português do Brasil, mantendo medidas/especificações técnicas e unidades (ex: 'Prego comum 17x27 polido, 1kg/saco, 20 sacos/caixa')" },
+            productName: { type: "string", description: "Nome comercial CURTO em PT-BR que IDENTIFICA A VARIANTE específica. Inclua os atributos que diferenciam o item e IMPACTAM O PREÇO: tamanho/bitola, diâmetro do tubo, classe do material, acabamento. NÃO inclua specs secundárias (peso, embalagem, tolerâncias). Mantenha conciso (~100 chars). Ex: 'Prego cabeça simples 17x27'; 'Escora de aço 4m, tubo 60, galvanizada a fogo' (≠ 'Escora de aço 3,5m, tubo 48, pré-galvanizada')." },
+            description: { type: ["string", "null"], description: "Ficha técnica COMPLETA do produto em PT-BR (pode repetir o que está no nome + todo o resto): medidas exatas, material, componentes, acabamento, dimensões, peso bruto, embalagem. Ex: 'Tubo interno 48x2,2x2200mm; Tubo externo 60x2,2x2000mm; Placa de base 120x120x5mm; Pino G 12mm; Galvanizado por imersão a quente; Altura ajustável 2200-4000mm; Peso bruto 13kg'. Null se não houver specs." },
             productNameOriginal: { type: ["string", "null"], description: "Nome do produto EXATAMENTE como aparece no documento, sem traduzir" },
             ncmCode: { type: ["string", "null"], description: "NCM apenas se estiver explícito no documento; senão null (será classificada depois)" },
             quantity: { type: "number" },
@@ -100,8 +104,11 @@ Extraia os dados com máxima precisão:
 3. Cada item: nome do produto, NCM (se houver), quantidade, unidade, preço unitário
 4. Moeda, incoterm (FOB/CIF/EXW/DDP), condições de pagamento, lead time, MOQ, total FOB
 
-TRADUÇÃO DOS PRODUTOS (importante):
-- "productName": traduza o nome do produto para PORTUGUÊS DO BRASIL, preservando medidas, especificações técnicas e unidades (ex: "Common Nail 17*27 Polished, 1kg/bag" → "Prego comum 17x27 polido, 1kg/saco"). Use a terminologia comercial brasileira correta.
+TRADUÇÃO E ESTRUTURAÇÃO DOS PRODUTOS (importante):
+- "productName": nome comercial CURTO em PORTUGUÊS DO BRASIL que IDENTIFICA A VARIANTE. Inclua só os atributos que diferenciam o item e IMPACTAM O PREÇO (tamanho/bitola, diâmetro do tubo, classe do material, acabamento); deixe peso/embalagem/tolerâncias fora. Variantes da mesma classe DEVEM ter nomes distintos, pois entram no histórico de preço separadamente:
+    • "Prego cabeça simples 17x27" ≠ "Prego cabeça simples 18x36"
+    • "Escora de aço 4m, tubo 60, galvanizada a fogo" ≠ "Escora de aço 3,5m, tubo 48, pré-galvanizada"
+- "description": ficha técnica COMPLETA em PT-BR (pode repetir o que está no nome + todo o resto: medidas exatas, material, tubos, placa, pino, acabamento, altura, peso, embalagem). Ex: "Tubo interno 48x2,2x2200mm; Tubo externo 60x2,2x2000mm; Placa de base 120x120x5mm; Galvanizado por imersão a quente; Altura ajustável 2200-4000mm; Peso bruto 13kg". Null se não houver specs.
 - "productNameOriginal": mantenha o nome EXATAMENTE como está no documento, sem traduzir.
 
 IMPORTANTE:
@@ -263,6 +270,7 @@ export async function createProforma(
     await db.createProformaItem({
       proformaId,
       productName: item.productName,
+      description: item.description,
       ncmCode: item.ncmCode,
       quantity: item.quantity,
       unit: item.unit || "UN",
@@ -319,6 +327,7 @@ export async function updateProforma(
     await db.createProformaItem({
       proformaId,
       productName: item.productName,
+      description: item.description,
       ncmCode: item.ncmCode,
       quantity: item.quantity,
       unit: item.unit || "UN",
@@ -408,6 +417,7 @@ export async function distributeProformaToBase(
     const product = await db.createProduct({
       userId,
       name: item.productName,
+      description: item.description ?? undefined,
       ncmCode: ncm || "00000000",
       unit: item.unit || "UN",
       supplierId: industriaId ?? undefined,

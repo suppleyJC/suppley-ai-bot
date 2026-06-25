@@ -11,6 +11,7 @@ import * as priceHistoryService from "../services/proformaPriceHistoryService";
 
 const itemSchema = z.object({
   productName: z.string().min(1),
+  description: z.string().optional(),
   ncmCode: z.string().optional(),
   quantity: z.number().int().positive(),
   unit: z.string().default("UN"),

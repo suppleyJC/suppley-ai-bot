@@ -1920,9 +1920,12 @@ export const proformaItems = mysqlTable("proforma_items", {
   proformaId: int("proformaId").notNull(),
 
   // Produto
-  // 1024: nomes traduzidos vêm com specs completas (ex.: escora ~263 chars);
-  // a coluna não é indexada, então cabe folga sem risco de limite de índice.
+  // productName guarda o NOME CURTO comercial (ex.: "Escora de aço Q235").
+  // As especificações técnicas completas vão em `description`.
+  // 1024 de folga p/ nomes ainda assim longos; a coluna não é indexada.
   productName: varchar("productName", { length: 1024 }).notNull(),
+  // Especificações técnicas completas (medidas, material, acabamento, etc.).
+  description: text("description"),
   ncmCode: varchar("ncmCode", { length: 10 }),
   quantity: int("quantity").notNull(),
   unit: varchar("unit", { length: 20 }).default("UN").notNull(),
