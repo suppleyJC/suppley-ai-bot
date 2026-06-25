@@ -102,21 +102,38 @@
 
 ---
 
+### 1a. Price History Enhancements (Post-Sprint 3)
+
+- [x] **Period filters for price history**
+  - Users can now select date range (from/to) to analyze trends over specific periods
+  - Dynamic count indicator shows filtered vs total quotations
+  - Filter controls are clear and easy to clear
+  - Integrates seamlessly with existing price history view
+  - Arquivo: `client/src/components/PriceHistoryView.tsx`
+- [x] **CSV export for price data**
+  - Users can export filtered price history as CSV
+  - Columns: Data, Fornecedor, Preço Original, Moeda, FOB (BRL), Custo Nacionalizado, Markup %
+  - Filename includes export date for easy organization
+  - Button appears only when data is available
+  - Arquivo: `client/src/components/PriceHistoryView.tsx`
+
+---
+
 ## 🔴 Pendências
 
 ### P1 — Segurança do banco de dados (PRIORIDADE)
 
 - [ ] **Trocar a senha do MySQL** (atualmente é o default fraco `changeme`)
-  - O `.env` não define `DB_PASSWORD`, então o compose usa `${DB_PASSWORD:-changeme}`
-  - Definir `DB_PASSWORD=<senha_forte>` no `.env`, atualizar o usuário no MySQL e recriar containers
-  - **Procedimento seguro de troca ainda precisa ser executado** (sem perda de dados)
+  - Procedimento seguro documentado em `SECURITY.md`
+  - Steps: gerar senha forte → atualizar `.env` → mudar user MySQL → verificar conexão → restart
+  - **✅ Documentação criada; execução ainda precisa ser feita** (sem perda de dados)
 - [ ] **Remover variável obsoleta `MYSQL_PASSWORD` do `.env`**
   - O valor (`SuppleyDb2024`) vazou no terminal durante o troubleshooting e não é usado pelo app
-  - Recomenda-se limpar/rotacionar
+  - Recomenda-se limpar/rotacionar conforme `SECURITY.md`
 - [ ] **Padronizar credenciais no `.env`**
   - Hoje há ambiguidade: `MYSQL_PASSWORD` e `DATABASE_URL` (host `127.0.0.1`) no `.env` **não** são os que o app usa
   - O app usa `DB_USER`/`DB_PASSWORD`/`DB_NAME` via `docker-compose.yml` (host `db`)
-  - Consolidar para evitar confusão em deploys futuros
+  - Consolidar para evitar confusão em deploys futuros (ver `SECURITY.md`)
 
 ### P2 — Robustez do Deploy
 
@@ -139,11 +156,17 @@
 
 ### P4 — Melhorias futuras (backlog)
 
-- [ ] Filtros de período (data inicial/final) nas visualizações de histórico
-- [ ] Exportação do histórico de preços (CSV/Excel)
+- [x] **Filtros de período** — ✅ IMPLEMENTADO (data inicial/final) nas visualizações de histórico
+- [x] **Exportação do histórico de preços** — ✅ IMPLEMENTADO (CSV com todas as colunas relevantes)
 - [ ] Alerta de variação de preço acima de um limite (ex.: reajuste > X%)
+  - Requereria: criar tabela de alertas configuráveis por produto
+  - Backend: API para criar/listar/deletar alertas
+  - Frontend: UI em Products para configurar threshold por produto
 - [ ] Comparação lado a lado de fornecedores para o mesmo produto
+  - Requereria: novo endpoint tRPC para agrupar múltiplos fornecedores
+  - Frontend: tabela comparativa com pivot de fornecedor × preço × data
 - [ ] Otimização do chunk do `recharts` no build (hoje gera warning de tamanho)
+  - Considerar: code-splitting do recharts ou trocar para alternativa menor
 
 ---
 
@@ -151,16 +174,16 @@
 
 | Commit | Descrição |
 |--------|-----------|
+| `177992f` | feat(price-history): add CSV export for price data analysis |
+| `b683981` | feat(price-history): add period filters for temporal analysis |
+| `67f2a0f` | docs(security): add password rotation guide and best practices |
+| `7ab3f05` | docs(status): update with Sprint 3 classification + Excambia improvements |
 | `cfb157b` | feat(ativos+excambia): catálogo classificável e chat com anexos |
 | `b077895` | feat(proforma): split product into short variant name + full specs |
 | `8c95dc0` | fix(proforma): widen productName column + implement draft editing |
 | `b52168b` | feat(nav): use brand orbital icon for Excambia in main sidebar |
 | `500ca18` | chore(deploy): add idempotent redeploy script with orphan-container workaround |
 | `536fd59` | fix(migration): índice idempotente compatível com MySQL 8.0 |
-| `be5afad` | docs: guia de deploy do histórico de preços |
-| `a47e4ba` | db(migration): coluna `quotationDate` na tabela proformas |
-| `f555cc0` | feat(price-history): visualizações de evolução de preço |
-| `cdebcc0` | feat(price-history): métricas cronológicas derivadas das proformas |
 
 ---
 
