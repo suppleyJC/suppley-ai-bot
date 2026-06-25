@@ -58,7 +58,10 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 
 export default function Proformas() {
   const [draft, setDraft] = useState<Draft | null>(null);
+  // id da proforma em edição (null = criando uma nova).
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [loadingEditId, setLoadingEditId] = useState<number | null>(null);
 
   const utils = trpc.useUtils();
   const { data: proformas, isLoading } = trpc.proforma.list.useQuery();
@@ -66,7 +69,47 @@ export default function Proformas() {
   const uploadMutation = trpc.calculations.uploadQuotation.useMutation();
   const extractMutation = trpc.proforma.extract.useMutation();
   const createMutation = trpc.proforma.create.useMutation();
+  const updateMutation = trpc.proforma.update.useMutation();
   const distributeMutation = trpc.proforma.distribute.useMutation();
+
+  // ---- Abrir uma proforma existente para edição ----
+  async function openForEdit(id: number) {
+    setLoadingEditId(id);
+    try {
+      const detail = await utils.proforma.get.fetch({ id });
+      if (!detail) {
+        toast.error("Proforma não encontrada");
+        return;
+      }
+      const { proforma: p, items } = detail;
+      setEditingId(id);
+      setDraft({
+        supplierName: p.supplierName ?? "",
+        supplierCountry: p.supplierCountry ?? "",
+        supplierEmail: p.supplierEmail ?? "",
+        supplierPhone: p.supplierPhone ?? "",
+        currency: p.currency ?? "USD",
+        incoterm: p.incoterm ?? "FOB",
+        paymentTerms: p.paymentTerms ?? "",
+        leadTimeDays: p.leadTimeDays ?? undefined,
+        moq: p.moq ?? undefined,
+        quotationDate: p.quotationDate
+          ? new Date(p.quotationDate).toISOString().slice(0, 10)
+          : undefined,
+        items: (items ?? []).map((it) => ({
+          productName: it.productName,
+          ncmCode: it.ncmCode || undefined,
+          quantity: it.quantity,
+          unit: it.unit || "UN",
+          unitPrice: (it.unitPriceCents || 0) / 100,
+        })),
+      });
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao abrir a proforma");
+    } finally {
+      setLoadingEditId(null);
+    }
+  }
 
   // ---- Upload + extração via Excambia ----
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -100,6 +143,7 @@ export default function Proformas() {
         mimeType: file.type || "application/pdf",
       });
 
+      setEditingId(null);
       setDraft({
         supplierName: extracted.supplierName || "",
         supplierCountry: extracted.supplierCountry || "",
@@ -134,6 +178,7 @@ export default function Proformas() {
   }
 
   function startManual() {
+    setEditingId(null);
     setDraft({ ...emptyDraft, items: [{ productName: "", quantity: 1, unit: "UN", unitPrice: 0 }] });
   }
 
@@ -149,7 +194,39 @@ export default function Proformas() {
       return;
     }
 
+    const items = draft.items.map((i) => ({
+      productName: i.productName,
+      ncmCode: i.ncmCode || undefined,
+      quantity: i.quantity,
+      unit: i.unit,
+      unitPriceCents: Math.round(i.unitPrice * 100),
+    }));
+
     try {
+      // Modo edição: apenas salva as alterações (não redistribui).
+      if (editingId != null) {
+        await updateMutation.mutateAsync({
+          id: editingId,
+          supplierName: draft.supplierName,
+          supplierCountry: draft.supplierCountry,
+          supplierEmail: draft.supplierEmail || undefined,
+          supplierPhone: draft.supplierPhone || undefined,
+          currency: draft.currency,
+          incoterm: draft.incoterm,
+          paymentTerms: draft.paymentTerms || undefined,
+          leadTimeDays: draft.leadTimeDays,
+          moq: draft.moq,
+          quotationDate: draft.quotationDate || undefined,
+          items,
+        });
+        toast.success("Alterações salvas. Use “Distribuir” no card quando quiser enviar para a Base.");
+        setDraft(null);
+        setEditingId(null);
+        utils.proforma.list.invalidate();
+        return;
+      }
+
+      // Modo criação: cria e já distribui para a Base.
       const created = await createMutation.mutateAsync({
         supplierName: draft.supplierName,
         supplierCountry: draft.supplierCountry,
@@ -164,13 +241,7 @@ export default function Proformas() {
         fileUrl: draft.fileUrl,
         fileName: draft.fileName,
         extractionConfidence: draft.confidence,
-        items: draft.items.map((i) => ({
-          productName: i.productName,
-          ncmCode: i.ncmCode || undefined,
-          quantity: i.quantity,
-          unit: i.unit,
-          unitPriceCents: Math.round(i.unitPrice * 100),
-        })),
+        items,
       });
 
       toast.success(`Proforma ${created.numero} criada. Distribuindo para a Base...`);
@@ -181,13 +252,14 @@ export default function Proformas() {
       );
 
       setDraft(null);
+      setEditingId(null);
       utils.proforma.list.invalidate();
     } catch (err: any) {
       toast.error(err?.message || "Erro ao salvar proforma");
     }
   }
 
-  const busy = createMutation.isPending || distributeMutation.isPending;
+  const busy = createMutation.isPending || updateMutation.isPending || distributeMutation.isPending;
 
   return (
     <div className="space-y-6">
@@ -255,13 +327,17 @@ export default function Proformas() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" /> Revisar proforma
+                <FileText className="h-5 w-5" /> {editingId != null ? "Editar proforma" : "Revisar proforma"}
               </CardTitle>
               {draft.confidence != null && (
                 <Badge className="bg-amber-100 text-amber-800">Confiança IA: {draft.confidence}%</Badge>
               )}
             </div>
-            <CardDescription>Confira e ajuste os dados antes de distribuir para a Base.</CardDescription>
+            <CardDescription>
+              {editingId != null
+                ? "Ajuste os dados e salve. A distribuição para a Base continua sendo uma ação separada."
+                : "Confira e ajuste os dados antes de distribuir para a Base."}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Fornecedor */}
@@ -388,12 +464,12 @@ export default function Proformas() {
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <Button variant="ghost" onClick={() => setDraft(null)} disabled={busy}>
+              <Button variant="ghost" onClick={() => { setDraft(null); setEditingId(null); }} disabled={busy}>
                 Cancelar
               </Button>
               <Button onClick={handleSaveAndDistribute} disabled={busy}>
                 {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-2" />}
-                Salvar e distribuir para a Base
+                {editingId != null ? "Salvar alterações" : "Salvar e distribuir para a Base"}
               </Button>
             </div>
           </CardContent>
@@ -433,7 +509,11 @@ export default function Proformas() {
                   }}
                   compact={false}
                   actions={[
-                    { label: "Revisar", icon: <Edit className="h-4 w-4" />, onClick: () => alert("Abrir edição de " + p.id) },
+                    {
+                      label: loadingEditId === p.id ? "Abrindo..." : "Revisar",
+                      icon: <Edit className="h-4 w-4" />,
+                      onClick: () => openForEdit(p.id),
+                    },
                     { label: "Distribuir", onClick: () => distributeMutation.mutate({ proformaId: p.id }) },
                   ]}
                 />

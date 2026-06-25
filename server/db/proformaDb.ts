@@ -71,6 +71,13 @@ export async function getProformaItems(proformaId: number): Promise<ProformaItem
   return db.select().from(proformaItems).where(eq(proformaItems.proformaId, proformaId));
 }
 
+/** Remove todos os itens de uma proforma (usado ao reescrever na edição). */
+export async function deleteProformaItems(proformaId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(proformaItems).where(eq(proformaItems.proformaId, proformaId));
+}
+
 export async function updateProformaItem(
   id: number,
   data: Partial<InsertProformaItem>

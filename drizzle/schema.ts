@@ -64,7 +64,9 @@ export const products = mysqlTable("products", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   supplierId: int("supplierId"),
-  name: varchar("name", { length: 255 }).notNull(),
+  // 1024: acomoda nomes de produto com specs completas vindos da distribuição
+  // de proformas (não é indexado, sem risco de limite de índice).
+  name: varchar("name", { length: 1024 }).notNull(),
   description: text("description"),
   ncmCode: varchar("ncmCode", { length: 10 }).notNull(),
   unit: varchar("unit", { length: 20 }).default("UN").notNull(),
@@ -1918,7 +1920,9 @@ export const proformaItems = mysqlTable("proforma_items", {
   proformaId: int("proformaId").notNull(),
 
   // Produto
-  productName: varchar("productName", { length: 255 }).notNull(),
+  // 1024: nomes traduzidos vêm com specs completas (ex.: escora ~263 chars);
+  // a coluna não é indexada, então cabe folga sem risco de limite de índice.
+  productName: varchar("productName", { length: 1024 }).notNull(),
   ncmCode: varchar("ncmCode", { length: 10 }),
   quantity: int("quantity").notNull(),
   unit: varchar("unit", { length: 20 }).default("UN").notNull(),

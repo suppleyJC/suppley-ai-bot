@@ -72,6 +72,36 @@ export const proformaRouter = router({
       return proformaService.createProforma(ctx.user.id, input);
     }),
 
+  // 2b) Atualiza uma proforma existente (edição do rascunho) + reescreve itens
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        supplierName: z.string().optional(),
+        supplierCountry: z.string().optional(),
+        supplierEmail: z.string().optional(),
+        supplierPhone: z.string().optional(),
+        currency: z.string().default("USD"),
+        incoterm: z.string().optional(),
+        paymentTerms: z.string().optional(),
+        leadTimeDays: z.number().optional(),
+        moq: z.number().optional(),
+        quotationDate: z.string().optional(),
+        items: z.array(itemSchema).min(1, "Inclua ao menos um item"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...rest } = input;
+      try {
+        return await proformaService.updateProforma(ctx.user.id, id, rest);
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Erro ao atualizar proforma: ${error instanceof Error ? error.message : "desconhecido"}`,
+        });
+      }
+    }),
+
   // 3) Distribui a proforma para a base (fornecedor + produtos)
   distribute: protectedProcedure
     .input(z.object({ proformaId: z.number() }))

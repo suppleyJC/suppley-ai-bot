@@ -274,6 +274,62 @@ export async function createProforma(
   return { id: proformaId, numero };
 }
 
+/**
+ * Atualiza uma proforma existente (edição manual do rascunho) e reescreve
+ * seus itens. Só afeta proformas do próprio usuário. Não redistribui para a
+ * base — a distribuição segue sendo uma ação explícita separada.
+ */
+export async function updateProforma(
+  userId: number,
+  proformaId: number,
+  data: {
+    supplierName?: string;
+    supplierCountry?: string;
+    supplierEmail?: string;
+    supplierPhone?: string;
+    currency?: string;
+    incoterm?: string;
+    paymentTerms?: string;
+    leadTimeDays?: number;
+    moq?: number;
+    quotationDate?: string;
+    items: ProformaItemInput[];
+  }
+): Promise<{ id: number }> {
+  const existing = await db.getProformaById(proformaId, userId);
+  if (!existing) throw new Error("Proforma não encontrada");
+
+  await db.updateProforma(proformaId, userId, {
+    supplierName: data.supplierName,
+    supplierCountry: data.supplierCountry,
+    supplierEmail: data.supplierEmail,
+    supplierPhone: data.supplierPhone,
+    currency: data.currency,
+    incoterm: data.incoterm,
+    paymentTerms: data.paymentTerms,
+    leadTimeDays: data.leadTimeDays,
+    moq: data.moq,
+    quotationDate: data.quotationDate ? new Date(data.quotationDate) : undefined,
+  });
+
+  // Reescreve os itens: remove os antigos e insere os atuais.
+  await db.deleteProformaItems(proformaId);
+  for (const item of data.items) {
+    const total = item.unitPriceCents * item.quantity;
+    await db.createProformaItem({
+      proformaId,
+      productName: item.productName,
+      ncmCode: item.ncmCode,
+      quantity: item.quantity,
+      unit: item.unit || "UN",
+      unitPriceCents: item.unitPriceCents,
+      totalPriceCents: total,
+    } satisfies InsertProformaItem);
+  }
+
+  return { id: proformaId };
+}
+
 // ============================================================
 // 3) DISTRIBUIÇÃO PARA A BASE (COESÃO)
 //    fornecedor → industries · itens → products

@@ -28,6 +28,16 @@ warn() { echo -e "${YELLOW}⚠${NC} $1"; }
 err()  { echo -e "${RED}✗${NC} $1"; }
 
 APP_CONTAINER="suppley-ai-bot"
+DB_CONTAINER="suppley-mysql"
+
+# Migrações IDEMPOTENTES (seguras para re-rodar a cada deploy).
+# NÃO inclua migrações com ALTER ... ADD INDEX/COLUMN sem guarda
+# (ex.: 0026) — elas quebram na segunda execução.
+IDEMPOTENT_MIGRATIONS=(
+  "drizzle/0025_sprint1_proformas.sql"
+  "drizzle/0027_add_quotation_date_to_proformas.sql"
+  "drizzle/0028_widen_product_name_columns.sql"
+)
 
 echo "╔════════════════════════════════════════════════════════════╗"
 echo "║        SUPPLEY AI BOT — RE-DEPLOY IDEMPOTENTE             ║"
@@ -60,6 +70,26 @@ echo ""
 log "Reconstruindo e subindo os serviços..."
 docker-compose up -d --build --remove-orphans
 ok "Serviços no ar"
+echo ""
+
+# Passo 3b — aplicar migrações idempotentes (evita "Data too long" / tabela ausente)
+log "Aplicando migrações idempotentes..."
+# Credenciais reais do app: lê do .env (mesmos defaults do docker-compose.yml).
+DB_USER="$(grep -E '^DB_USER=' .env 2>/dev/null | cut -d= -f2-)"; DB_USER="${DB_USER:-suppley}"
+DB_PASSWORD="$(grep -E '^DB_PASSWORD=' .env 2>/dev/null | cut -d= -f2-)"; DB_PASSWORD="${DB_PASSWORD:-changeme}"
+DB_NAME="$(grep -E '^DB_NAME=' .env 2>/dev/null | cut -d= -f2-)"; DB_NAME="${DB_NAME:-suppley_calc}"
+
+for mig in "${IDEMPOTENT_MIGRATIONS[@]}"; do
+  if [ -f "$mig" ]; then
+    if docker exec -i "${DB_CONTAINER}" mysql -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" < "$mig" 2>/dev/null; then
+      ok "  aplicada: $mig"
+    else
+      warn "  falhou (verifique manualmente): $mig"
+    fi
+  else
+    warn "  ausente: $mig"
+  fi
+done
 echo ""
 
 # Passo 4 — health check
