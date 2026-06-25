@@ -10,7 +10,7 @@ import {
   Legend,
 } from "recharts";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, Minus, X } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, X, Download } from "lucide-react";
 
 /** Ponto de preço (espelha PricePoint do backend; datas chegam como Date via superjson). */
 export interface PricePointView {
@@ -60,6 +60,32 @@ function ChangeBadge({ percent }: { percent: number | null }) {
       {percent.toFixed(1)}%
     </Badge>
   );
+}
+
+function generateCsv(points: PricePointView[]): string {
+  const headers = [
+    "Data",
+    "Fornecedor",
+    "Preço Original",
+    "Moeda",
+    "FOB (BRL)",
+    "Custo Nacionalizado (BRL)",
+    "Markup (%) Brasil",
+  ].join(",");
+
+  const rows = points.map((p) =>
+    [
+      fmtDate(p.quotationDate),
+      `"${p.supplierName || ""}"`,
+      (p.unitPriceCents / 100).toFixed(2),
+      p.currency,
+      p.unitPriceBrlCents != null ? (p.unitPriceBrlCents / 100).toFixed(2) : "",
+      p.nationalizedUnitCostBrlCents != null ? (p.nationalizedUnitCostBrlCents / 100).toFixed(2) : "",
+      p.nationalizedMarkupPercent != null ? p.nationalizedMarkupPercent.toFixed(1) : "",
+    ].join(",")
+  );
+
+  return [headers, ...rows].join("\n");
 }
 
 /**
@@ -165,6 +191,25 @@ export function PriceHistoryView({
           >
             <X className="h-3 w-3" />
             Limpar
+          </button>
+        )}
+        {filtered.length > 0 && (
+          <button
+            onClick={() => {
+              const csv = generateCsv(filtered);
+              const blob = new Blob([csv], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `historico-precos-${new Date().toISOString().split("T")[0]}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="flex items-center gap-1 px-2 py-1.5 text-violet-600 hover:bg-violet-50 rounded text-xs transition"
+            title="Exportar para CSV"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Exportar
           </button>
         )}
         {filtered.length > 0 && filtered.length !== sorted.length && (
