@@ -422,9 +422,17 @@ export async function distributeProformaToBase(
       unit: item.unit || "UN",
       supplierId: industriaId ?? undefined,
       origem: "cotado_nao_importado",
-      ncmStatus: ncm ? "sugerido" : "sugerido",
+      ncmStatus: ncm ? "validado" : "sugerido",
       custoImportadoRefCents: item.unitPriceCents,
-    } as any);
+      // Classificação (novos campos do Sprint 3)
+      classe: undefined,
+      criticidade: undefined,
+      subcategoria: undefined,
+      tags: undefined,
+      aplicacao: undefined,
+      material: undefined,
+      dimensoes: undefined,
+    });
 
     if (product) {
       productIds.push(product.id);
