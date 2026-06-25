@@ -21,15 +21,22 @@ import {
 } from "@/components/ui/sidebar";
 
 import { useIsMobile } from "@/hooks/useMobile";
-import { LogOut, PanelLeft, Building2, Package, Settings, FileText, ChevronRight, Sparkles, Workflow, TrendingUp } from "lucide-react";
+import { LogOut, PanelLeft, Building2, Package, Settings, FileText, ChevronRight, Workflow, TrendingUp } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 
 
+// Orbital oficial da marca (símbolo do logo) — usada no item Excambia.
+// Recebe className como os ícones do lucide para herdar o tamanho (h-5 w-5);
+// as classes de cor (text-*) são ignoradas por ser uma imagem.
+const OrbitalIcon = ({ className }: { className?: string }) => (
+  <img src="/suppley-icon.png" alt="" aria-hidden="true" className={`${className ?? ""} object-contain`} />
+);
+
 const menuItems = [
   // INTELIGÊNCIA
-  { icon: Sparkles, label: "Excambia", path: "/excambia", section: "inteligencia" },
+  { icon: OrbitalIcon, label: "Excambia", path: "/excambia", section: "inteligencia" },
   { icon: TrendingUp, label: "Inteligência de mercado", path: "/excambia/market", section: "inteligencia" },
 
   // OPERAÇÕES
