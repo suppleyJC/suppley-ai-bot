@@ -253,10 +253,11 @@ function CopyButton({ text }: { text: string }) {
 }
 
 function FxRate() {
-  // opcional: trpc.exchange.getRate. Placeholder enquanto não liga.
+  const { data: rate, isLoading } = trpc.exchange.getRate.useQuery({ from: 'USD', to: 'BRL' });
+  const displayRate = rate?.rate?.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) ?? (isLoading ? '...' : '—');
   return (
     <span className="flex items-center gap-1.5">
-      USD/BRL <b className="font-semibold text-slate-700">5,1442</b>
+      USD/BRL <b className="font-semibold text-slate-700">{displayRate}</b>
       <span className="text-[10px] text-teal-600">● PTAX</span>
     </span>
   );
