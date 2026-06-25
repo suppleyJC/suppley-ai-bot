@@ -8,6 +8,51 @@
 
 ## ✅ Implementado e em produção
 
+### 0. Classificação de Produtos & Melhorias Excambia (Sprint 3)
+
+- [x] **Sistema de classificação escalonável de produtos**
+  - Adicionadas 4 colunas à tabela `products`:
+    - `classe`: família operacional (Fixadores, Escoramento, EPI, etc.)
+    - `criticidade`: impacto de suprimento (alta/media/baixa)
+    - `subcategoria`: segundo nível hierárquico sob `categoria`
+    - `tags`: sistema flexível de etiquetas (JSON)
+  - Migração `0030` idempotente aplicada com `information_schema` guards
+  - Arquivo: `drizzle/0030_add_classification_to_products.sql`
+- [x] **Página de Produtos redesenhada**
+  - Barra de busca por nome/NCM/classe/categoria/fornecedor/tags
+  - Filtros por classe e criticidade (dinâmicos)
+  - Cards redesenhados com:
+    - Preço mais recente derivado de proformas (supplier + unitPrice + currency + quotationDate)
+    - Nome do fornecedor com ícone Building2
+    - Badges de classificação (classe, categoria › subcategoria)
+    - Tags display (primeiras 4 com "+N mais")
+    - Badge de criticidade com cores (alta=red, media=amber, baixa=emerald)
+    - Formato/unidade do produto
+  - Formulário de criação/edição com todos os campos de classificação
+  - Responsivo: `md:grid-cols-2 lg:grid-cols-3`
+  - Arquivo: `client/src/pages/Products.tsx` (~900 linhas)
+- [x] **Excambia — Anexos de arquivo (PDF/imagem)**
+  - Usuário pode anexar PDF ou imagem ao enviar mensagem
+  - Arquivo é lido em base64 e enviado ao agente como conteúdo multimodal
+  - Bloco `MessageContent`: type="document" para PDF, type="image" para imagens
+  - Fallback gracioso: erro no upload não derruba a conversa
+  - Marca no histórico: `📎 {nome_arquivo}`
+  - Arquivos: `server/routers/conversasRouter.ts`, `client/src/pages/ExcambiaChat.tsx`
+- [x] **Excambia — Otimização da UI (mensagens otimistas + sidebar fluida)**
+  - Mensagem do usuário aparece imediatamente (otimistic UI)
+  - Resposta do agente carrega enquanto a mensagem está sendo processada
+  - Rollback automático com toast se falhar
+  - Sidebar: headers sticky (`sticky top-0 z-10`) para scroll fluido
+  - Chat routes em full-bleed layout (sem padding)
+  - Arquivo: `client/src/pages/ExcambiaChat.tsx`, `client/src/components/excambia/ConversationPanel.tsx`
+- [x] **Backend: enriquecimento de produtos com preço mais recente**
+  - `products.list` agora retorna `latestPrice` derivado de `proformas`
+  - Agrupa por `normalizeProductName()` para lidar com variantes
+  - Retorna: `{ unitPriceCents, currency, quotationDate, supplierName }`
+  - Arquivo: `server/routers/productsRouter.ts`
+- [x] **Migração `0030` e `redeploy.sh` atualizados**
+  - Adicionada à lista `IDEMPOTENT_MIGRATIONS` para rodar automaticamente em deploys
+
 ### 1. Histórico & Evolução de Preços (Sprint 2)
 
 - [x] **Extração da data da cotação (`quotationDate`)** do PDF via IA
@@ -106,20 +151,26 @@
 
 | Commit | Descrição |
 |--------|-----------|
+| `cfb157b` | feat(ativos+excambia): catálogo classificável e chat com anexos |
+| `b077895` | feat(proforma): split product into short variant name + full specs |
+| `8c95dc0` | fix(proforma): widen productName column + implement draft editing |
+| `b52168b` | feat(nav): use brand orbital icon for Excambia in main sidebar |
+| `500ca18` | chore(deploy): add idempotent redeploy script with orphan-container workaround |
 | `536fd59` | fix(migration): índice idempotente compatível com MySQL 8.0 |
 | `be5afad` | docs: guia de deploy do histórico de preços |
 | `a47e4ba` | db(migration): coluna `quotationDate` na tabela proformas |
 | `f555cc0` | feat(price-history): visualizações de evolução de preço |
 | `cdebcc0` | feat(price-history): métricas cronológicas derivadas das proformas |
-| `5eac6d3` | feat(proforma): extração e armazenamento da data da cotação |
-| `5f41daf` | feat(proforma): tradução de produtos + sugestão automática de NCM |
 
 ---
 
-## 🧪 Validação (último estado)
+## 🧪 Validação (último estado pós-Sprint 3)
 
 - ✅ `pnpm check` — 0 erros de TypeScript
 - ✅ `pnpm build` — build de produção OK (warning de chunk do recharts)
-- ✅ Testes — 149/150 passando (1 falha pré-existente, não relacionada)
-- ✅ Migração `0027` aplicada e coluna confirmada no banco de produção
-- ✅ Site no ar
+- ✅ `pnpm test` — 149/150 passando (1 falha environmental: `quotations.test.ts`, conexão DB em testes)
+- ✅ Migração `0030` adicionada ao script de deploy idempotente
+- ✅ Deployment em produção bem-sucedido (HTTP 200)
+- ✅ Migrações `0025`, `0027`, `0028`, `0029`, `0030` confirmadas no banco
+- ✅ Site no ar com novas features funcionando
+- ✅ Últimas alterações commitadas: `cfb157b` (feat: catálogo classificável + chat com anexos)
