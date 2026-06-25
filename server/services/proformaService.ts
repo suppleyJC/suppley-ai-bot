@@ -9,6 +9,7 @@
 import * as db from "../db";
 import { invokeLLM } from "../_core/llm";
 import { suggestNCMWithAI, suggestNCMBatch } from "./ncmService";
+import { suggestNCMSmart } from "./smartNcmService";
 import type { InsertProforma, InsertProformaItem } from "../../drizzle/schema";
 
 // ============================================================
@@ -407,8 +408,10 @@ export async function distributeProformaToBase(
     let ncm = item.ncmCode || undefined;
     if (!ncm) {
       try {
-        const suggestion = await suggestNCMWithAI(item.productName);
-        ncm = suggestion?.suggestedNCM?.ncmCode;
+        // Sugestão inteligente: reutiliza NCM de produtos similares já validados,
+        // senão faz busca normal. Melhora a consistência e economiza API calls.
+        const suggestion = await suggestNCMSmart(item.productName, userId);
+        ncm = suggestion?.ncmCode;
       } catch {
         /* segue sem NCM */
       }
