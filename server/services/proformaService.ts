@@ -8,7 +8,7 @@
  */
 import * as db from "../db";
 import { invokeLLM } from "../_core/llm";
-import { suggestNCMWithAI } from "./ncmService";
+import { suggestNCMWithAI, suggestNCMBatch } from "./ncmService";
 import type { InsertProforma, InsertProformaItem } from "../../drizzle/schema";
 
 // ============================================================
@@ -17,7 +17,11 @@ import type { InsertProforma, InsertProformaItem } from "../../drizzle/schema";
 
 export interface ProformaItemInput {
   productName: string;
+  /** Nome original como aparece no documento (antes da tradução p/ PT-BR). */
+  productNameOriginal?: string;
   ncmCode?: string;
+  /** Confiança da NCM sugerida (0-100); presente quando a NCM veio do classificador. */
+  ncmConfidence?: number;
   quantity: number;
   unit: string;
   unitPriceCents: number;
@@ -62,8 +66,9 @@ const EXTRACTION_SCHEMA = {
         items: {
           type: "object",
           properties: {
-            productName: { type: "string" },
-            ncmCode: { type: ["string", "null"] },
+            productName: { type: "string", description: "Nome do produto TRADUZIDO para português do Brasil, mantendo medidas/especificações técnicas e unidades (ex: 'Prego comum 17x27 polido, 1kg/saco, 20 sacos/caixa')" },
+            productNameOriginal: { type: ["string", "null"], description: "Nome do produto EXATAMENTE como aparece no documento, sem traduzir" },
+            ncmCode: { type: ["string", "null"], description: "NCM apenas se estiver explícito no documento; senão null (será classificada depois)" },
             quantity: { type: "number" },
             unit: { type: "string" },
             unitPriceCents: { type: "number", description: "Preço unitário em centavos da moeda" },
@@ -92,8 +97,13 @@ Extraia os dados com máxima precisão:
 2. Cada item: nome do produto, NCM (se houver), quantidade, unidade, preço unitário
 3. Moeda, incoterm (FOB/CIF/EXW/DDP), condições de pagamento, lead time, MOQ, total FOB
 
+TRADUÇÃO DOS PRODUTOS (importante):
+- "productName": traduza o nome do produto para PORTUGUÊS DO BRASIL, preservando medidas, especificações técnicas e unidades (ex: "Common Nail 17*27 Polished, 1kg/bag" → "Prego comum 17x27 polido, 1kg/saco"). Use a terminologia comercial brasileira correta.
+- "productNameOriginal": mantenha o nome EXATAMENTE como está no documento, sem traduzir.
+
 IMPORTANTE:
 - Preços SEMPRE em centavos (multiplique por 100). Ex: USD 12.50 → 1250.
+- NCM: só preencha "ncmCode" se a NCM estiver EXPLÍCITA no documento. Caso contrário deixe null — a classificação será feita por um motor certificado depois.
 - Se um campo não existir, retorne null.
 - "confidence" = sua certeza geral (0-100).
 ${hints?.supplierName ? `- Fornecedor esperado: ${hints.supplierName}` : ""}
@@ -144,7 +154,41 @@ ${hints?.expectedProducts?.length ? `- Produtos esperados: ${hints.expectedProdu
   parsed.currency = parsed.currency || "USD";
   parsed.incoterm = parsed.incoterm || "FOB";
   parsed.confidence = typeof parsed.confidence === "number" ? parsed.confidence : 50;
+
+  // Classifica a NCM dos itens que vieram sem NCM no documento, usando o motor
+  // certificado (busca no banco real de NCMs, não inventa). A NCM é sugestão:
+  // o usuário confirma na tela antes de distribuir para a base.
+  await classificarNcmDosItens(parsed.items);
+
   return parsed;
+}
+
+/**
+ * Preenche ncmCode/ncmConfidence dos itens sem NCM usando o classificador
+ * certificado em lote. Usa o nome ORIGINAL (em inglês/espanhol) como descrição
+ * extra para melhorar a precisão da classificação.
+ */
+async function classificarNcmDosItens(items: ProformaItemInput[]): Promise<void> {
+  const semNcm = items.filter((it) => !it.ncmCode || it.ncmCode.trim() === "");
+  if (semNcm.length === 0) return;
+
+  try {
+    const sugestoes = await suggestNCMBatch(
+      semNcm.map((it) => ({ name: it.productName, description: it.productNameOriginal })),
+    );
+
+    for (const item of semNcm) {
+      const result = sugestoes.get(item.productName);
+      if (result?.suggestedNCM) {
+        item.ncmCode = result.suggestedNCM.ncmCode;
+        item.ncmConfidence = result.suggestedNCM.confidence;
+      }
+    }
+  } catch (error) {
+    // Classificação é best-effort: se falhar, o item segue sem NCM (usuário
+    // preenche manualmente). Não derruba a extração inteira por causa disso.
+    console.error("[Proforma] Falha ao classificar NCM dos itens:", error);
+  }
 }
 
 // ============================================================

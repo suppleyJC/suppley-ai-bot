@@ -11,7 +11,9 @@ import OperationCard from "@/components/OperationCard";
 
 type ItemDraft = {
   productName: string;
+  productNameOriginal?: string;
   ncmCode?: string;
+  ncmConfidence?: number;
   quantity: number;
   unit: string;
   unitPrice: number; // em unidades da moeda (não centavos) — UX
@@ -108,7 +110,9 @@ export default function Proformas() {
         moq: extracted.moq ?? undefined,
         items: (extracted.items || []).map((it) => ({
           productName: it.productName,
+          productNameOriginal: it.productNameOriginal || undefined,
           ncmCode: it.ncmCode || undefined,
+          ncmConfidence: it.ncmConfidence ?? undefined,
           quantity: it.quantity,
           unit: it.unit || "UN",
           unitPrice: (it.unitPriceCents || 0) / 100,
@@ -335,10 +339,20 @@ export default function Proformas() {
                         onChange={(e) => updateItem(idx, { productName: e.target.value })}
                         placeholder="Nome do produto"
                       />
+                      {item.productNameOriginal && item.productNameOriginal !== item.productName && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5 truncate" title={item.productNameOriginal}>
+                          Original: {item.productNameOriginal}
+                        </p>
+                      )}
                     </div>
                     <div className="col-span-2">
                       <Label className="text-xs">NCM</Label>
-                      <Input value={item.ncmCode ?? ""} onChange={(e) => updateItem(idx, { ncmCode: e.target.value })} placeholder="auto" />
+                      <Input value={item.ncmCode ?? ""} onChange={(e) => updateItem(idx, { ncmCode: e.target.value, ncmConfidence: undefined })} placeholder="auto" />
+                      {item.ncmCode && item.ncmConfidence != null && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          Sugerida · {item.ncmConfidence}% — confirme
+                        </p>
+                      )}
                     </div>
                     <div className="col-span-2">
                       <Label className="text-xs">Qtd</Label>
