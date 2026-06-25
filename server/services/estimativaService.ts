@@ -15,6 +15,7 @@ import {
   type EngineResult,
   type RegimeTributario,
 } from "./importCostEngine";
+import { getStateIcmsInternalRate, getStateName } from "./statePricingService";
 
 export interface EstimativaProductInput {
   productName: string;
@@ -30,6 +31,9 @@ export interface EstimativaProductInput {
   icmsStValue?: number;
 }
 
+/** Modal logístico — define a incidência de AFRMM (só marítimo). */
+export type ModalLogistico = "maritimo" | "aereo" | "rodoviario" | "ferroviario";
+
 export interface EstimativaInput {
   products: EstimativaProductInput[];
   exchangeRate: number;
@@ -37,6 +41,20 @@ export interface EstimativaInput {
   /** Frete e seguro internacionais na moeda da cotação */
   freight?: number;
   insurance?: number;
+
+  /**
+   * UF de destino do desembaraço/nacionalização (ex.: "SC", "SP").
+   * - SC: aplica o benefício TTD 409 (ICMS antecipado 2,6%/1,0%) por padrão.
+   * - Demais UFs: aplica ICMS importação CHEIO com a alíquota interna do estado,
+   *   a menos que icmsFullRegime/icmsInternalRate sejam informados explicitamente.
+   * Se ausente, assume SC (com aviso).
+   */
+  estadoDestino?: string;
+  /**
+   * Modal logístico. AFRMM (25% do frete) só incide no modal marítimo;
+   * para aéreo/rodoviário/ferroviário o AFRMM é zerado automaticamente.
+   */
+  modal?: ModalLogistico;
 
   // Custos em BRL (todos opcionais)
   afrmmBrl?: number;            // default: 25% do frete em BRL
@@ -154,11 +172,52 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
     input.icmsAntecipadoRateOverride ??
     (input.ttdPhase === "apos_36m" ? 0.01 : 0.026);
 
+  // ---- ESTADO DE DESTINO: define o regime de ICMS importação ----
+  // SC tem o benefício TTD 409 (antecipado 2,6%/1,0%). Demais UFs recolhem o
+  // ICMS importação CHEIO com a alíquota interna do estado. O usuário ainda pode
+  // sobrescrever via icmsFullRegime/icmsInternalRate explícitos.
+  const estadoUf = (input.estadoDestino ?? "").toUpperCase().slice(0, 2);
+  let icmsFullRegime = input.icmsFullRegime;
+  let icmsInternalRate = input.icmsInternalRate;
+
+  if (!input.estadoDestino) {
+    ncmWarnings.push(
+      "Estado de destino não informado — cálculo assumiu SC (benefício TTD 409, " +
+      "ICMS antecipado). Informe a UF de destino para precisão do ICMS importação.",
+    );
+  } else if (estadoUf !== "SC" && icmsFullRegime === undefined && icmsInternalRate === undefined) {
+    const stateRate = getStateIcmsInternalRate(estadoUf);
+    if (stateRate) {
+      icmsFullRegime = true;
+      icmsInternalRate = stateRate;
+      ncmWarnings.push(
+        `Estado ${estadoUf} (${getStateName(estadoUf) ?? estadoUf}): aplicado ICMS importação ` +
+        `CHEIO a ${(stateRate * 100).toFixed(1)}% (alíquota interna). O benefício TTD 409 ` +
+        `(antecipado) é exclusivo de Santa Catarina.`,
+      );
+    } else {
+      ncmWarnings.push(
+        `Estado "${input.estadoDestino}" não reconhecido — mantido o regime padrão (SC/TTD 409). ` +
+        `Confira a UF de destino.`,
+      );
+    }
+  }
+
+  // ---- MODAL: AFRMM só incide no marítimo ----
+  let afrmmBrl = input.afrmmBrl;
+  if (afrmmBrl === undefined && input.modal && input.modal !== "maritimo") {
+    afrmmBrl = 0;
+    ncmWarnings.push(
+      `Modal ${input.modal}: AFRMM zerado (o Adicional ao Frete para Renovação da ` +
+      `Marinha Mercante incide apenas sobre frete marítimo).`,
+    );
+  }
+
   const globals: EngineGlobalInput = {
     exchangeRate: input.exchangeRate,
     freightTotalFob: input.freight ?? 0,
     insuranceTotalFob: input.insurance ?? 0,
-    afrmmTotalBrl: input.afrmmBrl,
+    afrmmTotalBrl: afrmmBrl,
     siscomexTotalBrl: input.siscomexBrl,
     demaisDespesasBrl: demaisDespesas,
     pacoteLogisticoBrl: input.pacoteLogisticoBrl,
@@ -168,8 +227,8 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
     icmsGrossUpRate: input.icmsGrossUpRateOverride,
     icmsAntecipadoRate: icmsAntecipado,
     icmsNegociadoClienteRate: input.icmsNegociadoClienteRate,
-    icmsFullRegime: input.icmsFullRegime,
-    icmsInternalRate: input.icmsInternalRate,
+    icmsFullRegime,
+    icmsInternalRate,
 
     pisImportRate: input.pisImportRateOverride,
     cofinsImportRate: input.cofinsImportRateOverride,

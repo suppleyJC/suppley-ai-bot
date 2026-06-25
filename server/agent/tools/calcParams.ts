@@ -39,12 +39,39 @@ export const CALC_SCHEMA_PROPERTIES = {
     enum: ["lucro_real", "lucro_presumido", "simples_nacional"],
     description: "Regime tributário do importador",
   },
-  estadoDestino: { type: "string", description: "UF de destino (ex: SC)" },
+  estadoDestino: {
+    type: "string",
+    description:
+      "UF de destino do desembaraço (ex: SC, SP, RS). Define o regime de ICMS importação: " +
+      "SC usa o benefício TTD 409 (antecipado); demais estados usam o ICMS importação cheio " +
+      "com a alíquota interna do estado. Impacta diretamente o custo — sempre pergunte se não souber.",
+  },
+  modal: {
+    type: "string",
+    enum: ["maritimo", "aereo", "rodoviario", "ferroviario"],
+    description:
+      "Modal logístico da importação. Afeta o AFRMM (incide só no marítimo). " +
+      "Pergunte se não souber.",
+  },
   ttdFase: {
     type: "string",
     description: "Fase do TTD/benefício estadual de SC: 'primeiros_36m' (2,6%) ou 'apos_36m' (1,0%)",
   },
 } as const;
+
+/** Normaliza o modal textual vindo do LLM para o enum do motor. */
+export function mapModal(modal?: unknown): estimativaService.ModalLogistico | undefined {
+  if (typeof modal !== "string") return undefined;
+  const m = modal
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // remove acentos
+  if (m.includes("marit") || m.includes("mar") || m.includes("navio")) return "maritimo";
+  if (m.includes("aere") || m.includes("aviao") || m.includes("air")) return "aereo";
+  if (m.includes("rodov") || m.includes("caminhao") || m.includes("truck")) return "rodoviario";
+  if (m.includes("ferrov") || m.includes("trem")) return "ferroviario";
+  return undefined;
+}
 
 /** Mapeia a fase TTD textual vinda do LLM para o enum esperado pelo motor. */
 export function mapTtdPhase(ttdFase?: unknown): "primeiros_36m" | "apos_36m" | undefined {
@@ -73,6 +100,8 @@ export function mapArgsToEstimativaInput(
     freight: typeof args.freteUsd === "number" ? args.freteUsd : undefined,
     insurance: typeof args.seguroUsd === "number" ? args.seguroUsd : undefined,
     taxRegime: args.regimeTributario as estimativaService.EstimativaInput["taxRegime"],
+    estadoDestino: typeof args.estadoDestino === "string" ? args.estadoDestino : undefined,
+    modal: mapModal(args.modal),
     ttdPhase: mapTtdPhase(args.ttdFase),
   };
 }

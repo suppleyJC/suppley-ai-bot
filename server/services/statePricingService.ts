@@ -83,6 +83,26 @@ const STATE_ICMS_DATA: Record<string, { name: string; internal: number; intersta
 const IMPORTED_INTERSTATE_RATE = 400; // 4%
 
 /**
+ * Retorna a alíquota interna de ICMS de um estado como FRAÇÃO (ex.: 0.17),
+ * pronta para uso no motor de cálculo. Retorna null se o estado for desconhecido.
+ *
+ * Fonte da verdade única do ICMS interno por UF (usado pelo motor de importação
+ * para aplicar o regime cheio fora de SC, e pela precificação por estado).
+ */
+export function getStateIcmsInternalRate(stateCode: string): number | null {
+  const uf = (stateCode || "").toUpperCase().slice(0, 2);
+  const data = STATE_ICMS_DATA[uf];
+  if (!data) return null;
+  return data.internal / 10000; // basis points → fração
+}
+
+/** Nome do estado pela UF (ou null se desconhecido). */
+export function getStateName(stateCode: string): string | null {
+  const uf = (stateCode || "").toUpperCase().slice(0, 2);
+  return STATE_ICMS_DATA[uf]?.name ?? null;
+}
+
+/**
  * Calcula DIFAL (Diferencial de Alíquota)
  * DIFAL = (Alíquota Interna - Alíquota Interestadual) * Base de Cálculo
  */
