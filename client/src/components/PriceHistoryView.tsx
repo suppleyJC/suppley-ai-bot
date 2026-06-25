@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   LineChart,
   Line,
@@ -10,7 +10,7 @@ import {
   Legend,
 } from "recharts";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, X } from "lucide-react";
 
 /** Ponto de preço (espelha PricePoint do backend; datas chegam como Date via superjson). */
 export interface PricePointView {
@@ -74,6 +74,9 @@ export function PriceHistoryView({
   points: PricePointView[];
   compact?: boolean;
 }) {
+  const [fromDate, setFromDate] = useState<string>("");
+  const [toDate, setToDate] = useState<string>("");
+
   const sorted = useMemo(
     () =>
       [...points].sort(
@@ -83,11 +86,23 @@ export function PriceHistoryView({
     [points]
   );
 
-  const currency = sorted[0]?.currency || "USD";
+  const filtered = useMemo(() => {
+    if (!fromDate && !toDate) return sorted;
+    const from = fromDate ? new Date(fromDate).getTime() : 0;
+    const to = toDate ? new Date(toDate).getTime() : Infinity;
+    return sorted.filter(
+      (p) => {
+        const date = new Date(p.quotationDate).getTime();
+        return date >= from && date <= to;
+      }
+    );
+  }, [sorted, fromDate, toDate]);
+
+  const currency = filtered[0]?.currency || "USD";
 
   const chartData = useMemo(
     () =>
-      sorted.map((p) => ({
+      filtered.map((p) => ({
         date: fmtDate(p.quotationDate),
         fobBrl: p.unitPriceBrlCents != null ? p.unitPriceBrlCents / 100 : null,
         natBrl:
@@ -98,21 +113,21 @@ export function PriceHistoryView({
         currency: p.currency,
         supplier: p.supplierName || "—",
       })),
-    [sorted]
+    [filtered]
   );
 
   const hasBrl = chartData.some((d) => d.fobBrl != null);
   const hasNat = chartData.some((d) => d.natBrl != null);
 
   // Variação do primeiro ao último (moeda original)
-  const first = sorted[0];
-  const last = sorted[sorted.length - 1];
+  const first = filtered[0];
+  const last = filtered[filtered.length - 1];
   const changePercent =
     first && last && first.unitPriceCents > 0
       ? Math.round(((last.unitPriceCents - first.unitPriceCents) / first.unitPriceCents) * 10000) / 100
       : null;
 
-  if (sorted.length === 0) {
+  if (filtered.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-4 text-center">
         Sem cotações registradas ainda.
@@ -122,11 +137,48 @@ export function PriceHistoryView({
 
   return (
     <div className="space-y-4">
+      {/* Filtros de período */}
+      <div className="flex flex-wrap items-end gap-3 text-sm bg-muted/30 p-3 rounded-lg">
+        <div className="flex flex-col">
+          <label className="text-xs font-semibold text-muted-foreground mb-1">De:</label>
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="px-2 py-1.5 border border-input rounded text-sm bg-background"
+          />
+        </div>
+        <div className="flex flex-col">
+          <label className="text-xs font-semibold text-muted-foreground mb-1">Até:</label>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="px-2 py-1.5 border border-input rounded text-sm bg-background"
+          />
+        </div>
+        {(fromDate || toDate) && (
+          <button
+            onClick={() => { setFromDate(""); setToDate(""); }}
+            className="flex items-center gap-1 px-2 py-1.5 text-muted-foreground hover:bg-background rounded text-xs transition"
+            title="Limpar filtros"
+          >
+            <X className="h-3 w-3" />
+            Limpar
+          </button>
+        )}
+        {filtered.length > 0 && filtered.length !== sorted.length && (
+          <span className="text-xs text-muted-foreground ml-auto">
+            {filtered.length} de {sorted.length} cotações
+          </span>
+        )}
+      </div>
+
       {/* Estatísticas resumidas */}
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <div>
           <span className="text-muted-foreground">Cotações: </span>
-          <span className="font-medium">{sorted.length}</span>
+          <span className="font-medium">{filtered.length}</span>
         </div>
         <div>
           <span className="text-muted-foreground">Último preço: </span>
@@ -227,7 +279,7 @@ export function PriceHistoryView({
               </tr>
             </thead>
             <tbody>
-              {[...sorted].reverse().map((p, i) => (
+              {[...filtered].reverse().map((p, i) => (
                 <tr key={`${p.proformaId}-${i}`} className="border-t hover:bg-muted/30">
                   <td className="p-2 whitespace-nowrap">{fmtDate(p.quotationDate)}</td>
                   <td className="p-2 truncate max-w-[160px]" title={p.supplierName || ""}>
