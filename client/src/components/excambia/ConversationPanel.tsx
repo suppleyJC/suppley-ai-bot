@@ -9,7 +9,7 @@
  */
 import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, MoreHorizontal, ChevronLeft, Pin, PinOff, Pencil, Archive, Trash2 } from "lucide-react";
+import { Plus, Search, MoreHorizontal, ChevronLeft, PanelLeftOpen, Pin, PinOff, Pencil, Archive, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -47,12 +47,12 @@ export default function ConversationPanel({
 
   if (collapsed) {
     return (
-      <div className="flex w-10 sm:w-12 flex-shrink-0 flex-col items-center border-r border-slate-200 bg-white py-3 sm:py-4 gap-2">
-        <button onClick={onToggleCollapse} className="rounded-lg p-1.5 sm:p-2 text-slate-500 hover:bg-slate-100" title="Abrir conversas">
-          <Search className="h-4 w-4 sm:h-5 sm:w-5" />
+      <div className="flex w-12 flex-shrink-0 flex-col items-center border-r border-slate-200 bg-white py-4 gap-2">
+        <button onClick={onToggleCollapse} className="rounded-lg p-2 text-slate-500 transition hover:bg-violet-50 hover:text-violet-600" title="Abrir conversas">
+          <PanelLeftOpen className="h-5 w-5" />
         </button>
-        <button onClick={onNew} className="rounded-lg p-1.5 sm:p-2 text-violet-600 hover:bg-violet-50" title="Nova conversa">
-          <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+        <button onClick={onNew} className="rounded-lg p-2 text-violet-600 transition hover:bg-violet-50" title="Nova conversa">
+          <Plus className="h-5 w-5" />
         </button>
       </div>
     );
@@ -78,7 +78,13 @@ export default function ConversationPanel({
   };
 
   return (
-    <div className="hidden sm:flex w-64 md:w-80 flex-shrink-0 flex-col border-r border-slate-200 bg-white">
+    <>
+      {/* backdrop só no mobile (fecha o drawer ao tocar fora) */}
+      <div
+        onClick={onToggleCollapse}
+        className="fixed inset-0 z-30 bg-slate-900/20 backdrop-blur-[1px] sm:hidden"
+      />
+      <div className="flex w-64 md:w-80 flex-shrink-0 flex-col border-r border-slate-200 bg-white max-sm:absolute max-sm:inset-y-0 max-sm:left-0 max-sm:z-40 max-sm:w-[82vw] max-sm:max-w-[18rem] max-sm:shadow-2xl">
       {/* header */}
       <div className="flex items-center gap-2 p-3 sm:p-4 pb-2 sm:pb-2.5">
         <button onClick={onNew}
@@ -137,7 +143,8 @@ export default function ConversationPanel({
           </p>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

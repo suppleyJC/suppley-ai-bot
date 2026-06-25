@@ -13,7 +13,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
-import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight } from "lucide-react";
+import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check } from "lucide-react";
+import { Streamdown } from "streamdown";
 
 // Ícone oficial SUPPLEY (símbolo recortado do logo, fundo transparente)
 const LogoIcon = ({ className }: { className?: string }) => (
@@ -22,7 +23,10 @@ const LogoIcon = ({ className }: { className?: string }) => (
 
 export default function ExcambiaChat() {
   const [activeId, setActiveId] = useState<number | undefined>(undefined);
-  const [collapsed, setCollapsed] = useState(false);
+  // No mobile inicia recolhido (chat ocupa a tela toda); no desktop, expandido.
+  const [collapsed, setCollapsed] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 640,
+  );
   const [draft, setDraft] = useState("");
   const utils = trpc.useUtils();
 
@@ -36,6 +40,15 @@ export default function ExcambiaChat() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight); }, [conv?.mensagens]);
+
+  // Auto-grow do composer: cresce com o texto até um teto e então rola.
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+  }, [draft]);
 
   async function handleNew() { create.mutate({}); }
 
@@ -75,7 +88,7 @@ export default function ExcambiaChat() {
   const vazio = mensagens.length === 0;
 
   return (
-    <div className="flex h-full">
+    <div className="relative flex h-full">
       <ConversationPanel
         activeId={activeId} onSelect={setActiveId} onNew={handleNew}
         collapsed={collapsed} onToggleCollapse={() => setCollapsed((v) => !v)}
@@ -84,39 +97,41 @@ export default function ExcambiaChat() {
       {/* CHAT */}
       <div className="flex flex-1 flex-col bg-[#faf9fc] min-h-0">
         {/* topbar fina */}
-        <div className="flex h-[54px] items-center gap-3 px-3 sm:px-6">
-          <span className="text-sm font-semibold text-slate-800">Excambia</span>
+        <div className="flex h-[54px] items-center gap-2 sm:gap-2.5 px-3 sm:px-6 border-b border-slate-100">
+          <img src="/suppley-icon.png" alt="" className="h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 object-contain" />
+          <span className="text-sm font-semibold tracking-tight text-slate-800">Excambia</span>
           <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
             <FxRate />
           </div>
         </div>
 
         {/* área de conversa */}
-        <div ref={scrollRef} className="flex flex-1 flex-col items-center overflow-y-auto min-h-0">
+        <div ref={scrollRef} className="flex flex-1 flex-col items-center overflow-y-auto scrollbar-custom min-h-0">
           {vazio ? (
             <Welcome onPick={(t) => setDraft(t)} />
           ) : (
-            <div className="flex w-full max-w-xs sm:max-w-sm md:max-w-xl lg:max-w-2xl flex-col gap-3 sm:gap-5 px-3 sm:px-6 pt-4 sm:pt-6">
+            <div className="flex w-full max-w-full sm:max-w-2xl lg:max-w-3xl flex-col gap-4 sm:gap-6 px-3 sm:px-6 pt-4 sm:pt-6 pb-2">
               {mensagens.map((m: any) => (
                 <Message key={m.id} role={m.role} content={m.content} />
               ))}
-              {send.isPending && <Message role="assistant" content="…" />}
+              {send.isPending && <Message role="assistant" content="…" pending />}
             </div>
           )}
         </div>
 
         {/* composer */}
         <div className="flex w-full justify-center bg-gradient-to-t from-[#faf9fc] px-3 sm:px-6 pb-4 sm:pb-6 pt-2.5 sm:pt-3.5">
-          <div className="w-full max-w-xs sm:max-w-sm md:max-w-xl lg:max-w-2xl">
-            <div className="flex items-end gap-2 sm:gap-2.5 rounded-[18px] border border-[#e2def0] bg-white p-2 sm:p-2.5 pl-3 sm:pl-4 shadow-[0_4px_20px_rgba(49,18,96,0.05)] focus-within:border-violet-500">
+          <div className="w-full max-w-full sm:max-w-2xl lg:max-w-3xl">
+            <div className="flex items-end gap-2 sm:gap-2.5 rounded-[18px] border border-[#e2def0] bg-white p-2 sm:p-2.5 pl-3 sm:pl-4 shadow-[0_4px_20px_rgba(49,18,96,0.05)] transition-colors focus-within:border-violet-500 focus-within:shadow-[0_4px_24px_rgba(104,42,186,0.12)]">
               <button className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 flex-shrink-0">
                 <Paperclip className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
               </button>
               <textarea
+                ref={taRef}
                 value={draft} onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                 rows={1} placeholder='Ex.: "5.400 escoras galvanizadas da China"…'
-                className="flex-1 resize-none bg-transparent py-1.5 text-sm sm:text-[14px] text-slate-700 outline-none placeholder:text-slate-400"
+                className="flex-1 resize-none bg-transparent py-1.5 text-sm sm:text-[14px] leading-relaxed text-slate-700 outline-none placeholder:text-slate-400 max-h-[200px] overflow-y-auto scrollbar-custom"
               />
               <button onClick={handleSend}
                 className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-[10px] bg-violet-600 text-white hover:bg-violet-700 flex-shrink-0">
@@ -170,25 +185,71 @@ function Suggestion({ icon, title, sub, onClick }: any) {
   );
 }
 
-function Message({ role, content }: { role: string; content: string }) {
+function Message({ role, content, pending }: { role: string; content: string; pending?: boolean }) {
   if (role === "user") {
     return (
-      <div className="max-w-[85%] sm:max-w-[75%] self-end rounded-2xl border border-slate-200 bg-white px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-[14px] leading-relaxed text-slate-800">
+      <div className="max-w-[85%] sm:max-w-[75%] self-end whitespace-pre-wrap break-words rounded-2xl bg-violet-600 px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-[14px] leading-relaxed text-white shadow-sm">
         {content}
       </div>
     );
   }
   if (role === "assistant") {
     return (
-      <div className="flex items-start gap-2 sm:gap-3 w-full">
+      <div className="group flex w-full items-start gap-2 sm:gap-3">
         <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white border border-slate-200 p-1">
           <LogoIcon />
         </span>
-        <div className="pt-0.5 text-sm sm:text-[14px] leading-relaxed text-slate-800 whitespace-pre-wrap">{content}</div>
+        <div className="min-w-0 flex-1">
+          {pending ? (
+            <TypingDots />
+          ) : (
+            <>
+              <div className="prose prose-sm max-w-none break-words text-slate-800 prose-p:my-2 prose-p:leading-relaxed prose-headings:font-semibold prose-headings:text-slate-900 prose-strong:text-slate-900 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-a:text-violet-600 prose-a:no-underline hover:prose-a:underline prose-code:rounded prose-code:bg-violet-50 prose-code:px-1 prose-code:py-0.5 prose-code:text-[0.85em] prose-code:text-violet-700 prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:rounded-xl prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-table:text-[13px] prose-th:border prose-th:border-slate-200 prose-th:bg-slate-50 prose-th:px-2 prose-th:py-1 prose-td:border prose-td:border-slate-200 prose-td:px-2 prose-td:py-1">
+                <Streamdown>{content}</Streamdown>
+              </div>
+              <CopyButton text={content} />
+            </>
+          )}
+        </div>
       </div>
     );
   }
   return null; // system/tool não renderizam
+}
+
+/** Indicador de "digitando" enquanto a Excambia processa. */
+function TypingDots() {
+  return (
+    <div className="flex items-center gap-1 pt-2" aria-label="Excambia está respondendo">
+      <span className="h-2 w-2 animate-bounce rounded-full bg-violet-300 [animation-delay:-0.3s]" />
+      <span className="h-2 w-2 animate-bounce rounded-full bg-violet-400 [animation-delay:-0.15s]" />
+      <span className="h-2 w-2 animate-bounce rounded-full bg-violet-500" />
+    </div>
+  );
+}
+
+/** Botão de copiar a resposta (texto puro), aparece ao passar o mouse. */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          /* clipboard indisponível (ex.: http) — ignora silenciosamente */
+        }
+      }}
+      title="Copiar resposta"
+      className="mt-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-slate-400 opacity-0 transition focus:opacity-100 group-hover:opacity-100 hover:bg-slate-100 hover:text-slate-600"
+    >
+      {copied ? <Check className="h-3 w-3 text-teal-600" /> : <Copy className="h-3 w-3" />}
+      {copied ? "Copiado" : "Copiar"}
+    </button>
+  );
 }
 
 function FxRate() {
