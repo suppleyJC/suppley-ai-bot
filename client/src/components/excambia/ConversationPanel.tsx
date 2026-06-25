@@ -47,7 +47,7 @@ export default function ConversationPanel({
 
   if (collapsed) {
     return (
-      <div className="flex w-12 flex-shrink-0 flex-col items-center border-r border-slate-200 bg-white py-4 gap-2">
+      <div className="flex h-full w-12 flex-shrink-0 flex-col items-center border-r border-slate-200 bg-white py-4 gap-2">
         <button onClick={onToggleCollapse} className="rounded-lg p-2 text-slate-500 transition hover:bg-violet-50 hover:text-violet-600" title="Abrir conversas">
           <PanelLeftOpen className="h-5 w-5" />
         </button>
@@ -84,9 +84,9 @@ export default function ConversationPanel({
         onClick={onToggleCollapse}
         className="fixed inset-0 z-30 bg-slate-900/20 backdrop-blur-[1px] sm:hidden"
       />
-      <div className="flex w-64 md:w-80 flex-shrink-0 flex-col border-r border-slate-200 bg-white max-sm:absolute max-sm:inset-y-0 max-sm:left-0 max-sm:z-40 max-sm:w-[82vw] max-sm:max-w-[18rem] max-sm:shadow-2xl">
+      <div className="flex h-full w-64 md:w-80 flex-shrink-0 flex-col border-r border-slate-200 bg-white max-sm:absolute max-sm:inset-y-0 max-sm:left-0 max-sm:z-40 max-sm:w-[82vw] max-sm:max-w-[18rem] max-sm:shadow-2xl">
       {/* header */}
-      <div className="flex items-center gap-2 p-3 sm:p-4 pb-2 sm:pb-2.5">
+      <div className="flex items-center gap-2 p-3 sm:p-4 pb-2 sm:pb-2.5 flex-shrink-0">
         <button onClick={onNew}
           className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white hover:bg-violet-700">
           <Plus className="h-4 w-4" /> Nova conversa
@@ -98,7 +98,7 @@ export default function ConversationPanel({
       </div>
 
       {/* busca */}
-      <div className="mx-3 sm:mx-4 mb-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 sm:px-3 py-1.5 sm:py-2">
+      <div className="mx-3 sm:mx-4 mb-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 sm:px-3 py-1.5 sm:py-2 flex-shrink-0">
         <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…"
           className="w-full bg-transparent text-sm text-slate-600 outline-none placeholder:text-slate-400" />

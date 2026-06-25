@@ -14,7 +14,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
-import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2 } from "lucide-react";
+import ParameterExtractionModal from "@/components/excambia/ParameterExtractionModal";
+import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2, Settings2 } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 const ALLOWED_UPLOAD_TYPES = [
@@ -70,6 +71,8 @@ export default function ExcambiaChat() {
   // Mensagens do usuário exibidas na hora (optimistic UI), antes da resposta.
   const [optimistic, setOptimistic] = useState<Array<{ id: string; content: string }>>([]);
   const [uploading, setUploading] = useState(false);
+  const [paramModalOpen, setParamModalOpen] = useState(false);
+  const [collectedParams, setCollectedParams] = useState<any>(null);
   const utils = trpc.useUtils();
 
   const create = trpc.conversas.create.useMutation({
@@ -137,6 +140,20 @@ export default function ExcambiaChat() {
     }
   }
 
+  function handleParametersCollected(params: any) {
+    setCollectedParams(params);
+    setParamModalOpen(false);
+    // Format parameters as a summary message
+    const summary = `Parâmetros para cálculo:
+- Regime: ${params.regime === 'lucro_real' ? 'Lucro Real' : params.regime === 'lucro_presumido' ? 'Lucro Presumido' : 'Simples Nacional'}
+- Estado: ${params.estado}${params.ttdPhase ? ` (TTD: ${params.ttdPhase === 'primeiros_36m' ? 'primeiros 36m' : 'após 36m'})` : ''}
+- Câmbio: ${params.cambio === 'ptax_oficial' ? 'PTAX Oficial' : `Taxa fixa: ${params.taxaFixa}`}
+- Modal: ${params.modal}${params.frete ? ` | Frete: USD ${params.frete}` : ''}${params.seguro ? ` | Seguro: USD ${params.seguro}` : ''}`;
+
+    setDraft(summary);
+    // Could auto-send, but instead we let user review and send manually
+  }
+
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ""; // permite re-selecionar o mesmo arquivo
@@ -194,14 +211,14 @@ export default function ExcambiaChat() {
   const vazio = mensagens.length === 0 && optimistic.length === 0;
 
   return (
-    <div className="relative flex h-full">
+    <div className="relative flex h-full w-full">
       <ConversationPanel
         activeId={activeId} onSelect={setActiveId} onNew={handleNew}
         collapsed={collapsed} onToggleCollapse={() => setCollapsed((v) => !v)}
       />
 
       {/* CHAT */}
-      <div className="flex flex-1 flex-col bg-[#faf9fc] min-h-0">
+      <div className="flex flex-1 flex-col bg-[#faf9fc] min-h-0 h-full">
         {/* topbar fina */}
         <div className="flex h-[54px] items-center gap-2 sm:gap-2.5 px-3 sm:px-6 border-b border-slate-100">
           <img src="/suppley-icon.png" alt="" className="h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 object-contain" />
@@ -252,6 +269,15 @@ export default function ExcambiaChat() {
                   <Paperclip className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => setParamModalOpen(true)}
+                disabled={uploading || send.isPending}
+                title="Extrair parâmetros de cálculo (regime, estado, câmbio, frete)"
+                className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-violet-600 flex-shrink-0 disabled:opacity-50"
+              >
+                <Settings2 className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
+              </button>
               <textarea
                 ref={taRef}
                 value={draft} onChange={(e) => setDraft(e.target.value)}
@@ -270,6 +296,14 @@ export default function ExcambiaChat() {
           </div>
         </div>
       </div>
+
+      {/* Parameter Extraction Modal */}
+      <ParameterExtractionModal
+        open={paramModalOpen}
+        onClose={() => setParamModalOpen(false)}
+        onSubmit={handleParametersCollected}
+        prefilledParams={collectedParams}
+      />
     </div>
   );
 }
