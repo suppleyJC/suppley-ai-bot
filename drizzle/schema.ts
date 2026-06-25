@@ -75,6 +75,15 @@ export const products = mysqlTable("products", {
 
   // ===== FASE 5: Ativos & Insumos (ampliação aditiva) =====
   categoria: varchar("categoria", { length: 120 }),
+  // subcategoria: segundo nível hierárquico abaixo de `categoria`.
+  subcategoria: varchar("subcategoria", { length: 120 }),
+  // classe: família operacional do item (Fixadores, Escoramento, EPI…),
+  // usada para agrupar e filtrar o catálogo de forma escalável.
+  classe: varchar("classe", { length: 80 }),
+  // criticidade de suprimento (impacto na operação se faltar).
+  criticidade: mysqlEnum("criticidade", ["alta", "media", "baixa"]),
+  // tags livres (string[]): etiquetas múltiplas para busca/filtro flexível.
+  tags: json("tags"),
   aplicacao: varchar("aplicacao", { length: 255 }),
   material: varchar("material", { length: 120 }),
   dimensoes: varchar("dimensoes", { length: 120 }),

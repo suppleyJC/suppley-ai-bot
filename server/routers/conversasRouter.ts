@@ -7,8 +7,42 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import * as conversaDb from "../db/conversaDb";
 import { runExcambia } from "../agent/orchestrator";
+import type { Message, MessageContent } from "../_core/llm";
 import { enrichOperacaoFromChat } from "../services/gapEnrichmentService";
 import { TRPCError } from "@trpc/server";
+
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+
+/**
+ * Baixa o arquivo anexado e monta o bloco de conteúdo multimodal (base64) que o
+ * Claude consegue ler — `document` para PDF, `image` para imagens. Mesmo padrão
+ * usado na extração de proformas. Best-effort: erro vira null (segue só texto).
+ */
+async function buildAttachmentBlock(att: {
+  url: string;
+  mimeType: string;
+  name: string;
+}): Promise<MessageContent | null> {
+  try {
+    const resp = await fetch(att.url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = Buffer.from(await resp.arrayBuffer()).toString("base64");
+
+    if (att.mimeType === "application/pdf") {
+      return {
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data },
+      };
+    }
+    const media = (IMAGE_TYPES as readonly string[]).includes(att.mimeType)
+      ? (att.mimeType as (typeof IMAGE_TYPES)[number])
+      : "image/jpeg";
+    return { type: "image", source: { type: "base64", media_type: media, data } };
+  } catch (err) {
+    console.error("[conversas.send] falha ao ler anexo:", err);
+    return null;
+  }
+}
 
 export const conversasRouter = router({
   /** Lista conversas do usuário (operações e avulsas) */
@@ -88,12 +122,41 @@ export const conversasRouter = router({
       })),
       operacaoId: z.number().optional(),
       estagio: z.string().optional(),
+      // Anexo opcional (PDF/imagem) já enviado ao storage. Quando presente, o
+      // arquivo é lido e encaminhado ao agente junto da última mensagem.
+      attachment: z
+        .object({ url: z.string(), mimeType: z.string(), name: z.string() })
+        .optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      // Adiciona a mensagem do usuário ao histórico
+      // Adiciona a mensagem do usuário ao histórico (com marcador do anexo).
       const userMsg = input.messages[input.messages.length - 1];
       if (userMsg?.role === "user") {
-        await conversaDb.addMessage(input.conversaId, "user", userMsg.content);
+        const persisted = input.attachment
+          ? `📎 ${input.attachment.name}${userMsg.content ? `\n\n${userMsg.content}` : ""}`
+          : userMsg.content;
+        await conversaDb.addMessage(input.conversaId, "user", persisted);
+      }
+
+      // Monta as mensagens para o agente; se houver anexo, transforma a última
+      // mensagem do usuário em conteúdo multimodal (texto + arquivo) para o LLM.
+      const agentMessages: Message[] = input.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+      if (input.attachment && agentMessages.length > 0) {
+        const block = await buildAttachmentBlock(input.attachment);
+        const lastIdx = agentMessages.length - 1;
+        const lastText = (agentMessages[lastIdx].content as string) || "";
+        if (block) {
+          const text =
+            lastText.trim() ||
+            "Segue o arquivo em anexo. Leia o documento e conduza conforme a operação.";
+          agentMessages[lastIdx] = {
+            role: "user",
+            content: [{ type: "text", text }, block],
+          };
+        }
       }
 
       // PILAR 2 — Enriquecimento automático: extrai dados que a pessoa forneceu
@@ -114,12 +177,12 @@ export const conversasRouter = router({
         }
       }
 
-      // Chama o orquestrador
+      // Chama o orquestrador (com a mensagem multimodal quando houver anexo)
       const result = await runExcambia({
         userId: ctx.user.id,
         operacaoId: input.operacaoId,
         estagio: input.estagio,
-        messages: input.messages,
+        messages: agentMessages,
       });
 
       // Persiste a resposta

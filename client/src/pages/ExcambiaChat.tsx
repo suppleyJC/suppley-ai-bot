@@ -12,9 +12,23 @@
  */
 import React, { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
-import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check } from "lucide-react";
+import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2 } from "lucide-react";
 import { Streamdown } from "streamdown";
+
+const ALLOWED_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+const MAX_UPLOAD_BYTES = 16 * 1024 * 1024; // 16MB
+
+/** Converte um File em base64 puro (sem o prefixo data:). */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(((reader.result as string) || "").split(",")[1] ?? "");
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 // Ícone oficial SUPPLEY (símbolo recortado do logo, fundo transparente)
 const LogoIcon = ({ className }: { className?: string }) => (
@@ -28,18 +42,25 @@ export default function ExcambiaChat() {
     () => typeof window !== "undefined" && window.innerWidth < 640,
   );
   const [draft, setDraft] = useState("");
+  // Mensagens do usuário exibidas na hora (optimistic UI), antes da resposta.
+  const [optimistic, setOptimistic] = useState<Array<{ id: string; content: string }>>([]);
+  const [uploading, setUploading] = useState(false);
   const utils = trpc.useUtils();
 
   const create = trpc.conversas.create.useMutation({
     onSuccess: ({ id }) => { setActiveId(id); utils.conversas.list.invalidate(); },
   });
   const send = trpc.conversas.send.useMutation();
+  const upload = trpc.calculations.uploadQuotation.useMutation();
   const { data: conv } = trpc.conversas.get.useQuery(
     { id: activeId! }, { enabled: activeId != null },
   );
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight); }, [conv?.mensagens]);
+  useEffect(() => {
+    scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
+  }, [conv?.mensagens, optimistic, send.isPending]);
 
   // Auto-grow do composer: cresce com o texto até um teto e então rola.
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -52,40 +73,95 @@ export default function ExcambiaChat() {
 
   async function handleNew() { create.mutate({}); }
 
+  /** Histórico aceito pelo orquestrador (exclui "tool"). */
+  function buildHistory() {
+    return mensagens
+      .filter((m: any) => m.role === "user" || m.role === "assistant" || m.role === "system")
+      .map((m: any) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
+  }
+
+  async function ensureConversa(titulo: string): Promise<{ id: number; operacaoId?: number }> {
+    if (activeId) return { id: activeId, operacaoId: conv?.operacaoId ?? undefined };
+    const res = await create.mutateAsync({ titulo: titulo.slice(0, 40) });
+    setActiveId(res.id);
+    return { id: res.id, operacaoId: undefined };
+  }
+
   async function handleSend() {
     const text = draft.trim();
     if (!text) return;
     setDraft("");
+    const optId = `opt-${Date.now()}`;
+    setOptimistic((prev) => [...prev, { id: optId, content: text }]);
     try {
-      let id = activeId;
-      let operacaoId = conv?.operacaoId;
-      if (!id) {
-        const res = await create.mutateAsync({ titulo: text.slice(0, 40) });
-        id = res.id; setActiveId(id);
-        operacaoId = undefined;
-      }
-      // Histórico só com papéis aceitos pelo orquestrador (exclui "tool")
-      const history = mensagens
-        .filter((m: any) => m.role === "user" || m.role === "assistant" || m.role === "system")
-        .map((m: any) => ({ role: m.role, content: m.content }));
-      const messages = [...history, { role: "user" as const, content: text }];
-
+      const { id, operacaoId } = await ensureConversa(text);
+      const messages = [...buildHistory(), { role: "user" as const, content: text }];
       await send.mutateAsync({
-        conversaId: id!,
+        conversaId: id,
         messages,
         ...(operacaoId ? { operacaoId } : {}),
       });
-
-      utils.conversas.get.invalidate({ id: id! });
+      await utils.conversas.get.invalidate({ id });
       utils.conversas.list.invalidate();
     } catch (err: any) {
       console.error("Falha ao enviar mensagem:", err);
       setDraft(text); // devolve o texto para não perder a mensagem
+      toast.error("Não foi possível enviar a mensagem. Tente novamente.");
+    } finally {
+      setOptimistic((prev) => prev.filter((o) => o.id !== optId));
+    }
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permite re-selecionar o mesmo arquivo
+    if (!file) return;
+
+    if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
+      toast.error("Tipo não suportado. Envie PDF, JPEG, PNG ou WebP.");
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error("Arquivo muito grande (máximo 16MB).");
+      return;
+    }
+
+    const text = draft.trim();
+    setDraft("");
+    const optId = `opt-${Date.now()}`;
+    setOptimistic((prev) => [
+      ...prev,
+      { id: optId, content: `📎 ${file.name}${text ? `\n\n${text}` : ""}` },
+    ]);
+    setUploading(true);
+    try {
+      const { id, operacaoId } = await ensureConversa(file.name);
+      const base64 = await fileToBase64(file);
+      const up = await upload.mutateAsync({
+        fileName: file.name,
+        fileData: base64,
+        contentType: file.type,
+      });
+      const messages = [...buildHistory(), { role: "user" as const, content: text }];
+      await send.mutateAsync({
+        conversaId: id,
+        messages,
+        ...(operacaoId ? { operacaoId } : {}),
+        attachment: { url: up.fileUrl, mimeType: file.type, name: file.name },
+      });
+      await utils.conversas.get.invalidate({ id });
+      utils.conversas.list.invalidate();
+    } catch (err: any) {
+      console.error("Falha ao enviar anexo:", err);
+      toast.error("Não foi possível processar o anexo. Tente novamente.");
+    } finally {
+      setUploading(false);
+      setOptimistic((prev) => prev.filter((o) => o.id !== optId));
     }
   }
 
   const mensagens = conv?.mensagens ?? [];
-  const vazio = mensagens.length === 0;
+  const vazio = mensagens.length === 0 && optimistic.length === 0;
 
   return (
     <div className="relative flex h-full">
@@ -114,7 +190,10 @@ export default function ExcambiaChat() {
               {mensagens.map((m: any) => (
                 <Message key={m.id} role={m.role} content={m.content} />
               ))}
-              {send.isPending && <Message role="assistant" content="…" pending />}
+              {optimistic.map((o) => (
+                <Message key={o.id} role="user" content={o.content} />
+              ))}
+              {(send.isPending || uploading) && <Message role="assistant" content="…" pending />}
             </div>
           )}
         </div>
@@ -123,8 +202,25 @@ export default function ExcambiaChat() {
         <div className="flex w-full justify-center bg-gradient-to-t from-[#faf9fc] px-3 sm:px-6 pb-4 sm:pb-6 pt-2.5 sm:pt-3.5">
           <div className="w-full max-w-full sm:max-w-2xl lg:max-w-3xl">
             <div className="flex items-end gap-2 sm:gap-2.5 rounded-[18px] border border-[#e2def0] bg-white p-2 sm:p-2.5 pl-3 sm:pl-4 shadow-[0_4px_20px_rgba(49,18,96,0.05)] transition-colors focus-within:border-violet-500 focus-within:shadow-[0_4px_24px_rgba(104,42,186,0.12)]">
-              <button className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 flex-shrink-0">
-                <Paperclip className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading || send.isPending}
+                title="Anexar PDF ou imagem"
+                className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-violet-600 flex-shrink-0 disabled:opacity-50"
+              >
+                {uploading ? (
+                  <Loader2 className="h-4 w-4 sm:h-[18px] sm:w-[18px] animate-spin" />
+                ) : (
+                  <Paperclip className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
+                )}
               </button>
               <textarea
                 ref={taRef}

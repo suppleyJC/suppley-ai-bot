@@ -38,6 +38,7 @@ IDEMPOTENT_MIGRATIONS=(
   "drizzle/0027_add_quotation_date_to_proformas.sql"
   "drizzle/0028_widen_product_name_columns.sql"
   "drizzle/0029_add_description_to_proforma_items.sql"
+  "drizzle/0030_add_classification_to_products.sql"
 )
 
 echo "╔════════════════════════════════════════════════════════════╗"

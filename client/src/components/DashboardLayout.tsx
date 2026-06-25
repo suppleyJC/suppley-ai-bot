@@ -115,6 +115,9 @@ function DashboardLayoutContent({
   // dando atenção total às conversas; ao SAIR, ela reabre. Só dispara na troca de
   // rota — assim o usuário ainda pode abrir/fechar manualmente dentro da página.
   const isExcambia = location.startsWith("/excambia");
+  // Rotas do chat (conversa-primeiro) que devem ocupar a tela inteira, sem o
+  // padding/scroll padrão do conteúdo. O mercado (/excambia/market) NÃO entra.
+  const isChatFullBleed = location === "/" || location === "/excambia";
   const wasExcambia = useRef(false);
   useEffect(() => {
     if (isMobile) return;
@@ -367,7 +370,19 @@ function DashboardLayoutContent({
           </div>
         )}
         <main className="flex-1 overflow-hidden flex flex-col">
-          <div className="flex-1 overflow-auto p-6 md:p-8">{children}</div>
+          {/* A Excambia (chat) ocupa a altura toda e gerencia sua própria rolagem
+              interna — sem padding nem overflow externos, que criavam a "coluna em
+              branco" e faziam o painel de conversas rolar junto. Demais páginas
+              mantêm o respiro padrão. */}
+          <div
+            className={
+              isChatFullBleed
+                ? "flex-1 min-h-0 overflow-hidden"
+                : "flex-1 overflow-auto p-6 md:p-8"
+            }
+          >
+            {children}
+          </div>
         </main>
       </SidebarInset>
     </>
