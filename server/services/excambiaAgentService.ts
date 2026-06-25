@@ -281,7 +281,21 @@ export async function analyzeDocument(
   try {
     if (mimeType === "application/pdf") {
       console.log("[EXCAMBIA] Analisando PDF:", documentUrl);
-      
+
+      let base64Data: string;
+      try {
+        const fileResponse = await fetch(documentUrl);
+        if (!fileResponse.ok) {
+          throw new Error(`HTTP ${fileResponse.status} ao baixar PDF`);
+        }
+        const arrayBuffer = await fileResponse.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        base64Data = buffer.toString("base64");
+      } catch (downloadError) {
+        console.error("[EXCAMBIA] Erro ao baixar PDF:", downloadError);
+        return `Não consegui baixar o documento. Verifique se a URL é acessível.`;
+      }
+
       const response = await invokeLLM({
         messages: [
           { role: "system", content: EXCAMBIA_SYSTEM_PROMPT },
@@ -289,10 +303,11 @@ export async function analyzeDocument(
             role: "user",
             content: [
               {
-                type: "file_url",
-                file_url: {
-                  url: documentUrl,
-                  mime_type: "application/pdf",
+                type: "document",
+                source: {
+                  type: "base64",
+                  media_type: "application/pdf",
+                  data: base64Data,
                 },
               },
               {
@@ -308,7 +323,7 @@ export async function analyzeDocument(
       if (typeof content === "string" && content.length > 50) {
         return content;
       }
-      
+
       return `Recebi o documento **${documentUrl.split('/').pop()}** mas não consegui processar seu conteúdo diretamente.\n\nPara melhor análise, você pode:\n1. Copiar e colar o conteúdo do PDF no chat\n2. Usar a função de upload na página **Novo Cálculo** que extrai automaticamente os produtos\n\nComo posso ajudar com sua cotação?`;
     }
 

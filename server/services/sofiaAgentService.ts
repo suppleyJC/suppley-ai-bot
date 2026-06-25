@@ -193,7 +193,21 @@ export async function analyzeDocument(
     if (mimeType === "application/pdf") {
       console.log("[SOFIA] Analisando PDF:", documentUrl);
       
-      // Tentar usar file_url diretamente com o LLM
+      // Download PDF e converter para base64
+      let base64Data: string;
+      try {
+        const fileResponse = await fetch(documentUrl);
+        if (!fileResponse.ok) {
+          throw new Error(`HTTP ${fileResponse.status} ao baixar PDF`);
+        }
+        const arrayBuffer = await fileResponse.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        base64Data = buffer.toString("base64");
+      } catch (downloadError) {
+        console.error("[SOFIA] Erro ao baixar PDF:", downloadError);
+        return `Não consegui baixar o documento. Verifique se a URL é acessível.`;
+      }
+
       const response = await invokeLLM({
         messages: [
           { role: "system", content: SOFIA_SYSTEM_PROMPT },
@@ -201,10 +215,11 @@ export async function analyzeDocument(
             role: "user",
             content: [
               {
-                type: "file_url",
-                file_url: {
-                  url: documentUrl,
-                  mime_type: "application/pdf",
+                type: "document",
+                source: {
+                  type: "base64",
+                  media_type: "application/pdf",
+                  data: base64Data,
                 },
               },
               {

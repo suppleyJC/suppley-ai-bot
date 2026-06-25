@@ -99,13 +99,36 @@ IMPORTANTE:
 ${hints?.supplierName ? `- Fornecedor esperado: ${hints.supplierName}` : ""}
 ${hints?.expectedProducts?.length ? `- Produtos esperados: ${hints.expectedProducts.join(", ")}` : ""}`;
 
+  let base64Data: string;
+  try {
+    const fileResponse = await fetch(fileUrl);
+    if (!fileResponse.ok) {
+      throw new Error(`HTTP ${fileResponse.status} ao baixar arquivo`);
+    }
+    const arrayBuffer = await fileResponse.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    base64Data = buffer.toString("base64");
+  } catch (downloadError) {
+    throw new Error(`Erro ao baixar arquivo: ${downloadError instanceof Error ? downloadError.message : String(downloadError)}`);
+  }
+
+  const mediaType = mimeType === "application/pdf" ? "application/pdf" : "image/jpeg";
+  const contentType = mimeType === "application/pdf" ? "document" : "image";
+
   const result = await invokeLLM({
     messages: [
       {
         role: "user",
         content: [
           { type: "text", text: prompt },
-          { type: "file_url", file_url: { url: fileUrl, mime_type: mimeType as any } },
+          {
+            type: contentType as any,
+            source: {
+              type: "base64",
+              media_type: mediaType,
+              data: base64Data,
+            },
+          } as any,
         ],
       },
     ],

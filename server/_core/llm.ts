@@ -23,7 +23,25 @@ export type FileContent = {
   };
 };
 
-export type MessageContent = string | TextContent | ImageContent | FileContent;
+export type DocumentContent = {
+  type: "document";
+  source: {
+    type: "base64";
+    media_type: "application/pdf" | "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+    data: string;
+  };
+};
+
+export type ImageBase64Content = {
+  type: "image";
+  source: {
+    type: "base64";
+    media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+    data: string;
+  };
+};
+
+export type MessageContent = string | TextContent | ImageContent | FileContent | DocumentContent | ImageBase64Content;
 
 export type Message = {
   role: Role;

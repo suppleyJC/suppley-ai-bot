@@ -32,14 +32,16 @@ export interface ExtractedQuotation {
  */
 export async function extractQuotationFromPdfDirect(dataUrl: string): Promise<ExtractedQuotation> {
   console.log("[QuotationExtractor] Extracting data from PDF data URL, length:", dataUrl.length);
-  
-  // Validate data URL
+
+  // Validate data URL and extract base64
   if (!dataUrl || !dataUrl.startsWith("data:application/pdf;base64,")) {
     throw new Error("Data URL do PDF inválida");
   }
-  
+
+  const base64Data = dataUrl.replace("data:application/pdf;base64,", "");
+
   try {
-    console.log("[QuotationExtractor] Calling LLM with data URL...");
+    console.log("[QuotationExtractor] Calling LLM with base64 PDF...");
     const response = await invokeLLM({
       messages: [
         {
@@ -110,10 +112,11 @@ Retorne os dados em formato JSON com a seguinte estrutura:
               text: "Analise este PDF de cotação e extraia todas as informações dos produtos e valores. Retorne os dados em formato JSON estruturado."
             },
             {
-              type: "file_url",
-              file_url: {
-                url: dataUrl,
-                mime_type: "application/pdf"
+              type: "document",
+              source: {
+                type: "base64",
+                media_type: "application/pdf",
+                data: base64Data
               }
             }
           ]
