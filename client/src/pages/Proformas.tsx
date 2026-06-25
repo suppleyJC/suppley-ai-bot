@@ -29,6 +29,7 @@ type Draft = {
   paymentTerms: string;
   leadTimeDays?: number;
   moq?: number;
+  quotationDate?: string; // YYYY-MM-DD
   items: ItemDraft[];
   confidence?: number;
   fileUrl?: string;
@@ -43,6 +44,7 @@ const emptyDraft: Draft = {
   currency: "USD",
   incoterm: "FOB",
   paymentTerms: "",
+  quotationDate: undefined,
   items: [],
 };
 
@@ -108,6 +110,7 @@ export default function Proformas() {
         paymentTerms: extracted.paymentTerms || "",
         leadTimeDays: extracted.leadTimeDays ?? undefined,
         moq: extracted.moq ?? undefined,
+        quotationDate: extracted.quotationDate ?? undefined,
         items: (extracted.items || []).map((it) => ({
           productName: it.productName,
           productNameOriginal: it.productNameOriginal || undefined,
@@ -157,6 +160,7 @@ export default function Proformas() {
         paymentTerms: draft.paymentTerms || undefined,
         leadTimeDays: draft.leadTimeDays,
         moq: draft.moq,
+        quotationDate: draft.quotationDate || undefined,
         fileUrl: draft.fileUrl,
         fileName: draft.fileName,
         extractionConfidence: draft.confidence,
@@ -285,6 +289,13 @@ export default function Proformas() {
             <div>
               <h3 className="text-sm font-semibold mb-3">Condições comerciais</h3>
               <div className="grid gap-3 md:grid-cols-4">
+                <Field label="Data da proforma">
+                  <Input
+                    type="date"
+                    value={draft.quotationDate ?? ""}
+                    onChange={(e) => setDraft({ ...draft, quotationDate: e.target.value || undefined })}
+                  />
+                </Field>
                 <Field label="Moeda">
                   <Input value={draft.currency} onChange={(e) => setDraft({ ...draft, currency: e.target.value.toUpperCase() })} />
                 </Field>

@@ -56,6 +56,7 @@ export const proformaRouter = router({
         leadTimeDays: z.number().optional(),
         moq: z.number().optional(),
         totalFobCents: z.number().optional(),
+        quotationDate: z.string().optional(), // ISO 8601: YYYY-MM-DD
         items: z.array(itemSchema).min(1, "Inclua ao menos um item"),
         fileUrl: z.string().optional(),
         fileName: z.string().optional(),

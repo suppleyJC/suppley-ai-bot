@@ -1878,6 +1878,7 @@ export const proformas = mysqlTable("proformas", {
   leadTimeDays: int("leadTimeDays"),
   moq: int("moq"),
   totalFobCents: bigint("totalFobCents", { mode: "number" }),
+  quotationDate: timestamp("quotationDate"),
   validUntil: timestamp("validUntil"),
 
   // Vínculo opcional a operação/RFQ (proforma pode ser avulsa)

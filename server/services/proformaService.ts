@@ -38,6 +38,7 @@ export interface ProformaExtraction {
   leadTimeDays?: number;
   moq?: number;
   totalFobCents?: number;
+  quotationDate?: string; // ISO 8601 date string (YYYY-MM-DD)
   items: ProformaItemInput[];
   confidence: number; // 0-100
 }
@@ -61,6 +62,7 @@ const EXTRACTION_SCHEMA = {
       leadTimeDays: { type: ["number", "null"], description: "Prazo de produção em dias" },
       moq: { type: ["number", "null"], description: "Quantidade mínima de pedido" },
       totalFobCents: { type: ["number", "null"], description: "Valor total FOB em centavos da moeda" },
+      quotationDate: { type: ["string", "null"], description: "Data da proforma/orçamento em formato YYYY-MM-DD (ex: 2026-06-25)" },
       items: {
         type: "array",
         items: {
@@ -94,8 +96,9 @@ export async function extractProformaFromFile(
 
 Extraia os dados com máxima precisão:
 1. Fornecedor/fabricante: nome, país, email, telefone
-2. Cada item: nome do produto, NCM (se houver), quantidade, unidade, preço unitário
-3. Moeda, incoterm (FOB/CIF/EXW/DDP), condições de pagamento, lead time, MOQ, total FOB
+2. Data do documento: mês, dia, ano (quando disponível)
+3. Cada item: nome do produto, NCM (se houver), quantidade, unidade, preço unitário
+4. Moeda, incoterm (FOB/CIF/EXW/DDP), condições de pagamento, lead time, MOQ, total FOB
 
 TRADUÇÃO DOS PRODUTOS (importante):
 - "productName": traduza o nome do produto para PORTUGUÊS DO BRASIL, preservando medidas, especificações técnicas e unidades (ex: "Common Nail 17*27 Polished, 1kg/bag" → "Prego comum 17x27 polido, 1kg/saco"). Use a terminologia comercial brasileira correta.
@@ -103,6 +106,7 @@ TRADUÇÃO DOS PRODUTOS (importante):
 
 IMPORTANTE:
 - Preços SEMPRE em centavos (multiplique por 100). Ex: USD 12.50 → 1250.
+- "quotationDate": extraia a data da proforma em formato YYYY-MM-DD (ex: 2026-06-25). Se não encontrar data explícita, retorne null.
 - NCM: só preencha "ncmCode" se a NCM estiver EXPLÍCITA no documento. Caso contrário deixe null — a classificação será feita por um motor certificado depois.
 - Se um campo não existir, retorne null.
 - "confidence" = sua certeza geral (0-100).
@@ -215,6 +219,7 @@ export async function createProforma(
     leadTimeDays?: number;
     moq?: number;
     totalFobCents?: number;
+    quotationDate?: string;
     items: ProformaItemInput[];
     fileUrl?: string;
     fileName?: string;
@@ -242,6 +247,7 @@ export async function createProforma(
     leadTimeDays: data.leadTimeDays,
     moq: data.moq,
     totalFobCents: data.totalFobCents,
+    quotationDate: data.quotationDate ? new Date(data.quotationDate) : undefined,
     fileUrl: data.fileUrl,
     fileName: data.fileName,
     documentoId: data.documentoId,
