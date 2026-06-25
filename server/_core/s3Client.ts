@@ -13,21 +13,23 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export class S3StorageClient {
   private client: S3Client | null = null;
-  private bucket: string;
-  private region: string;
 
-  constructor() {
-    this.bucket = process.env.AWS_S3_BUCKET || "";
-    this.region = process.env.AWS_REGION || "us-east-1";
-
-    if (!this.bucket) {
-      throw new Error(
-        "AWS_S3_BUCKET environment variable not configured"
-      );
+  /**
+   * Resolve o bucket de forma preguiçosa (lazy): só valida quando o S3 é
+   * realmente usado, não ao importar o módulo. Isso evita que ambientes sem
+   * AWS configurado (testes, dev sem storage) quebrem só por importar storage.
+   */
+  private getBucket(): string {
+    const bucket = process.env.AWS_S3_BUCKET || "";
+    if (!bucket) {
+      throw new Error("AWS_S3_BUCKET environment variable not configured");
     }
+    return bucket;
   }
 
   private getClient(): S3Client {
+    const region = process.env.AWS_REGION || "us-east-1";
+
     if (!this.client) {
       const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
       const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
@@ -39,7 +41,7 @@ export class S3StorageClient {
       }
 
       this.client = new S3Client({
-        region: this.region,
+        region,
         credentials: {
           accessKeyId,
           secretAccessKey,
@@ -62,7 +64,7 @@ export class S3StorageClient {
 
     try {
       const command = new PutObjectCommand({
-        Bucket: this.bucket,
+        Bucket: this.getBucket(),
         Key: key,
         Body: bufferBody,
         ContentType: contentType,
@@ -93,7 +95,7 @@ export class S3StorageClient {
   ): Promise<string> {
     try {
       const command = new GetObjectCommand({
-        Bucket: this.bucket,
+        Bucket: this.getBucket(),
         Key: key,
       });
 
@@ -113,7 +115,7 @@ export class S3StorageClient {
   async delete(key: string): Promise<void> {
     try {
       const command = new DeleteObjectCommand({
-        Bucket: this.bucket,
+        Bucket: this.getBucket(),
         Key: key,
       });
 

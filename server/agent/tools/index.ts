@@ -1,78 +1,35 @@
 /**
  * Registry central de ferramentas da Excambia.
  *
- * Junta todas as tools num só lugar. O orquestrador pede:
+ * Combina as tools-base (capacidades diretas, em ./registry) com os ESPECIALISTAS
+ * (sub-agentes expostos como tools, em ../specialists). O orquestrador pede:
  *   - getToolSchemas(estagio) → schemas para passar ao invokeLLM
- *   - runTool(name, args, ctx) → executa a tool escolhida pelo LLM
+ *   - runTool(name, args, ctx) → executa a tool/especialista escolhido pelo LLM
  *
- * Para adicionar uma nova ferramenta: implemente em ./suaTool.ts e registre
- * no array ALL_TOOLS abaixo. Nada mais muda.
+ * Para adicionar uma capacidade direta: implemente em ./suaTool.ts e registre em
+ * BASE_TOOLS (registry.ts). Para adicionar um especialista: declare em
+ * specialists/definitions.ts. Nada mais muda aqui.
  */
 import type { AgentTool, ToolContext, ToolResult } from "./types";
 import type { Tool } from "../../_core/llm";
+import { BASE_TOOLS, schemasFor, runFrom } from "./registry";
+import { SPECIALIST_TOOLS } from "../specialists";
 
-import { montarCalculoTool } from "./montarCalculo";
-import { gerarRelatorioTool } from "./gerarRelatorio";
-import { classificarNcmTool } from "./classificarNcm";
-import { compararCotacoesTool } from "./compararCotacoes";
-import { enviarRfqTool } from "./enviarRfq";
-import { registrarCotacaoTool } from "./registrarCotacao";
-import { registrarMarcoProducaoTool } from "./registrarMarcoProducao";
-import { registrarNacionalizacaoTool } from "./registrarNacionalizacao";
-import { lancarFinanceiroTool } from "./lancarFinanceiroTool";
-import { buscarAtivoTool, compararOrigemTool, benchmarkMercadoTool } from "./fase5Tools";
-import { coletarDadosFaltantesTool } from "./coletar_dados_faltantes";
-
-const ALL_TOOLS: AgentTool[] = [
-  montarCalculoTool,
-  gerarRelatorioTool,
-  classificarNcmTool,
-  compararCotacoesTool,
-  enviarRfqTool,
-  registrarCotacaoTool,
-  registrarMarcoProducaoTool,
-  registrarNacionalizacaoTool,
-  lancarFinanceiroTool,
-  // Completude — detecta gaps e coleta dados
-  coletarDadosFaltantesTool,
-  // Fase 5 — buscas (lado leitura do ciclo de inteligência)
-  buscarAtivoTool,
-  compararOrigemTool,
-  benchmarkMercadoTool,
-];
-
-const byName = new Map<string, AgentTool>(ALL_TOOLS.map((t) => [t.name, t]));
+/** Todas as tools que a Excambia enxerga: capacidades diretas + especialistas. */
+const ALL_TOOLS: AgentTool[] = [...BASE_TOOLS, ...SPECIALIST_TOOLS];
 
 /** Schemas das tools disponíveis para um estágio (ou todas, se estagio undefined). */
 export function getToolSchemas(estagio?: string): Tool[] {
-  return ALL_TOOLS
-    .filter((t) => !estagio || !t.estagios || t.estagios.includes(estagio))
-    .map((t) => t.schema);
+  return schemasFor(ALL_TOOLS, estagio);
 }
 
 /** Executa uma tool pelo nome, com tratamento de erro padronizado. */
-export async function runTool(
+export function runTool(
   name: string,
   args: Record<string, unknown>,
   ctx: ToolContext,
 ): Promise<ToolResult> {
-  const tool = byName.get(name);
-  if (!tool) {
-    return { ok: false, summary: `Ferramenta "${name}" não encontrada.`, error: "tool_inexistente" };
-  }
-  // valida estágio
-  if (tool.estagios && ctx.estagio && !tool.estagios.includes(ctx.estagio)) {
-    return {
-      ok: false,
-      summary: `A ferramenta "${name}" não se aplica ao estágio atual.`,
-      error: "estagio_invalido",
-    };
-  }
-  try {
-    return await tool.run(args, ctx);
-  } catch (e: any) {
-    return { ok: false, summary: "Erro ao executar a ferramenta.", error: String(e?.message ?? e) };
-  }
+  return runFrom(ALL_TOOLS, name, args, ctx);
 }
 
 export { ALL_TOOLS };
