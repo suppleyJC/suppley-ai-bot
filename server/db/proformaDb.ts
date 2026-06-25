@@ -88,3 +88,84 @@ export async function countProformasByUser(userId: number): Promise<number> {
   const rows = await db.select({ id: proformas.id }).from(proformas).where(eq(proformas.userId, userId));
   return rows.length;
 }
+
+/**
+ * Item de proforma com o contexto da proforma (fornecedor, data, moeda).
+ * É a base do histórico cronológico de preços (evolução por produto/fornecedor).
+ */
+export interface ProformaItemWithContext {
+  itemId: number;
+  proformaId: number;
+  numero: string | null;
+  industriaId: number | null;
+  supplierName: string | null;
+  supplierCountry: string | null;
+  currency: string;
+  incoterm: string | null;
+  /** Data efetiva da cotação: quotationDate quando existir, senão createdAt. */
+  quotationDate: Date;
+  productName: string;
+  ncmCode: string | null;
+  quantity: number;
+  unit: string;
+  unitPriceCents: number;
+}
+
+/**
+ * Retorna todos os itens de proforma do usuário com o contexto da proforma,
+ * em ordem cronológica (mais antigo → mais recente). Base para as métricas de
+ * evolução de preço por produto e por fornecedor.
+ */
+export async function getProformaItemsWithContext(
+  userId: number,
+  filters?: { industriaId?: number }
+): Promise<ProformaItemWithContext[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [eq(proformas.userId, userId)];
+  if (filters?.industriaId) conditions.push(eq(proformas.industriaId, filters.industriaId));
+
+  const rows = await db
+    .select({
+      itemId: proformaItems.id,
+      proformaId: proformas.id,
+      numero: proformas.numero,
+      industriaId: proformas.industriaId,
+      supplierName: proformas.supplierName,
+      supplierCountry: proformas.supplierCountry,
+      currency: proformas.currency,
+      incoterm: proformas.incoterm,
+      quotationDate: proformas.quotationDate,
+      createdAt: proformas.createdAt,
+      productName: proformaItems.productName,
+      ncmCode: proformaItems.ncmCode,
+      quantity: proformaItems.quantity,
+      unit: proformaItems.unit,
+      unitPriceCents: proformaItems.unitPriceCents,
+    })
+    .from(proformaItems)
+    .innerJoin(proformas, eq(proformaItems.proformaId, proformas.id))
+    .where(and(...conditions));
+
+  const mapped: ProformaItemWithContext[] = rows.map((r) => ({
+    itemId: r.itemId,
+    proformaId: r.proformaId,
+    numero: r.numero,
+    industriaId: r.industriaId,
+    supplierName: r.supplierName,
+    supplierCountry: r.supplierCountry,
+    currency: r.currency,
+    incoterm: r.incoterm,
+    quotationDate: r.quotationDate ?? r.createdAt,
+    productName: r.productName,
+    ncmCode: r.ncmCode,
+    quantity: r.quantity,
+    unit: r.unit,
+    unitPriceCents: Number(r.unitPriceCents),
+  }));
+
+  // Ordena cronologicamente (mais antigo primeiro) para séries temporais.
+  mapped.sort((a, b) => a.quotationDate.getTime() - b.quotationDate.getTime());
+  return mapped;
+}

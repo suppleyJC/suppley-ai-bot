@@ -7,6 +7,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import * as proformaService from "../services/proformaService";
+import * as priceHistoryService from "../services/proformaPriceHistoryService";
 
 const itemSchema = z.object({
   productName: z.string().min(1),
@@ -99,5 +100,20 @@ export const proformaRouter = router({
       const detail = await proformaService.getProformaDetail(ctx.user.id, input.id);
       if (!detail) throw new TRPCError({ code: "NOT_FOUND" });
       return detail;
+    }),
+
+  // 6) Histórico cronológico de preço de um produto (todos os fornecedores)
+  //    + custo nacionalizado estimado ("posto no Brasil há época")
+  productPriceHistory: protectedProcedure
+    .input(z.object({ productName: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      return priceHistoryService.getProductPriceHistory(ctx.user.id, input.productName);
+    }),
+
+  // 7) Catálogo do fornecedor: produtos cotados + reajustes ao longo do tempo
+  supplierCatalog: protectedProcedure
+    .input(z.object({ industriaId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      return priceHistoryService.getSupplierCatalog(ctx.user.id, input.industriaId);
     }),
 });

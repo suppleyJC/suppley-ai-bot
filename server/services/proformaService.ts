@@ -7,7 +7,6 @@
  *     • itens/preços → products (Ativos & Insumos)
  */
 import * as db from "../db";
-import { createSupplierPrice } from "../db/pricesDb";
 import { invokeLLM } from "../_core/llm";
 import { suggestNCMWithAI, suggestNCMBatch } from "./ncmService";
 import type { InsertProforma, InsertProformaItem } from "../../drizzle/schema";
@@ -337,22 +336,7 @@ export async function distributeProformaToBase(
     });
   }
 
-  // Obter taxa de câmbio se necessário (para armazenar preço em BRL)
-  let exchangeRate: number | null = null;
-  let unitPriceBrlCents: number | null = null;
-
-  if (proforma.currency !== "BRL") {
-    try {
-      const rate = await db.getLatestExchangeRate(proforma.currency, "BRL");
-      if (rate) {
-        exchangeRate = rate.rate; // rate * 1000000
-      }
-    } catch (e) {
-      console.warn(`[Proforma] Falha ao obter taxa de câmbio para ${proforma.currency}:`, e);
-    }
-  }
-
-  // 2) Itens → products (Ativos & Insumos) + registrar histórico de preços
+  // 2) Itens → products (Ativos & Insumos)
   const productIds: number[] = [];
   for (const item of items) {
     let ncm = item.ncmCode || undefined;
@@ -379,39 +363,6 @@ export async function distributeProformaToBase(
     if (product) {
       productIds.push(product.id);
       await db.updateProformaItem(item.id, { productId: product.id });
-
-      // Calcular preço em BRL se houve câmbio
-      if (exchangeRate && proforma.currency !== "BRL") {
-        unitPriceBrlCents = Math.round((item.unitPriceCents * exchangeRate) / 1000000);
-      } else {
-        unitPriceBrlCents = proforma.currency === "BRL" ? item.unitPriceCents : null;
-      }
-
-      // Registrar no histórico de preços (supplierPrices) para rastreamento cronológico
-      if (industriaId) {
-        try {
-          await createSupplierPrice({
-            userId,
-            supplierId: industriaId,
-            quotationId: proformaId,
-            productName: item.productName,
-            productNameNormalized: normalizeProductName(item.productName),
-            ncmCode: ncm || undefined,
-            unitPriceCents: item.unitPriceCents,
-            currency: proforma.currency,
-            unit: item.unit || "UN",
-            unitPriceBrlCents,
-            exchangeRate,
-            incoterm: proforma.incoterm,
-            paymentTerms: proforma.paymentTerms || undefined,
-            quotationDate: proforma.quotationDate || new Date(),
-            validUntil: proforma.validUntil || undefined,
-            isActive: true,
-          } as any);
-        } catch (e) {
-          console.warn(`[Proforma] Falha ao registrar preço em histórico:`, e);
-        }
-      }
     }
   }
 
@@ -422,17 +373,6 @@ export async function distributeProformaToBase(
   });
 
   return { industriaId, productIds };
-}
-
-/**
- * Normaliza nome de produto para comparação (remove espaços, converte para minúsculas).
- */
-function normalizeProductName(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, " ") // Múltiplos espaços → um
-    .replace(/[^\w\s]/g, ""); // Remove caracteres especiais
 }
 
 // ============================================================
