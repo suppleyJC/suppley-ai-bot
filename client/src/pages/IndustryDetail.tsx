@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-import { ArrowLeft, Trash2, Plus, Star, Package, Users, Mail, Phone, MessageCircle, Globe } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, Star, Package, Users, Mail, Phone, MessageCircle, Globe, TrendingUp } from "lucide-react";
+import { PriceHistoryView } from "@/components/PriceHistoryView";
 
 const SECTORS_MAP: Record<string, string> = {
   metals: "Metais", construction: "Construção Civil", machinery: "Máquinas e Equipamentos",
@@ -31,6 +32,7 @@ export default function IndustryDetail({ id }: { id: string }) {
   const { data: products } = trpc.industries.products.list.useQuery({ industryId });
   const { data: contacts } = trpc.industries.contacts.list.useQuery({ industryId });
   const { data: ratings } = trpc.industries.ratings.list.useQuery({ industryId });
+  const { data: priceCatalog, isLoading: loadingCatalog } = trpc.proforma.supplierCatalog.useQuery({ industriaId: industryId });
   const utils = trpc.useUtils();
 
   const addProductMutation = trpc.industries.products.create.useMutation({
@@ -203,6 +205,9 @@ export default function IndustryDetail({ id }: { id: string }) {
           <TabsTrigger value="ratings" className="gap-2">
             <Star className="h-4 w-4" /> Avaliações ({ratings?.length || 0})
           </TabsTrigger>
+          <TabsTrigger value="prices" className="gap-2">
+            <TrendingUp className="h-4 w-4" /> Histórico de Preços ({priceCatalog?.productCount || 0})
+          </TabsTrigger>
         </TabsList>
 
         {/* Produtos */}
@@ -332,6 +337,47 @@ export default function IndustryDetail({ id }: { id: string }) {
                       <div><span className="text-muted-foreground">Comunicação:</span> {r.communicationScore}/5</div>
                     </div>
                     {r.comment && <p className="text-sm mt-2 text-muted-foreground">{r.comment}</p>}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Histórico de Preços (cronológico, por produto cotado) */}
+        <TabsContent value="prices" className="mt-4">
+          <p className="text-sm text-muted-foreground mb-4">
+            Evolução dos preços cotados com este fornecedor ao longo do tempo. Cada produto é uma
+            ramificação do catálogo; reajustes e o custo estimado posto no Brasil aparecem por cotação.
+          </p>
+
+          {loadingCatalog ? (
+            <Card><CardContent className="p-8 text-center text-muted-foreground">Carregando histórico...</CardContent></Card>
+          ) : !priceCatalog?.products.length ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                Nenhuma cotação registrada para este fornecedor ainda.
+                <br />
+                <span className="text-xs">Suba proformas na aba Proformas para alimentar o histórico.</span>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {priceCatalog.products.map((prod) => (
+                <Card key={prod.productNameNormalized}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <CardTitle className="text-base">{prod.productName}</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          NCM {prod.ncmCode || "—"} · {prod.quoteCount} cotação(ões) ·{" "}
+                          {prod.unit}
+                        </p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <PriceHistoryView points={prod.points} />
                   </CardContent>
                 </Card>
               ))}

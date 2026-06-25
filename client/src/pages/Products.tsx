@@ -37,9 +37,11 @@ import {
   Barcode,
   Scale,
   Box,
-  Loader2
+  Loader2,
+  TrendingUp
 } from "lucide-react";
 import { NCMAutocomplete } from "@/components/NCMAutocomplete";
+import { PriceHistoryView } from "@/components/PriceHistoryView";
 
 interface ProductFormData {
   name: string;
@@ -389,6 +391,7 @@ export default function Products() {
                 )}
                 
                 <div className="flex gap-2 pt-3 border-t">
+                  <ProductPriceHistoryDialog productName={product.name} />
                   <Dialog open={editingId === product.id} onOpenChange={(open) => !open && setEditingId(null)}>
                     <DialogTrigger asChild>
                       <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(product)}>
@@ -445,5 +448,45 @@ export default function Products() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Botão + diálogo com a evolução cronológica de preço do produto (todos os fornecedores). */
+function ProductPriceHistoryDialog({ productName }: { productName: string }) {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading } = trpc.proforma.productPriceHistory.useQuery(
+    { productName },
+    { enabled: open }
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="flex-1">
+          <TrendingUp className="h-4 w-4 mr-1" />
+          Histórico
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Histórico de preços — {productName}</DialogTitle>
+          <DialogDescription>
+            Evolução cronológica entre fornecedores e custo estimado posto no Brasil há época.
+          </DialogDescription>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="py-8 text-center text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
+            Carregando histórico...
+          </div>
+        ) : !data || data.points.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Nenhuma cotação registrada para este produto ainda. Suba proformas para alimentar o histórico.
+          </p>
+        ) : (
+          <PriceHistoryView points={data.points} />
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
