@@ -114,7 +114,7 @@ export type InvokeResult = {
     index: number;
     message: {
       role: Role;
-      content: string | Array<TextContent | ImageContent | FileContent>;
+      content: string | Array<TextContent | ImageContent | FileContent | DocumentContent | ImageBase64Content>;
       tool_calls?: ToolCall[];
     };
     finish_reason: string | null;
@@ -145,7 +145,7 @@ const ensureArray = (
 
 const normalizeContentPart = (
   part: MessageContent
-): TextContent | ImageContent | FileContent => {
+): TextContent | ImageContent | FileContent | DocumentContent | ImageBase64Content => {
   if (typeof part === "string") {
     return { type: "text", text: part };
   }
@@ -159,6 +159,14 @@ const normalizeContentPart = (
   }
 
   if (part.type === "file_url") {
+    return part;
+  }
+
+  if (part.type === "document") {
+    return part;
+  }
+
+  if (part.type === "image") {
     return part;
   }
 
