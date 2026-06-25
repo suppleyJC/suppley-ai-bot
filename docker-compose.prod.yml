@@ -40,6 +40,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-changeme-in-production}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       VITE_APP_ID: ${VITE_APP_ID}
+      # AWS S3 — armazenamento de arquivos (uploads de PDF/imagem)
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
     ports:
       - "3000:3000"
     depends_on:
