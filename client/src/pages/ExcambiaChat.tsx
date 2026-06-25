@@ -17,8 +17,33 @@ import ConversationPanel from "@/components/excambia/ConversationPanel";
 import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2 } from "lucide-react";
 import { Streamdown } from "streamdown";
 
-const ALLOWED_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+const ALLOWED_UPLOAD_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  // Planilhas (parseadas no backend e enviadas como texto ao agente)
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+  "application/vnd.ms-excel", // .xls
+  "text/csv",
+  "application/csv",
+];
+// Alguns navegadores não preenchem file.type p/ csv/xls; validamos também pela extensão.
+const ALLOWED_UPLOAD_EXTS = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".xlsx", ".xls", ".csv"];
 const MAX_UPLOAD_BYTES = 16 * 1024 * 1024; // 16MB
+
+/** Infere o MIME type pela extensão (fallback quando o navegador não preenche file.type). */
+function mimeFromName(name: string): string {
+  const n = name.toLowerCase();
+  if (n.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (n.endsWith(".xls")) return "application/vnd.ms-excel";
+  if (n.endsWith(".csv")) return "text/csv";
+  if (n.endsWith(".pdf")) return "application/pdf";
+  if (n.endsWith(".png")) return "image/png";
+  if (n.endsWith(".webp")) return "image/webp";
+  if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
+  return "application/octet-stream";
+}
 
 /** Converte um File em base64 puro (sem o prefixo data:). */
 function fileToBase64(file: File): Promise<string> {
@@ -117,14 +142,19 @@ export default function ExcambiaChat() {
     e.target.value = ""; // permite re-selecionar o mesmo arquivo
     if (!file) return;
 
-    if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
-      toast.error("Tipo não suportado. Envie PDF, JPEG, PNG ou WebP.");
+    const nome = file.name.toLowerCase();
+    const extOk = ALLOWED_UPLOAD_EXTS.some((ext) => nome.endsWith(ext));
+    if (!ALLOWED_UPLOAD_TYPES.includes(file.type) && !extOk) {
+      toast.error("Tipo não suportado. Envie PDF, imagem (JPEG/PNG/WebP) ou planilha (XLSX/XLS/CSV).");
       return;
     }
     if (file.size > MAX_UPLOAD_BYTES) {
       toast.error("Arquivo muito grande (máximo 16MB).");
       return;
     }
+
+    // Navegadores às vezes não preenchem file.type (.csv/.xls); inferimos pela extensão.
+    const mimeType = file.type || mimeFromName(nome);
 
     const text = draft.trim();
     setDraft("");
@@ -140,14 +170,14 @@ export default function ExcambiaChat() {
       const up = await upload.mutateAsync({
         fileName: file.name,
         fileData: base64,
-        contentType: file.type,
+        contentType: mimeType,
       });
       const messages = [...buildHistory(), { role: "user" as const, content: text }];
       await send.mutateAsync({
         conversaId: id,
         messages,
         ...(operacaoId ? { operacaoId } : {}),
-        attachment: { url: up.fileUrl, mimeType: file.type, name: file.name },
+        attachment: { url: up.fileUrl, mimeType, name: file.name },
       });
       await utils.conversas.get.invalidate({ id });
       utils.conversas.list.invalidate();
@@ -205,7 +235,7 @@ export default function ExcambiaChat() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,image/jpeg,image/png,image/webp"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv,image/jpeg,image/png,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                 className="hidden"
                 onChange={handleFileUpload}
               />
@@ -213,7 +243,7 @@ export default function ExcambiaChat() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading || send.isPending}
-                title="Anexar PDF ou imagem"
+                title="Anexar PDF, imagem ou planilha (XLSX/CSV)"
                 className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-violet-600 flex-shrink-0 disabled:opacity-50"
               >
                 {uploading ? (

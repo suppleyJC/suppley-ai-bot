@@ -9,14 +9,17 @@ import * as conversaDb from "../db/conversaDb";
 import { runExcambia } from "../agent/orchestrator";
 import type { Message, MessageContent } from "../_core/llm";
 import { enrichOperacaoFromChat } from "../services/gapEnrichmentService";
+import { isSpreadsheet, spreadsheetBufferToText } from "../services/spreadsheetToText";
 import { TRPCError } from "@trpc/server";
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
 
 /**
  * Baixa o arquivo anexado e monta o bloco de conteúdo multimodal (base64) que o
- * Claude consegue ler — `document` para PDF, `image` para imagens. Mesmo padrão
- * usado na extração de proformas. Best-effort: erro vira null (segue só texto).
+ * Claude consegue ler — `document` para PDF, `image` para imagens, e para
+ * planilhas (XLSX/XLS/CSV) parseia o conteúdo e devolve como bloco de texto
+ * (o Claude não lê o binário de planilha). Mesmo padrão da extração de
+ * proformas. Best-effort: erro vira null (segue só texto).
  */
 async function buildAttachmentBlock(att: {
   url: string;
@@ -26,7 +29,21 @@ async function buildAttachmentBlock(att: {
   try {
     const resp = await fetch(att.url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = Buffer.from(await resp.arrayBuffer()).toString("base64");
+    const buffer = Buffer.from(await resp.arrayBuffer());
+
+    // Planilhas: converte para texto/Markdown antes de enviar ao LLM.
+    if (isSpreadsheet(att.mimeType, att.name)) {
+      const tabela = await spreadsheetBufferToText(buffer, {
+        name: att.name,
+        mimeType: att.mimeType,
+      });
+      return {
+        type: "text",
+        text: `Conteúdo da planilha anexada (${att.name}):\n\n${tabela}`,
+      };
+    }
+
+    const data = buffer.toString("base64");
 
     if (att.mimeType === "application/pdf") {
       return {
