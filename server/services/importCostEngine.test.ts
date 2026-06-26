@@ -208,3 +208,32 @@ describe("importCostEngine — 2º cenário: revenda do COMPRADOR (Lucro Real)",
     ).toThrow(/markup do COMPRADOR/i);
   });
 });
+
+describe("importCostEngine — finalidade: consumo próprio", () => {
+  it("consumo próprio: sem markup, sem impostos de saída, sem crédito; preço = custo", () => {
+    const { items: r, summary } = calculateImportCost(
+      { ...globals, finalidade: "consumo_proprio" }, items
+    );
+    expect(summary.finalidade).toBe("consumo_proprio");
+    // Sem crédito: custo líquido = custo total (tributos viram custo)
+    expect(r[0].recoverableCredits).toBe(0);
+    expect(r[0].netImportCost).toBeCloseTo(r[0].totalCost, 2);
+    // Sem markup nem impostos de saída: "preço" = custo líquido total
+    expect(r[0].markupFactor).toBe(1);
+    expect(r[0].salePrice).toBeCloseTo(r[0].netTotalCost, 2);
+    expect(r[0].icmsVendaValue).toBe(0);
+    expect(r[0].ipiVendaValue).toBe(0);
+    // Não calcula comprador mesmo se pedido
+    const comBuyer = calculateImportCost(
+      { ...globals, finalidade: "consumo_proprio", buyer: { icmsVendaRate: 0.12, lucroDesejado: 0.15 } },
+      items
+    );
+    expect(comBuyer.summary.buyer).toBeUndefined();
+  });
+
+  it("revenda (padrão) mantém markup e venda", () => {
+    const { summary } = calculateImportCost(globals, items);
+    expect(summary.finalidade).toBe("revenda");
+    expect(summary.salePriceTotal).toBeGreaterThan(summary.netCostTotal);
+  });
+});

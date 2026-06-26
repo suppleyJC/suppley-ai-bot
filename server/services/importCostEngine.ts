@@ -113,6 +113,18 @@ export interface EngineGlobalInput {
   /** Aplicar adicional de 0,6% da LC 224/2025 (default false = paridade contador) */
   applyCofinsLc224?: boolean;
 
+  // ---- Finalidade da importação ----
+  /**
+   * Define a NATUREZA do cálculo:
+   *  - "revenda" (padrão): o importador revende. Monta o CMV com impostos de
+   *    saída (ICMS/PIS/COFINS venda) e margem desejada → preço de venda.
+   *    Créditos recuperáveis conforme o regime.
+   *  - "consumo_proprio": o importador é o consumidor final (uso/consumo). NÃO
+   *    há revenda: sem markup, sem impostos de saída, sem margem. O entregável é
+   *    o CUSTO NACIONALIZADO cheio (os tributos viram custo, sem crédito).
+   */
+  finalidade?: "revenda" | "consumo_proprio";
+
   // ---- Venda / precificação ----
   regime: RegimeTributario;
   /** ICMS na venda (fração — ex.: 0.04 interestadual p/ importados) */
@@ -234,6 +246,8 @@ export interface EngineItemResult {
 }
 
 export interface EngineSummary {
+  /** Natureza do cálculo: revenda (com venda/margem) ou consumo próprio (só custo). */
+  finalidade: "revenda" | "consumo_proprio";
   exchangeRate: number;
   fobTotalFob: number;
   fobTotalBrl: number;
@@ -393,13 +407,17 @@ export function calculateImportCost(
     : (globals.icmsAntecipadoRate ?? DEFAULT_ICMS_ANTECIPADO);
   if (grossUpRate >= 1) throw new Error("Alíquota de gross-up do ICMS inválida");
 
-  // ---- Fator de precificação (markup divisor) ----
+  // ---- Finalidade: revenda (com venda) ou consumo próprio (só custo) ----
+  const isConsumo = globals.finalidade === "consumo_proprio";
+
+  // ---- Fator de precificação (markup divisor) — só para REVENDA ----
   const irpj = globals.irpjRate ?? DEFAULT_IRPJ;
   const csll = globals.csllRate ?? DEFAULT_CSLL;
-  const margemBruta = globals.lucroDesejado / (1 - (irpj + csll));
-  const markupFactor =
-    1 - (globals.icmsVendaRate + globals.pisVendaRate + globals.cofinsVendaRate + margemBruta);
-  if (markupFactor <= 0) {
+  const margemBruta = isConsumo ? 0 : globals.lucroDesejado / (1 - (irpj + csll));
+  const markupFactor = isConsumo
+    ? 1
+    : 1 - (globals.icmsVendaRate + globals.pisVendaRate + globals.cofinsVendaRate + margemBruta);
+  if (!isConsumo && markupFactor <= 0) {
     throw new Error(
       "Fator de markup ≤ 0: a soma de impostos de venda + margem bruta excede 100%. " +
       "Reduza o lucro desejado ou revise as alíquotas."
@@ -407,7 +425,8 @@ export function calculateImportCost(
   }
 
   // ---- 2º cenário: fator de markup do COMPRADOR (revenda Lucro Real) ----
-  const buyer = globals.buyer;
+  // Só se aplica em revenda; em consumo próprio não há cadeia de revenda.
+  const buyer = isConsumo ? undefined : globals.buyer;
   let buyerMargemBruta = 0;
   let buyerMarkupFactor = 0;
   let buyerPisVendaRate = 0;
@@ -475,8 +494,12 @@ export function calculateImportCost(
     const assessoriaValue = (royaltiesTotal * share + totalCostBefore) * assessoriaRate;
     const totalCost = totalCostBefore + assessoriaValue;
 
-    // Créditos recuperáveis por regime
+    // Créditos recuperáveis por regime. Em CONSUMO PRÓPRIO (uso final) não há
+    // revenda: os tributos viram CUSTO e não geram crédito.
     let credits = 0;
+    if (isConsumo) {
+      credits = 0;
+    } else
     switch (globals.regime) {
       case "lucro_real":
         // PIS, COFINS (não-cumulativo), IPI e ICMS são recuperáveis.
@@ -496,12 +519,13 @@ export function calculateImportCost(
     const netImportCost = totalCost - credits;
     const netTotalCost = netImportCost + pacoteLogistico * share;
 
-    // Venda
-    const salePrice = netTotalCost / markupFactor;
-    const icmsVendaValue = salePrice * globals.icmsVendaRate;
-    const ipiVendaValue = salePrice * it.ipiRate;
-    const icmsStValue = it.icmsStValue ?? 0;
-    const totalInvoiceValue = salePrice + ipiVendaValue + icmsStValue;
+    // Venda — só para REVENDA. Em consumo próprio o "preço" é o próprio custo
+    // nacionalizado (sem markup, sem impostos de saída).
+    const salePrice = isConsumo ? netTotalCost : netTotalCost / markupFactor;
+    const icmsVendaValue = isConsumo ? 0 : salePrice * globals.icmsVendaRate;
+    const ipiVendaValue = isConsumo ? 0 : salePrice * it.ipiRate;
+    const icmsStValue = isConsumo ? 0 : (it.icmsStValue ?? 0);
+    const totalInvoiceValue = isConsumo ? netTotalCost : salePrice + ipiVendaValue + icmsStValue;
 
     // Royalties na venda: total + margem sobre royalties, rateado
     const royaltiesComMargemTotal = royaltiesTotal * (1 + globals.lucroDesejado);
@@ -643,6 +667,7 @@ export function calculateImportCost(
   };
 
   const summary: EngineSummary = {
+    finalidade: isConsumo ? "consumo_proprio" : "revenda",
     exchangeRate: fx,
     fobTotalFob, fobTotalBrl, freightTotalBrl, insuranceTotalBrl, cifTotalBrl,
     iiTotal, ipiTotal, pisTotal, cofinsTotal, icmsTotal,

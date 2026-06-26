@@ -82,6 +82,9 @@ export interface EstimativaInput {
   pisImportRateOverride?: number;
   cofinsImportRateOverride?: number;
 
+  // Finalidade da importação: revenda (com venda/margem) ou consumo próprio (só custo)
+  finalidade?: "revenda" | "consumo_proprio";
+
   // Venda
   taxRegime: RegimeTributario;
   icmsVendaRate?: number;       // default 0.04 (interestadual p/ importados)
@@ -252,6 +255,7 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
     // com planilhas anteriores à LC 224/2025
     applyCofinsLc224: input.applyCofinsLc224 ?? true,
 
+    finalidade: input.finalidade ?? "revenda",
     regime: input.taxRegime,
     icmsVendaRate: input.icmsVendaRate ?? 0.04,
     pisVendaRate: input.pisVendaRate ?? saleDefaults.pis,

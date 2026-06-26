@@ -64,6 +64,22 @@ export const CALC_SCHEMA_PROPERTIES = {
       "que revende em Lucro Real) — o cenário 'x Lucro Real' do modelo. Use ao gerar a planilha " +
       "completa de trading ou quando perguntarem o preço de revenda do cliente.",
   },
+  finalidade: {
+    type: "string",
+    enum: ["revenda", "consumo_proprio"],
+    description:
+      "Finalidade da importação — MUDA o cálculo. 'revenda': o importador revende; monta o CMV " +
+      "com impostos de saída e a margem desejada → preço de venda. 'consumo_proprio': o importador " +
+      "é o consumidor final (uso próprio); NÃO há revenda — o resultado é o custo nacionalizado " +
+      "cheio, sem markup nem impostos de saída (tributos viram custo, sem crédito). " +
+      "Pergunte sempre se não souber: 'é para revender ou para consumo próprio?'.",
+  },
+  margemDesejada: {
+    type: "number",
+    description:
+      "Margem de lucro líquido desejada sobre a venda, em FRAÇÃO (ex.: 0.10 = 10%). Só vale para " +
+      "revenda. Padrão 0.05 (5%). Use o valor que a pessoa pedir — a margem é ajustável.",
+  },
 } as const;
 
 /** Normaliza o modal textual vindo do LLM para o enum do motor. */
@@ -111,5 +127,7 @@ export function mapArgsToEstimativaInput(
     modal: mapModal(args.modal),
     ttdPhase: mapTtdPhase(args.ttdFase),
     incluirComprador: args.incluirComprador === true,
+    finalidade: args.finalidade === "consumo_proprio" ? "consumo_proprio" : "revenda",
+    lucroDesejado: typeof args.margemDesejada === "number" ? args.margemDesejada : undefined,
   };
 }

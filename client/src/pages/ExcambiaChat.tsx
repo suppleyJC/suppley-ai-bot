@@ -606,7 +606,7 @@ function Message({ role, content, pending, toolResults, conversaId, operacaoId }
 /** Extrai do array de toolResults o cálculo e/ou a planilha gerada. */
 function extractCalc(toolResults: any): {
   planilha?: { url: string; fileName: string; formato?: string };
-  resumo?: { custo?: number; preco?: number; margemPct?: number };
+  resumo?: { custo?: number; preco?: number; margemPct?: number; consumo?: boolean };
 } | null {
   if (!Array.isArray(toolResults)) return null;
   let planilha: any;
@@ -622,6 +622,7 @@ function extractCalc(toolResults: any): {
         custo: sm.netCostTotal,
         preco: sm.salePriceTotal,
         margemPct: typeof sm.margemBruta === "number" ? sm.margemBruta * 100 : undefined,
+        consumo: sm.finalidade === "consumo_proprio",
       };
     }
   }
@@ -677,11 +678,17 @@ function CalcResultCard({ toolResults, conversaId, operacaoId }: {
       </div>
 
       {calc.resumo && (
-        <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-          <Stat label="Custo líquido" value={brl(calc.resumo.custo)} />
-          <Stat label="Preço de venda" value={brl(calc.resumo.preco)} />
-          <Stat label="Margem bruta" value={calc.resumo.margemPct != null ? `${calc.resumo.margemPct.toFixed(1)}%` : "—"} />
-        </div>
+        calc.resumo.consumo ? (
+          <div className="mt-2 grid grid-cols-1 gap-2 text-center">
+            <Stat label="Custo nacionalizado (consumo próprio)" value={brl(calc.resumo.custo)} />
+          </div>
+        ) : (
+          <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+            <Stat label="Custo líquido" value={brl(calc.resumo.custo)} />
+            <Stat label="Preço de venda" value={brl(calc.resumo.preco)} />
+            <Stat label="Margem bruta" value={calc.resumo.margemPct != null ? `${calc.resumo.margemPct.toFixed(1)}%` : "—"} />
+          </div>
+        )
       )}
 
       {calc.planilha && (

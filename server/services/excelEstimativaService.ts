@@ -457,6 +457,20 @@ function buildEstSheet(
   put("Custo Líquido Total", s.netCostTotal, { formula: refTot("nettotal"), bold: true });
   r++;
 
+  // CONSUMO PRÓPRIO: não há revenda — o entregável é o custo nacionalizado.
+  if (s.finalidade === "consumo_proprio") {
+    section("IMPORTAÇÃO PARA CONSUMO PRÓPRIO");
+    put("Custo nacionalizado (sem revenda, tributos viram custo)", s.netCostTotal, { formula: refTot("nettotal"), bold: true });
+    put("Custo unitário médio", result.items.length ? s.netCostTotal / result.items.reduce((a, i) => a + i.quantity, 0) : 0);
+    const warns0 = [...result.warnings, ...((result as { ncmWarnings?: string[] }).ncmWarnings ?? [])];
+    if (warns0.length) {
+      r++;
+      section("AVISOS");
+      warns0.forEach((w) => put(`• ${w}`));
+    }
+    return;
+  }
+
   section("ESTIMATIVA DE VENDA DO IMPORTADOR");
   put("Margem bruta (lucro / (1 − IRPJ − CSLL))", s.margemBruta, { fmt: PCT });
   put("Fator markup", s.markupFactor, { fmt: PCT });
