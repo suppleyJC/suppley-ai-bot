@@ -109,9 +109,13 @@ export default function ExcambiaChat() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Acompanha o fim da conversa — inclusive durante o streaming (a resposta e os
+  // passos crescem), como nos chats de IA. Por isso streamingReply/Events entram
+  // nas dependências, senão a tela não "sobe" enquanto a Excambia responde.
   useEffect(() => {
-    scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
-  }, [conv?.mensagens, optimistic, streaming]);
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [conv?.mensagens, optimistic, streaming, streamingReply, streamingEvents]);
 
   // Auto-grow do composer: cresce com o texto até um teto e então rola.
   const taRef = useRef<HTMLTextAreaElement>(null);
