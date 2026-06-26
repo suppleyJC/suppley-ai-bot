@@ -24,6 +24,7 @@ import { registrarNacionalizacaoTool } from "./registrarNacionalizacao";
 import { lancarFinanceiroTool } from "./lancarFinanceiroTool";
 import { buscarAtivoTool, compararOrigemTool, benchmarkMercadoTool } from "./fase5Tools";
 import { coletarDadosFaltantesTool } from "./coletar_dados_faltantes";
+import { consultarOperacaoTool } from "./consultarOperacao";
 
 /** Tools de capacidade direta — o "chão de fábrica" que os especialistas acionam. */
 export const BASE_TOOLS: AgentTool[] = [
@@ -38,6 +39,8 @@ export const BASE_TOOLS: AgentTool[] = [
   lancarFinanceiroTool,
   // Completude — detecta gaps e coleta dados
   coletarDadosFaltantesTool,
+  // Consulta de andamento da operação (leitura) — base da jornada no chat
+  consultarOperacaoTool,
   // Fase 5 — buscas (lado leitura do ciclo de inteligência)
   buscarAtivoTool,
   compararOrigemTool,

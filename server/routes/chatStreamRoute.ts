@@ -132,7 +132,14 @@ router.post("/api/chat/stream", async (req: Request, res: Response) => {
         res.write(`data: ${JSON.stringify(chunk)}\n\n`);
       }
 
-      // Persiste resposta completa
+      // INTERAÇÃO CONSTANTE: nunca deixe o usuário sem resposta. Se o agente
+      // voltou vazio, entrega um texto de continuidade em vez de uma bolha vazia.
+      if (!fullReply || !fullReply.trim()) {
+        fullReply =
+          "Não consegui formular uma resposta agora. Pode reformular ou me dar um pouco mais de contexto?";
+        res.write(`data: ${JSON.stringify({ type: "reply", reply: fullReply, toolsUsed, toolResults })}\n\n`);
+      }
+
       await conversaDb.addMessage(
         payload.conversaId,
         "assistant",
@@ -145,9 +152,15 @@ router.post("/api/chat/stream", async (req: Request, res: Response) => {
       res.end();
     } catch (err) {
       console.error("[chatStream] erro no stream:", err);
-      res.write(
-        `data: ${JSON.stringify({ type: "error", message: "Erro ao processar requisição" })}\n\n`
-      );
+      // Mesmo em erro, responde e PERSISTE — a conversa não pode ficar muda.
+      const fallback =
+        "Tive um problema técnico ao processar agora. Tente de novo em instantes — " +
+        "se persistir, me diga de outro jeito que eu sigo daqui.";
+      try {
+        await conversaDb.addMessage(payload.conversaId, "assistant", fallback, [], []);
+      } catch { /* não bloqueia a resposta ao usuário */ }
+      res.write(`data: ${JSON.stringify({ type: "reply", reply: fallback, toolsUsed: [], toolResults: [] })}\n\n`);
+      res.write('data: {"type":"done"}\n\n');
       res.end();
     }
   } catch (err) {

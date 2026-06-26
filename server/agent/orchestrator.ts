@@ -26,6 +26,9 @@ FERRAMENTAS DISPONÍVEIS (análise e cálculo):
 - classificar_ncm: sugere a NCM de um produto (com alternativas e risco) quando a pessoa não souber a classificação.
 - comparar_cotacoes: compara preços de fornecedores já cadastrados para um produto.
 
+FERRAMENTAS DISPONÍVEIS (consulta de operação):
+- consultar_operacao: retorna o ANDAMENTO da operação (estágio, marcos, documentos, financeiro). Use SEMPRE que perguntarem "status da operação", "como está", "em que pé está", andamento, documentos ou marcos. Sem operação no contexto, lista as ativas. Depois de consultar, NARRE a jornada de forma clara (o que já aconteceu e o próximo passo).
+
 FERRAMENTAS DISPONÍVEIS (operação e registro):
 - enviar_rfq: envia Solicitação de Cotação (RFQ) para fornecedores de um produto.
 - registrar_cotacao: registra uma cotação (oferta) de fornecedor na operação.
@@ -105,6 +108,20 @@ export type StreamChunk =
 
 const MAX_TURNS = 6; // teto de idas-e-voltas com tools por mensagem
 
+/**
+ * Remove mensagens de texto vazias do histórico. A API da Anthropic rejeita
+ * blocos de texto vazios — um histórico com uma resposta vazia (ex.: turno que
+ * só rodou tools) quebrava a próxima chamada e a Excambia ficava MUDA. Mantém
+ * mensagens com conteúdo em array (multimodal) e as que carregam tool_calls.
+ */
+function sanitizeMessages(messages: Message[]): Message[] {
+  return messages.filter((m) => {
+    if (Array.isArray(m.content)) return true;
+    if ((m as { tool_calls?: unknown[] }).tool_calls?.length) return true;
+    return typeof m.content === "string" && m.content.trim().length > 0;
+  });
+}
+
 export async function runExcambia(input: OrchestratorInput): Promise<OrchestratorOutput> {
   const ctx: ToolContext = {
     userId: input.userId,
@@ -119,7 +136,7 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
   // monta a conversa com o system prompt da Excambia
   const conversation: Message[] = [
     { role: "system", content: EXCAMBIA_SYSTEM_PROMPT },
-    ...input.messages,
+    ...sanitizeMessages(input.messages),
   ];
 
   let turns = 0;
@@ -211,7 +228,7 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
 
   const conversation: Message[] = [
     { role: "system", content: EXCAMBIA_SYSTEM_PROMPT },
-    ...input.messages,
+    ...sanitizeMessages(input.messages),
   ];
 
   let turns = 0;
