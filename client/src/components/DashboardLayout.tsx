@@ -80,6 +80,11 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider
+      // h-svh + overflow-hidden dão ao shell uma ALTURA DEFINIDA (não só
+      // min-height). Sem isso, o `h-full`/`flex-1` do chat não resolvem e o
+      // composer "flutua" no meio da página. Com altura fixa, o conteúdo rola
+      // internamente (chat = scroll na conversa; demais páginas = overflow-auto).
+      className="h-svh overflow-hidden"
       style={
         {
           "--sidebar-width": `${sidebarWidth}px`,

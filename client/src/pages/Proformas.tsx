@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { FileText, Upload, Sparkles, Trash2, Plus, ArrowRight, Loader2, CheckCircle2, Building2, Package, Copy, Edit, Share2 } from "lucide-react";
-import OperationCard from "@/components/OperationCard";
+import OperationCard, { type OperationCardAction } from "@/components/OperationCard";
 
 type ItemDraft = {
   productName: string;
@@ -73,6 +73,27 @@ export default function Proformas() {
   const createMutation = trpc.proforma.create.useMutation();
   const updateMutation = trpc.proforma.update.useMutation();
   const distributeMutation = trpc.proforma.distribute.useMutation();
+  const deleteMutation = trpc.proforma.delete.useMutation({
+    onSuccess: (res) => {
+      const n = res?.deletedProductIds?.length ?? 0;
+      toast.success(
+        n > 0
+          ? `Proforma excluída · ${n} produto(s) removido(s) de Ativos & Insumos`
+          : "Proforma excluída",
+      );
+      // Atualiza ambas as listas (proformas + produtos vinculados)
+      utils.proforma.list.invalidate();
+      utils.products.list.invalidate();
+    },
+    onError: (err) => toast.error(err?.message || "Erro ao excluir proforma"),
+  });
+
+  async function handleDeleteProforma(id: number, label: string) {
+    const ok = window.confirm(
+      `Excluir a proforma ${label}?\n\nIsto também remove os produtos que ela cadastrou em Ativos & Insumos. Esta ação não pode ser desfeita.`,
+    );
+    if (ok) deleteMutation.mutate({ proformaId: id });
+  }
 
   // ---- Abrir uma proforma existente para edição ----
   async function openForEdit(id: number) {
@@ -527,7 +548,7 @@ export default function Proformas() {
                   }}
                   compact={false}
                   actions={(() => {
-                    const acts = [
+                    const acts: OperationCardAction[] = [
                       {
                         label: loadingEditId === p.id ? "Abrindo..." : "Revisar",
                         icon: <Edit className="h-4 w-4" />,
@@ -541,6 +562,12 @@ export default function Proformas() {
                         onClick: async () => { distributeMutation.mutate({ proformaId: p.id }); },
                       });
                     }
+                    acts.push({
+                      label: "Excluir",
+                      icon: <Trash2 className="h-4 w-4" />,
+                      variant: "destructive",
+                      onClick: () => handleDeleteProforma(p.id, `PF-${p.numero || p.id}`),
+                    });
                     return acts;
                   })()}
                 />

@@ -565,6 +565,58 @@
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
   }
+
+  /* ===========================================================
+     Excambia Orbital — o símbolo da marca "vivo": anel de gradiente
+     girando + brilho pulsante. Usado no welcome e enquanto pensa.
+     =========================================================== */
+  .excambia-orbital {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background: #ffffff;
+    isolation: isolate;
+  }
+  /* anel de gradiente cônico girando (a "órbita") */
+  .excambia-orbital::before {
+    content: "";
+    position: absolute;
+    inset: -2.5px;
+    border-radius: 9999px;
+    background: conic-gradient(
+      from 0deg,
+      #682ABA, #28E7C5, #8B4FD0, #28E7C5, #682ABA
+    );
+    z-index: -2;
+    animation: orbit-rotate 3.5s linear infinite;
+  }
+  /* miolo branco que recorta o anel, deixando só a borda visível */
+  .excambia-orbital::after {
+    content: "";
+    position: absolute;
+    inset: 1.5px;
+    border-radius: 9999px;
+    background: #ffffff;
+    z-index: -1;
+  }
+  /* brilho pulsante ao redor (vida) */
+  .excambia-orbital--glow {
+    animation: excambia-orbital-glow 2.8s ease-in-out infinite;
+  }
+  @keyframes excambia-orbital-glow {
+    0%, 100% { box-shadow: 0 0 12px 0 rgba(40, 231, 197, 0.25), 0 0 0 0 rgba(104, 42, 186, 0.0); }
+    50%      { box-shadow: 0 0 26px 3px rgba(40, 231, 197, 0.5), 0 0 0 5px rgba(104, 42, 186, 0.06); }
+  }
+  /* enquanto pensa: anel gira mais rápido */
+  .excambia-orbital--thinking::before {
+    animation-duration: 1.4s;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .excambia-orbital::before,
+    .excambia-orbital--glow { animation: none; }
+  }
 }
 
 @layer utilities {

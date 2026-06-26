@@ -61,6 +61,26 @@ const LogoIcon = ({ className }: { className?: string }) => (
   <img src="/suppley-icon.png" alt="Excambia" className={className ?? "h-full w-full object-contain"} />
 );
 
+/**
+ * Orbital — o símbolo da Excambia "vivo": anel de gradiente girando + brilho.
+ * `glow` adiciona o pulso de luz; `thinking` acelera o giro (enquanto responde).
+ */
+function Orbital({
+  className = "",
+  glow = false,
+  thinking = false,
+}: { className?: string; glow?: boolean; thinking?: boolean }) {
+  return (
+    <span
+      className={`excambia-orbital ${glow ? "excambia-orbital--glow" : ""} ${
+        thinking ? "excambia-orbital--thinking" : ""
+      } ${className}`}
+    >
+      <LogoIcon className="h-[68%] w-[68%] object-contain" />
+    </span>
+  );
+}
+
 export default function ExcambiaChat() {
   const [activeId, setActiveId] = useState<number | undefined>(undefined);
   // No mobile inicia recolhido (chat ocupa a tela toda); no desktop, expandido.
@@ -220,7 +240,7 @@ export default function ExcambiaChat() {
       {/* CHAT */}
       <div className="flex flex-1 flex-col bg-[#faf9fc] min-h-0 h-full">
         {/* topbar fina */}
-        <div className="flex h-[54px] items-center gap-2 sm:gap-2.5 px-3 sm:px-6 border-b border-slate-100">
+        <div className="flex h-[54px] flex-shrink-0 items-center gap-2 sm:gap-2.5 px-3 sm:px-6 border-b border-slate-100">
           <img src="/suppley-icon.png" alt="" className="h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 object-contain" />
           <span className="text-sm font-semibold tracking-tight text-slate-800">Excambia</span>
           <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
@@ -245,8 +265,8 @@ export default function ExcambiaChat() {
           )}
         </div>
 
-        {/* composer */}
-        <div className="flex w-full justify-center bg-gradient-to-t from-[#faf9fc] px-3 sm:px-6 pb-4 sm:pb-6 pt-2.5 sm:pt-3.5">
+        {/* composer — fixo no rodapé (não encolhe) */}
+        <div className="flex w-full flex-shrink-0 justify-center bg-gradient-to-t from-[#faf9fc] px-3 sm:px-6 pb-4 sm:pb-6 pt-2.5 sm:pt-3.5">
           <div className="w-full max-w-full sm:max-w-2xl lg:max-w-3xl">
             <div className="flex items-end gap-2 sm:gap-2.5 rounded-[18px] border border-[#e2def0] bg-white p-2 sm:p-2.5 pl-3 sm:pl-4 shadow-[0_4px_20px_rgba(49,18,96,0.05)] transition-colors focus-within:border-violet-500 focus-within:shadow-[0_4px_24px_rgba(104,42,186,0.12)]">
               <input
@@ -311,7 +331,7 @@ export default function ExcambiaChat() {
 function Welcome({ onPick }: { onPick: (t: string) => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-3 sm:px-6 py-8 sm:py-12 text-center min-h-0">
-      <LogoIcon className="h-14 w-14 sm:h-16 sm:w-16 mb-4 sm:mb-5 flex-shrink-0" />
+      <Orbital glow className="h-16 w-16 sm:h-20 sm:w-20 mb-4 sm:mb-5 flex-shrink-0" />
       <h1 className="mb-2 sm:mb-2.5 text-xl sm:text-2xl md:text-[26px] font-semibold tracking-tight text-slate-800">
         Olá, Jean. O que vamos{" "}
         <span className="bg-gradient-to-r from-violet-600 to-teal-600 bg-clip-text text-transparent">importar</span> hoje?
@@ -356,9 +376,13 @@ function Message({ role, content, pending }: { role: string; content: string; pe
   if (role === "assistant") {
     return (
       <div className="group flex w-full items-start gap-2 sm:gap-3">
-        <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white border border-slate-200 p-1">
-          <LogoIcon />
-        </span>
+        {pending ? (
+          <Orbital glow thinking className="h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0" />
+        ) : (
+          <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white border border-slate-200 p-1">
+            <LogoIcon />
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           {pending ? (
             <TypingDots />

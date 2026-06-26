@@ -557,3 +557,50 @@ export async function getProformaDetail(userId: number, proformaId: number) {
   const items = await db.getProformaItems(proformaId);
   return { proforma, items };
 }
+
+// ============================================================
+// 5) EXCLUSÃO (com cascata para os produtos vinculados)
+// ============================================================
+
+/**
+ * Exclui uma proforma e, em cascata, os produtos que ELA originou na base
+ * (Ativos & Insumos). O vínculo é o `productId` gravado em cada item na
+ * distribuição (P7/P8). Assim, apagar o card da proforma também remove os
+ * respectivos produtos — mantendo a base limpa e coesa.
+ *
+ * Best-effort por produto: se um produto já tiver sido apagado/alterado, o
+ * loop segue; a proforma é sempre removida ao final.
+ */
+export async function deleteProformaWithProducts(
+  userId: number,
+  proformaId: number,
+): Promise<{ deletedProductIds: number[] }> {
+  const proforma = await db.getProformaById(proformaId, userId);
+  if (!proforma) throw new Error("Proforma não encontrada");
+
+  const items = await db.getProformaItems(proformaId);
+
+  // Coleta os produtos vinculados (dedup — um produto pode aparecer em vários itens)
+  const productIds = Array.from(
+    new Set(
+      items
+        .map((it) => it.productId)
+        .filter((id): id is number => typeof id === "number" && id > 0),
+    ),
+  );
+
+  const deletedProductIds: number[] = [];
+  for (const productId of productIds) {
+    try {
+      const ok = await db.deleteProduct(productId, userId);
+      if (ok) deletedProductIds.push(productId);
+    } catch (err) {
+      console.error(`[proformaService] Falha ao excluir produto ${productId}:`, err);
+    }
+  }
+
+  // Remove a proforma e seus itens
+  await db.deleteProforma(proformaId, userId);
+
+  return { deletedProductIds };
+}

@@ -117,6 +117,20 @@ export const proformaRouter = router({
       }
     }),
 
+  // 3b) Exclui a proforma + os produtos que ela originou (cascata para a base)
+  delete: protectedProcedure
+    .input(z.object({ proformaId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await proformaService.deleteProformaWithProducts(ctx.user.id, input.proformaId);
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Erro ao excluir proforma: ${error instanceof Error ? error.message : "desconhecido"}`,
+        });
+      }
+    }),
+
   // 4) Lista proformas
   list: protectedProcedure
     .input(z.object({ status: z.string().optional(), industriaId: z.number().optional() }).optional())

@@ -509,6 +509,26 @@ export default function Products() {
 
   const hasFilters = search.trim() !== "" || classeFilter !== "all" || critFilter !== "all";
 
+  // Agrupa o catálogo por CATEGORIA (fallback: classe → "Sem categoria"),
+  // para Ativos & Insumos ficar organizado por seções em vez de itens soltos.
+  // "Sem categoria" sempre por último.
+  const groupedProducts = useMemo(() => {
+    const groups = new Map<string, typeof filtered>();
+    for (const p of filtered) {
+      const key = p.categoria?.trim() || p.classe?.trim() || "Sem categoria";
+      const arr = groups.get(key);
+      if (arr) arr.push(p);
+      else groups.set(key, [p]);
+    }
+    return Array.from(groups.entries())
+      .map(([key, items]) => ({ key, items }))
+      .sort((a, b) => {
+        if (a.key === "Sem categoria") return 1;
+        if (b.key === "Sem categoria") return -1;
+        return a.key.localeCompare(b.key, "pt-BR");
+      });
+  }, [filtered]);
+
   if (isLoading) {
     return (
       <div className="space-y-8">
@@ -644,8 +664,17 @@ export default function Products() {
             {filtered.length} {filtered.length === 1 ? "item" : "itens"}
             {hasFilters ? ` de ${products.length}` : ""}
           </p>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((product) => {
+          {groupedProducts.map((group) => (
+            <section key={group.key} className="space-y-3">
+              <div className="flex items-center gap-2 border-b pb-1.5">
+                <Layers className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">{group.key}</h2>
+                <Badge variant="secondary" className="ml-1">
+                  {group.items.length}
+                </Badge>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {group.items.map((product) => {
               const crit = product.criticidade
                 ? CRIT_META[product.criticidade as "alta" | "media" | "baixa"]
                 : null;
@@ -830,8 +859,10 @@ export default function Products() {
                   </CardContent>
                 </Card>
               );
-            })}
-          </div>
+                })}
+              </div>
+            </section>
+          ))}
         </>
       )}
     </div>
