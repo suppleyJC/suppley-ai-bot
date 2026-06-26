@@ -198,12 +198,19 @@ export default function ExcambiaChat() {
         }
       }
 
+      // Encerra o streaming ANTES de carregar a versão persistida — evita que a
+      // resposta transmitida e a persistida sejam pintadas juntas (encavalamento).
+      setStreaming(false);
+      setStreamingReply("");
+      setStreamingEvents([]);
       await utils.conversas.get.invalidate({ id });
       utils.conversas.list.invalidate();
     } catch (err: any) {
       console.error("Falha ao enviar mensagem:", err);
       setDraft(text);
       setStreaming(false);
+      setStreamingReply("");
+      setStreamingEvents([]);
       toast.error("Não foi possível enviar a mensagem. Tente novamente.");
     } finally {
       setOptimistic((prev) => prev.filter((o) => o.id !== optId));
@@ -309,11 +316,17 @@ export default function ExcambiaChat() {
         }
       }
 
+      // Encerra o streaming ANTES de carregar a versão persistida (anti-encavalamento).
+      setStreaming(false);
+      setStreamingReply("");
+      setStreamingEvents([]);
       await utils.conversas.get.invalidate({ id });
       utils.conversas.list.invalidate();
     } catch (err: any) {
       console.error("Falha ao enviar anexo:", err);
       setStreaming(false);
+      setStreamingReply("");
+      setStreamingEvents([]);
       toast.error("Não foi possível processar o anexo. Tente novamente.");
     } finally {
       setUploading(false);
