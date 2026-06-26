@@ -58,6 +58,33 @@ async function resolveUserId(req: Request): Promise<number | null> {
   return null;
 }
 
+/**
+ * Traduz o erro técnico (geralmente da API da Anthropic) numa mensagem clara e
+ * ACIONÁVEL, exibida na própria conversa — assim o problema é diagnosticável sem
+ * abrir os logs do servidor.
+ */
+function diagnoseError(err: unknown): string {
+  const msg = String((err as { message?: string })?.message ?? err ?? "");
+  const has = (re: RegExp) => re.test(msg);
+
+  if (has(/ANTHROPIC_API_KEY is not configured/i))
+    return "Configuração ausente: a chave da API (ANTHROPIC_API_KEY) não está definida no servidor. Avise o time técnico.";
+  if (has(/\b401\b|authentication|invalid x-api-key|invalid api key/i))
+    return "Falha de autenticação com a IA — a chave da API parece inválida ou expirada. É preciso atualizar a ANTHROPIC_API_KEY.";
+  if (has(/\b403\b|permission|not allowed|web_search/i))
+    return "A IA recusou a requisição (permissão). Pode ser um recurso não habilitado na conta (ex.: pesquisa web). Avise o time técnico para revisar.";
+  if (has(/credit|billing|quota|insufficient|payment/i))
+    return "Os créditos da API da IA acabaram. É preciso recarregar o saldo na conta da Anthropic para a Excambia voltar a responder.";
+  if (has(/\b429\b|rate limit|overloaded|too many requests/i))
+    return "Muitas requisições em pouco tempo (limite da IA). Aguarde alguns segundos e tente de novo.";
+  if (has(/prompt is too long|context|maximum.*tokens|too many tokens/i))
+    return "O conteúdo ficou grande demais para uma única análise. Tente enviar menos itens por vez ou um arquivo menor.";
+  if (has(/\b400\b/i))
+    return "A requisição à IA foi rejeitada (erro 400). Já estou registrando o detalhe — me diga o que tentou fazer que eu ajusto.";
+
+  return "Tive um problema técnico ao processar agora. Tente de novo em instantes — se persistir, me diga de outro jeito que eu sigo daqui.";
+}
+
 router.post("/api/chat/stream", async (req: Request, res: Response) => {
   try {
     const userId = await resolveUserId(req);
@@ -153,9 +180,8 @@ router.post("/api/chat/stream", async (req: Request, res: Response) => {
     } catch (err) {
       console.error("[chatStream] erro no stream:", err);
       // Mesmo em erro, responde e PERSISTE — a conversa não pode ficar muda.
-      const fallback =
-        "Tive um problema técnico ao processar agora. Tente de novo em instantes — " +
-        "se persistir, me diga de outro jeito que eu sigo daqui.";
+      // Diagnostica o tipo do erro para a mensagem ser ACIONÁVEL na própria tela.
+      const fallback = diagnoseError(err);
       try {
         await conversaDb.addMessage(payload.conversaId, "assistant", fallback, [], []);
       } catch { /* não bloqueia a resposta ao usuário */ }
