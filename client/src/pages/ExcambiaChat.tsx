@@ -93,12 +93,14 @@ export default function ExcambiaChat() {
   const [uploading, setUploading] = useState(false);
   const [paramModalOpen, setParamModalOpen] = useState(false);
   const [collectedParams, setCollectedParams] = useState<any>(null);
+  const [streaming, setStreaming] = useState(false);
+  const [streamingReply, setStreamingReply] = useState("");
+  const [streamingEvents, setStreamingEvents] = useState<Array<any>>([]);
   const utils = trpc.useUtils();
 
   const create = trpc.conversas.create.useMutation({
     onSuccess: ({ id }) => { setActiveId(id); utils.conversas.list.invalidate(); },
   });
-  const send = trpc.conversas.send.useMutation();
   const upload = trpc.calculations.uploadQuotation.useMutation();
   const { data: conv } = trpc.conversas.get.useQuery(
     { id: activeId! }, { enabled: activeId != null },
@@ -108,7 +110,7 @@ export default function ExcambiaChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
-  }, [conv?.mensagens, optimistic, send.isPending]);
+  }, [conv?.mensagens, optimistic, streaming]);
 
   // Auto-grow do composer: cresce com o texto até um teto e então rola.
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -144,16 +146,63 @@ export default function ExcambiaChat() {
     try {
       const { id, operacaoId } = await ensureConversa(text);
       const messages = [...buildHistory(), { role: "user" as const, content: text }];
-      await send.mutateAsync({
-        conversaId: id,
-        messages,
-        ...(operacaoId ? { operacaoId } : {}),
+
+      setStreaming(true);
+      setStreamingReply("");
+      setStreamingEvents([]);
+
+      const response = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversaId: id,
+          messages,
+          ...(operacaoId ? { operacaoId } : {}),
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error(`Stream failed: ${response.statusText}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      if (!reader) throw new Error("No response body");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const chunk = JSON.parse(line.slice(6));
+
+            if (chunk.type === "done") {
+              setStreaming(false);
+            } else if (chunk.type === "reply") {
+              setStreamingReply(chunk.reply ?? "");
+            } else {
+              setStreamingEvents((prev) => [...prev, chunk]);
+            }
+          } catch {
+            // malformed JSON, skip
+          }
+        }
+      }
+
       await utils.conversas.get.invalidate({ id });
       utils.conversas.list.invalidate();
     } catch (err: any) {
       console.error("Falha ao enviar mensagem:", err);
-      setDraft(text); // devolve o texto para não perder a mensagem
+      setDraft(text);
+      setStreaming(false);
       toast.error("Não foi possível enviar a mensagem. Tente novamente.");
     } finally {
       setOptimistic((prev) => prev.filter((o) => o.id !== optId));
@@ -176,7 +225,7 @@ export default function ExcambiaChat() {
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    e.target.value = ""; // permite re-selecionar o mesmo arquivo
+    e.target.value = "";
     if (!file) return;
 
     const nome = file.name.toLowerCase();
@@ -190,9 +239,7 @@ export default function ExcambiaChat() {
       return;
     }
 
-    // Navegadores às vezes não preenchem file.type (.csv/.xls); inferimos pela extensão.
     const mimeType = file.type || mimeFromName(nome);
-
     const text = draft.trim();
     setDraft("");
     const optId = `opt-${Date.now()}`;
@@ -209,17 +256,63 @@ export default function ExcambiaChat() {
         fileData: base64,
         contentType: mimeType,
       });
+
+      setStreaming(true);
+      setStreamingReply("");
+      setStreamingEvents([]);
+
       const messages = [...buildHistory(), { role: "user" as const, content: text }];
-      await send.mutateAsync({
-        conversaId: id,
-        messages,
-        ...(operacaoId ? { operacaoId } : {}),
-        attachment: { url: up.fileUrl, mimeType, name: file.name },
+      const response = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversaId: id,
+          messages,
+          ...(operacaoId ? { operacaoId } : {}),
+          attachment: { url: up.fileUrl, mimeType, name: file.name },
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error(`Stream failed: ${response.statusText}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      if (!reader) throw new Error("No response body");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const chunk = JSON.parse(line.slice(6));
+            if (chunk.type === "done") {
+              setStreaming(false);
+            } else if (chunk.type === "reply") {
+              setStreamingReply(chunk.reply ?? "");
+            } else {
+              setStreamingEvents((prev) => [...prev, chunk]);
+            }
+          } catch {
+            // malformed JSON, skip
+          }
+        }
+      }
+
       await utils.conversas.get.invalidate({ id });
       utils.conversas.list.invalidate();
     } catch (err: any) {
       console.error("Falha ao enviar anexo:", err);
+      setStreaming(false);
       toast.error("Não foi possível processar o anexo. Tente novamente.");
     } finally {
       setUploading(false);
@@ -260,7 +353,15 @@ export default function ExcambiaChat() {
               {optimistic.map((o) => (
                 <Message key={o.id} role="user" content={o.content} />
               ))}
-              {(send.isPending || uploading) && <Message role="assistant" content="…" pending />}
+              {(streaming || uploading) && (
+                <>
+                  {streamingEvents.map((evt, i) => (
+                    <StreamingEvent key={i} event={evt} />
+                  ))}
+                  {streamingReply && <Message role="assistant" content={streamingReply} />}
+                  {!streamingReply && <Message role="assistant" content="…" pending />}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -279,7 +380,7 @@ export default function ExcambiaChat() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || send.isPending}
+                disabled={uploading || streaming}
                 title="Anexar PDF, imagem ou planilha (XLSX/CSV)"
                 className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-violet-600 flex-shrink-0 disabled:opacity-50"
               >
@@ -292,7 +393,7 @@ export default function ExcambiaChat() {
               <button
                 type="button"
                 onClick={() => setParamModalOpen(true)}
-                disabled={uploading || send.isPending}
+                disabled={uploading || streaming}
                 title="Extrair parâmetros de cálculo (regime, estado, câmbio, frete)"
                 className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-violet-600 flex-shrink-0 disabled:opacity-50"
               >
@@ -363,6 +464,62 @@ function Suggestion({ icon, title, sub, onClick }: any) {
       <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
     </button>
   );
+}
+
+/** Renderiza eventos de streaming (thinking, tool_call, tool_result, etc.). */
+function StreamingEvent({ event }: { event: any }) {
+  if (event.type === "thinking") {
+    return (
+      <div className="flex w-full items-start gap-2 sm:gap-3">
+        <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-violet-50 border border-violet-200 p-1">
+          <span className="text-[10px] text-violet-600 font-semibold">💭</span>
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-slate-500 italic">{event.thinking}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (event.type === "tool_call") {
+    return (
+      <div className="flex w-full items-start gap-2 sm:gap-3">
+        <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-teal-50 border border-teal-200 p-1">
+          <span className="text-[10px] text-teal-600 font-semibold">⚙️</span>
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-slate-700">{event.name}</p>
+          {event.input && (
+            <pre className="text-[11px] text-slate-600 mt-1 overflow-x-auto max-w-full">
+              {typeof event.input === "string"
+                ? event.input
+                : JSON.stringify(event.input, null, 2).slice(0, 200)}
+            </pre>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (event.type === "tool_result") {
+    return (
+      <div className="flex w-full items-start gap-2 sm:gap-3">
+        <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50 border border-emerald-200 p-1">
+          <span className="text-[10px] text-emerald-600 font-semibold">✓</span>
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-slate-700">
+            {event.ok ? "✓ Sucesso" : "✗ Falha"} — {event.name}
+          </p>
+          {event.summary && (
+            <p className="text-xs text-slate-600 mt-1">{event.summary}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function Message({ role, content, pending }: { role: string; content: string; pending?: boolean }) {
