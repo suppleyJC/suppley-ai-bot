@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { toast } from "sonner";
 import {
   Package,
@@ -45,6 +54,8 @@ import {
   AlertTriangle,
   Building2,
   Tag as TagIcon,
+  SlidersHorizontal,
+  ChevronDown,
 } from "lucide-react";
 import { NCMAutocomplete } from "@/components/NCMAutocomplete";
 import { PriceHistoryView } from "@/components/PriceHistoryView";
@@ -378,13 +389,17 @@ function ProductForm({
 
 export default function Products() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState<ProductFormData>(initialFormData);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Busca e filtros
+  // Busca e filtros facetados
   const [search, setSearch] = useState("");
-  const [classeFilter, setClasseFilter] = useState("all");
-  const [critFilter, setCritFilter] = useState("all");
+  const [selectedClasses, setSelectedClasses] = useState<Set<string>>(new Set());
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [selectedSuppliers, setSelectedSuppliers] = useState<Set<number>>(new Set());
+  const [selectedCriticidades, setSelectedCriticidades] = useState<Set<string>>(new Set());
+  const [priceRange, setPriceRange] = useState<[number, number] | null>(null);
+  const [sortBy, setSortBy] = useState<"name" | "price" | "date">("name");
 
   const { data: products, isLoading } = trpc.products.list.useQuery();
   const { data: suppliers } = trpc.suppliers.list.useQuery();
@@ -405,7 +420,6 @@ export default function Products() {
   const updateMutation = trpc.products.update.useMutation({
     onSuccess: () => {
       toast.success("Produto atualizado com sucesso");
-      setEditingId(null);
       setFormData(initialFormData);
       utils.products.list.invalidate();
     },
@@ -444,90 +458,115 @@ export default function Products() {
     createMutation.mutate(buildPayload());
   };
 
-  const handleUpdate = () => {
-    if (!editingId) return;
-    updateMutation.mutate({ id: editingId, ...buildPayload() });
-  };
 
-  const openEdit = (product: NonNullable<typeof products>[number]) => {
-    if (!product) return;
-    setFormData({
-      name: product.name,
-      description: product.description || "",
-      ncmCode: product.ncmCode,
-      unit: product.unit,
-      weightKg: product.weightKg,
-      volumeM3: product.volumeM3,
-      supplierId: product.supplierId,
-      classe: product.classe || "",
-      criticidade: (product.criticidade as Criticidade) || "",
-      categoria: product.categoria || "",
-      subcategoria: product.subcategoria || "",
-      aplicacao: product.aplicacao || "",
-      tags: (product.tags as string[] | null) ?? [],
-    });
-    setEditingId(product.id);
-  };
 
   const suppliersList = suppliers?.map((s) => ({ id: s.id, name: s.name })) || [];
   const supplierName = (id: number | null) =>
     id ? suppliers?.find((s) => s.id === id)?.name ?? null : null;
 
-  // Classes presentes nos dados (para o filtro dinâmico).
-  const classesDisponiveis = useMemo(() => {
-    const set = new Set<string>();
-    (products ?? []).forEach((p) => p.classe && set.add(p.classe));
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  // Coleta todos os valores únicos para filtros facetados
+  const facets = useMemo(() => {
+    const classes = new Set<string>();
+    const categories = new Set<string>();
+    const supplierIds = new Set<number>();
+    let minPrice = Infinity;
+    let maxPrice = 0;
+
+    (products ?? []).forEach((p) => {
+      if (p.classe) classes.add(p.classe);
+      if (p.categoria) categories.add(p.categoria);
+      if (p.supplierId) supplierIds.add(p.supplierId);
+      if (p.latestPrice?.unitPriceCents) {
+        minPrice = Math.min(minPrice, p.latestPrice.unitPriceCents);
+        maxPrice = Math.max(maxPrice, p.latestPrice.unitPriceCents);
+      }
+    });
+
+    return {
+      classes: Array.from(classes).sort((a, b) => a.localeCompare(b, "pt-BR")),
+      categories: Array.from(categories).sort((a, b) => a.localeCompare(b, "pt-BR")),
+      supplierIds: Array.from(supplierIds),
+      priceRange: minPrice === Infinity ? null : [minPrice / 100, maxPrice / 100],
+    };
   }, [products]);
 
-  // Aplica busca + filtros.
+  // Aplica todos os filtros facetados + busca
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (products ?? []).filter((p) => {
-      if (classeFilter !== "all" && (p.classe || "") !== classeFilter) return false;
-      if (critFilter !== "all" && (p.criticidade || "") !== critFilter) return false;
-      if (!q) return true;
-      const tags = ((p.tags as string[] | null) ?? []).join(" ");
-      const haystack = [
-        p.name,
-        p.ncmCode,
-        p.classe,
-        p.categoria,
-        p.subcategoria,
-        p.aplicacao,
-        p.description,
-        supplierName(p.supplierId),
-        p.latestPrice?.supplierName,
-        tags,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [products, search, classeFilter, critFilter, suppliers]);
+    return (products ?? [])
+      .filter((p) => {
+        if (selectedClasses.size > 0 && !selectedClasses.has(p.classe || "")) return false;
+        if (selectedCategories.size > 0 && !selectedCategories.has(p.categoria || "")) return false;
+        if (selectedSuppliers.size > 0 && !selectedSuppliers.has(p.supplierId || -1)) return false;
+        if (selectedCriticidades.size > 0 && !selectedCriticidades.has(p.criticidade || "")) return false;
 
-  const hasFilters = search.trim() !== "" || classeFilter !== "all" || critFilter !== "all";
+        if (priceRange && p.latestPrice?.unitPriceCents) {
+          const price = p.latestPrice.unitPriceCents / 100;
+          if (price < priceRange[0] || price > priceRange[1]) return false;
+        }
 
-  // Agrupa o catálogo por CATEGORIA (fallback: classe → "Sem categoria"),
-  // para Ativos & Insumos ficar organizado por seções em vez de itens soltos.
-  // "Sem categoria" sempre por último.
-  const groupedProducts = useMemo(() => {
-    const groups = new Map<string, typeof filtered>();
-    for (const p of filtered) {
-      const key = p.categoria?.trim() || p.classe?.trim() || "Sem categoria";
-      const arr = groups.get(key);
-      if (arr) arr.push(p);
-      else groups.set(key, [p]);
-    }
-    return Array.from(groups.entries())
-      .map(([key, items]) => ({ key, items }))
+        if (!q) return true;
+        const tags = ((p.tags as string[] | null) ?? []).join(" ");
+        const haystack = [
+          p.name,
+          p.ncmCode,
+          p.classe,
+          p.categoria,
+          p.subcategoria,
+          p.aplicacao,
+          p.description,
+          supplierName(p.supplierId),
+          p.latestPrice?.supplierName,
+          tags,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(q);
+      })
       .sort((a, b) => {
-        if (a.key === "Sem categoria") return 1;
-        if (b.key === "Sem categoria") return -1;
-        return a.key.localeCompare(b.key, "pt-BR");
+        if (sortBy === "name") return a.name.localeCompare(b.name, "pt-BR");
+        if (sortBy === "price") {
+          const aPrice = a.latestPrice?.unitPriceCents ?? Infinity;
+          const bPrice = b.latestPrice?.unitPriceCents ?? Infinity;
+          return aPrice - bPrice;
+        }
+        if (sortBy === "date") {
+          const aDate = a.latestPrice?.quotationDate ?? "";
+          const bDate = b.latestPrice?.quotationDate ?? "";
+          return new Date(bDate).getTime() - new Date(aDate).getTime();
+        }
+        return 0;
       });
-  }, [filtered]);
+  }, [
+    products,
+    search,
+    selectedClasses,
+    selectedCategories,
+    selectedSuppliers,
+    selectedCriticidades,
+    priceRange,
+    sortBy,
+    suppliers,
+  ]);
+
+  const hasFilters =
+    search.trim() !== "" ||
+    selectedClasses.size > 0 ||
+    selectedCategories.size > 0 ||
+    selectedSuppliers.size > 0 ||
+    selectedCriticidades.size > 0 ||
+    priceRange !== null;
+
+  const clearAllFilters = () => {
+    setSearch("");
+    setSelectedClasses(new Set());
+    setSelectedCategories(new Set());
+    setSelectedSuppliers(new Set());
+    setSelectedCriticidades(new Set());
+    setPriceRange(null);
+  };
+
 
   if (isLoading) {
     return (
@@ -539,9 +578,10 @@ export default function Products() {
           </div>
           <Skeleton className="h-10 w-40" />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Skeleton className="h-10" />
+        <div className="grid gap-4">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-48" />
+            <Skeleton key={i} className="h-12" />
           ))}
         </div>
       </div>
@@ -549,8 +589,9 @@ export default function Products() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 border-b">
         <div>
           <h1 className="text-3xl font-bold">Produtos</h1>
           <p className="text-muted-foreground">
@@ -559,7 +600,7 @@ export default function Products() {
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2" onClick={() => setFormData(initialFormData)}>
+            <Button className="gap-2 w-fit" onClick={() => setFormData(initialFormData)}>
               <Plus className="h-4 w-4" />
               Novo Produto
             </Button>
@@ -581,54 +622,39 @@ export default function Products() {
         </Dialog>
       </div>
 
-      {/* Barra de busca + filtros */}
+      {/* Search + View Toggle */}
       {products && products.length > 0 && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-col md:flex-row md:items-center gap-3 py-4 border-b">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nome, NCM, classe, fornecedor, tag…"
+              placeholder="Buscar por nome, NCM, classe, fornecedor…"
               className="pl-9"
             />
           </div>
-          <Select value={classeFilter} onValueChange={setClasseFilter}>
-            <SelectTrigger className="sm:w-52">
-              <Layers className="mr-1 h-4 w-4 text-muted-foreground" />
-              <SelectValue placeholder="Classe" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="gap-2 md:hidden"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Filtros
+          </Button>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="md:w-48">
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas as classes</SelectItem>
-              {classesDisponiveis.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={critFilter} onValueChange={setCritFilter}>
-            <SelectTrigger className="sm:w-44">
-              <AlertTriangle className="mr-1 h-4 w-4 text-muted-foreground" />
-              <SelectValue placeholder="Criticidade" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toda criticidade</SelectItem>
-              <SelectItem value="alta">Alta (crítico)</SelectItem>
-              <SelectItem value="media">Média</SelectItem>
-              <SelectItem value="baixa">Baixa</SelectItem>
+              <SelectItem value="name">Ordenar por nome</SelectItem>
+              <SelectItem value="price">Ordenar por preço</SelectItem>
+              <SelectItem value="date">Mais recente primeiro</SelectItem>
             </SelectContent>
           </Select>
           {hasFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSearch("");
-                setClasseFilter("all");
-                setCritFilter("all");
-              }}
-            >
+            <Button variant="ghost" size="sm" onClick={clearAllFilters}>
               <X className="mr-1 h-4 w-4" />
               Limpar
             </Button>
@@ -637,7 +663,7 @@ export default function Products() {
       )}
 
       {!products || products.length === 0 ? (
-        <Card>
+        <Card className="flex-1 flex items-center justify-center">
           <CardContent className="py-16 text-center">
             <Package className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
             <h3 className="text-lg font-semibold mb-2">Nenhum produto cadastrado</h3>
@@ -649,7 +675,7 @@ export default function Products() {
           </CardContent>
         </Card>
       ) : filtered.length === 0 ? (
-        <Card>
+        <Card className="flex-1 flex items-center justify-center">
           <CardContent className="py-16 text-center">
             <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
             <h3 className="text-lg font-semibold mb-1">Nenhum resultado</h3>
@@ -659,213 +685,335 @@ export default function Products() {
           </CardContent>
         </Card>
       ) : (
-        <>
-          <p className="text-sm text-muted-foreground">
-            {filtered.length} {filtered.length === 1 ? "item" : "itens"}
-            {hasFilters ? ` de ${products.length}` : ""}
-          </p>
-          {groupedProducts.map((group) => (
-            <section key={group.key} className="space-y-3">
-              <div className="flex items-center gap-2 border-b pb-1.5">
-                <Layers className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">{group.key}</h2>
-                <Badge variant="secondary" className="ml-1">
-                  {group.items.length}
-                </Badge>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {group.items.map((product) => {
-              const crit = product.criticidade
-                ? CRIT_META[product.criticidade as "alta" | "media" | "baixa"]
-                : null;
-              const tags = (product.tags as string[] | null) ?? [];
-              const forn = supplierName(product.supplierId) ?? product.latestPrice?.supplierName ?? null;
-              return (
-                <Card key={product.id} className="flex flex-col hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start gap-3">
-                      <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Package className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <CardTitle className="text-base leading-snug">{product.name}</CardTitle>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Barcode className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground font-mono">
-                            {product.ncmCode}
-                          </span>
-                        </div>
-                      </div>
-                      {crit && (
-                        <Badge variant="outline" className={`flex-shrink-0 ${crit.badge}`}>
-                          {crit.label}
-                        </Badge>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex flex-1 flex-col space-y-3">
-                    {/* Classe / categoria */}
-                    {(product.classe || product.categoria) && (
-                      <div className="flex flex-wrap gap-2">
-                        {product.classe && (
-                          <Badge variant="secondary" className="gap-1">
-                            <Layers className="h-3 w-3" />
-                            {product.classe}
-                          </Badge>
-                        )}
-                        {product.categoria && (
-                          <Badge variant="outline">
-                            {product.categoria}
-                            {product.subcategoria ? ` › ${product.subcategoria}` : ""}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-
-                    {product.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {product.description}
-                      </p>
-                    )}
-
-                    {/* Preço (última cotação) + formato */}
-                    <div className="flex items-end justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Última cotação
-                        </p>
-                        {product.latestPrice ? (
-                          <>
-                            <p className="text-lg font-semibold leading-tight">
-                              {fmtMoney(product.latestPrice.unitPriceCents, product.latestPrice.currency)}
-                              <span className="text-xs font-normal text-muted-foreground">
-                                {" "}
-                                /{product.unit}
-                              </span>
-                            </p>
-                            <p className="text-[11px] text-muted-foreground">
-                              {fmtDate(product.latestPrice.quotationDate)}
-                            </p>
-                          </>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">Sem cotação</p>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <Badge variant="outline">{product.unit}</Badge>
-                        {product.weightKg ? (
-                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                            <Scale className="h-3 w-3" />
-                            {product.weightKg} kg
-                          </span>
-                        ) : product.volumeM3 ? (
-                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                            <Box className="h-3 w-3" />
-                            {product.volumeM3} m³
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {/* Fornecedor */}
-                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <Building2 className="h-3.5 w-3.5 flex-shrink-0" />
-                      <span className="truncate">{forn ?? "Fornecedor não informado"}</span>
-                    </div>
-
-                    {/* Tags */}
-                    {tags.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <TagIcon className="h-3 w-3 text-muted-foreground" />
-                        {tags.slice(0, 4).map((t) => (
-                          <span
-                            key={t}
-                            className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] text-violet-700"
-                          >
-                            {t}
-                          </span>
-                        ))}
-                        {tags.length > 4 && (
-                          <span className="text-[11px] text-muted-foreground">
-                            +{tags.length - 4}
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="mt-auto flex gap-2 pt-3 border-t">
-                      <ProductPriceHistoryDialog productName={product.name} />
-                      <Dialog
-                        open={editingId === product.id}
-                        onOpenChange={(open) => !open && setEditingId(null)}
-                      >
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1"
-                            onClick={() => openEdit(product)}
-                          >
-                            <Pencil className="h-4 w-4 mr-1" />
-                            Editar
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-lg">
-                          <DialogHeader>
-                            <DialogTitle>Editar Produto</DialogTitle>
-                            <DialogDescription>Atualize as informações do produto</DialogDescription>
-                          </DialogHeader>
-                          <ProductForm
-                            data={formData}
-                            onChange={setFormData}
-                            onSubmit={handleUpdate}
-                            loading={updateMutation.isPending}
-                            suppliers={suppliersList}
-                            submitLabel="Salvar Alterações"
+        <div className="flex gap-6 flex-1 min-h-0 py-4">
+          {/* Sidebar Filtros */}
+          <aside
+            className={`${
+              sidebarOpen ? "w-64" : "hidden"
+            } md:block md:w-64 flex-shrink-0 border-r pr-4 overflow-y-auto`}
+          >
+            <div className="space-y-6">
+              {/* Classes */}
+              {facets.classes.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    <Layers className="h-4 w-4" />
+                    Classes
+                  </h3>
+                  <div className="space-y-2">
+                    {facets.classes.map((cls) => {
+                      const count = products?.filter((p) => p.classe === cls).length ?? 0;
+                      return (
+                        <label key={cls} className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox
+                            checked={selectedClasses.has(cls)}
+                            onCheckedChange={(checked) => {
+                              const newSet = new Set(selectedClasses);
+                              if (checked) newSet.add(cls);
+                              else newSet.delete(cls);
+                              setSelectedClasses(newSet);
+                            }}
                           />
-                        </DialogContent>
-                      </Dialog>
+                          <span className="text-sm flex-1">{cls}</span>
+                          <span className="text-xs text-muted-foreground">{count}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Esta ação não pode ser desfeita. O produto "{product.name}" será
-                              permanentemente excluído.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => deleteMutation.mutate({ id: product.id })}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Excluir
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-                })}
+              {/* Categories */}
+              {facets.categories.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-3">Categorias</h3>
+                  <div className="space-y-2">
+                    {facets.categories.map((cat) => {
+                      const count = products?.filter((p) => p.categoria === cat).length ?? 0;
+                      return (
+                        <label key={cat} className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox
+                            checked={selectedCategories.has(cat)}
+                            onCheckedChange={(checked) => {
+                              const newSet = new Set(selectedCategories);
+                              if (checked) newSet.add(cat);
+                              else newSet.delete(cat);
+                              setSelectedCategories(newSet);
+                            }}
+                          />
+                          <span className="text-sm flex-1">{cat}</span>
+                          <span className="text-xs text-muted-foreground">{count}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Criticidade */}
+              <div>
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Criticidade
+                </h3>
+                <div className="space-y-2">
+                  {Object.entries(CRIT_META).map(([value, meta]) => {
+                    const count = products?.filter((p) => p.criticidade === value).length ?? 0;
+                    return (
+                      <label key={value} className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                          checked={selectedCriticidades.has(value)}
+                          onCheckedChange={(checked) => {
+                            const newSet = new Set(selectedCriticidades);
+                            if (checked) newSet.add(value);
+                            else newSet.delete(value);
+                            setSelectedCriticidades(newSet);
+                          }}
+                        />
+                        <span className="text-sm flex-1">{meta.label}</span>
+                        <span className="text-xs text-muted-foreground">{count}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
-            </section>
-          ))}
-        </>
+
+              {/* Suppliers */}
+              {facets.supplierIds.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    Fornecedores
+                  </h3>
+                  <div className="space-y-2">
+                    {facets.supplierIds.map((supplierId) => {
+                      const name = supplierName(supplierId) || `Fornecedor ${supplierId}`;
+                      const count = products?.filter((p) => p.supplierId === supplierId).length ?? 0;
+                      return (
+                        <label key={supplierId} className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox
+                            checked={selectedSuppliers.has(supplierId)}
+                            onCheckedChange={(checked) => {
+                              const newSet = new Set(selectedSuppliers);
+                              if (checked) newSet.add(supplierId);
+                              else newSet.delete(supplierId);
+                              setSelectedSuppliers(newSet);
+                            }}
+                          />
+                          <span className="text-sm flex-1 truncate">{name}</span>
+                          <span className="text-xs text-muted-foreground">{count}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </aside>
+
+          {/* Main Table Area */}
+          <div className="flex-1 min-w-0 flex flex-col">
+            <p className="text-sm text-muted-foreground mb-4">
+              {filtered.length} {filtered.length === 1 ? "item" : "itens"}
+              {hasFilters ? ` de ${products.length}` : ""}
+            </p>
+            <div className="flex-1 overflow-auto border rounded-lg">
+              <Table>
+                <TableHeader className="sticky top-0 bg-muted/50">
+                  <TableRow>
+                    <TableHead className="w-32">Produto</TableHead>
+                    <TableHead className="w-24">Classe</TableHead>
+                    <TableHead className="w-24">Categoria</TableHead>
+                    <TableHead className="w-32">Fornecedor</TableHead>
+                    <TableHead className="text-right w-28">Preço</TableHead>
+                    <TableHead className="text-center w-24">Data</TableHead>
+                    <TableHead className="text-center w-20">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((product) => {
+                    const forn = supplierName(product.supplierId) ?? product.latestPrice?.supplierName ?? "—";
+                    const crit = product.criticidade
+                      ? CRIT_META[product.criticidade as "alta" | "media" | "baixa"]
+                      : null;
+                    return (
+                      <TableRow key={product.id} className="hover:bg-muted/50">
+                        <TableCell>
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{product.name}</div>
+                            <div className="text-xs text-muted-foreground font-mono">
+                              {product.ncmCode}
+                            </div>
+                            {crit && (
+                              <Badge variant="outline" className={`mt-1 ${crit.badge}`}>
+                                {crit.label}
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">{product.classe || "—"}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {product.categoria || "—"}
+                            {product.subcategoria && (
+                              <div className="text-xs text-muted-foreground">{product.subcategoria}</div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm truncate max-w-[128px] block">{forn}</span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {product.latestPrice ? (
+                            <div className="text-sm font-medium">
+                              {fmtMoney(product.latestPrice.unitPriceCents, product.latestPrice.currency)}
+                              <div className="text-xs text-muted-foreground">
+                                /{product.unit}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Sem cotação</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center text-sm">
+                          {product.latestPrice ? fmtDate(product.latestPrice.quotationDate) : "—"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <ProductActionMenu
+                              product={product}
+                              onDelete={(id) => deleteMutation.mutate({ id })}
+                              updateMutation={updateMutation}
+                              suppliers={suppliersList}
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </div>
       )}
     </div>
+  );
+}
+
+interface ProductActionMenuProps {
+  product: any;
+  onDelete: (id: number) => void;
+  updateMutation: any;
+  suppliers: Array<{ id: number; name: string }>;
+}
+
+function ProductActionMenu({
+  product,
+  onDelete,
+  updateMutation,
+  suppliers,
+}: ProductActionMenuProps) {
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState<ProductFormData>(initialFormData);
+
+  const handleOpenEdit = () => {
+    setEditFormData({
+      name: product.name,
+      description: product.description || "",
+      ncmCode: product.ncmCode,
+      unit: product.unit,
+      weightKg: product.weightKg,
+      volumeM3: product.volumeM3,
+      supplierId: product.supplierId,
+      classe: product.classe || "",
+      criticidade: (product.criticidade as Criticidade) || "",
+      categoria: product.categoria || "",
+      subcategoria: product.subcategoria || "",
+      aplicacao: product.aplicacao || "",
+      tags: (product.tags as string[] | null) ?? [],
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleUpdate = () => {
+    const payload = {
+      id: product.id,
+      name: editFormData.name,
+      description: editFormData.description || undefined,
+      ncmCode: editFormData.ncmCode,
+      unit: editFormData.unit,
+      weightKg: editFormData.weightKg ?? undefined,
+      volumeM3: editFormData.volumeM3 ?? undefined,
+      supplierId: editFormData.supplierId ?? undefined,
+      classe: editFormData.classe || undefined,
+      criticidade: editFormData.criticidade || undefined,
+      categoria: editFormData.categoria || undefined,
+      subcategoria: editFormData.subcategoria || undefined,
+      aplicacao: editFormData.aplicacao || undefined,
+      tags: editFormData.tags.length ? editFormData.tags : undefined,
+    };
+    updateMutation.mutate(payload, {
+      onSuccess: () => setIsEditOpen(false),
+    });
+  };
+
+  return (
+    <>
+      <ProductPriceHistoryDialog productName={product.name} />
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleOpenEdit}
+            title="Editar"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar Produto</DialogTitle>
+            <DialogDescription>Atualize as informações do produto</DialogDescription>
+          </DialogHeader>
+          <ProductForm
+            data={editFormData}
+            onChange={setEditFormData}
+            onSubmit={handleUpdate}
+            loading={updateMutation.isPending}
+            suppliers={suppliers}
+            submitLabel="Salvar Alterações"
+          />
+        </DialogContent>
+      </Dialog>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="ghost" size="sm" title="Excluir" className="text-destructive hover:text-destructive">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O produto "{product.name}" será permanentemente excluído.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => onDelete(product.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
