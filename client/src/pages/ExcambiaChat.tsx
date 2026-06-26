@@ -364,7 +364,7 @@ export default function ExcambiaChat() {
           {vazio ? (
             <Welcome onPick={(t) => setDraft(t)} />
           ) : (
-            <div className="flex w-full max-w-full sm:max-w-2xl lg:max-w-3xl flex-col gap-4 sm:gap-6 px-3 sm:px-6 pt-4 sm:pt-6 pb-2">
+            <div className="flex w-full max-w-full sm:max-w-2xl lg:max-w-3xl shrink-0 flex-col gap-4 sm:gap-6 px-3 sm:px-6 pt-4 sm:pt-6 pb-2">
               {mensagens.map((m: any) => (
                 <Message
                   key={m.id}
