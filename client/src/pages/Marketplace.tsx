@@ -16,14 +16,34 @@ import { Building2, Factory } from "lucide-react";
 import { useLocation } from "wouter";
 import Industries from "./Industries";
 
+/**
+ * Feature flag — aba "Compradores nacionais / Setores".
+ *
+ * Oculta por enquanto: hoje o ambiente reaproveita o formulário de fornecedor e
+ * não está ligado ao resto do sistema. Será reativado num segundo momento com
+ * propósito próprio: entender a DEMANDA dos importadores que usam a plataforma
+ * (segmento, perfil de demanda, volume, sensibilidade a preço, potencial).
+ *
+ * Para reativar: troque para `true` e adapte o formulário/stats em Industries.tsx
+ * para os campos de comprador (Fase 5 já previstos no schema).
+ */
+const SHOW_COMPRADORES = false;
+
 export default function Marketplace() {
   const [location] = useLocation();
   // permite /suppliers?tab=compradores ou navegar para /industries (legado)
   const params = new URLSearchParams(location.split("?")[1] ?? "");
   const initialTab =
-    params.get("tab") === "compradores" || location.startsWith("/industries")
+    SHOW_COMPRADORES &&
+    (params.get("tab") === "compradores" || location.startsWith("/industries"))
       ? "compradores"
       : "fornecedores";
+
+  // Aba de compradores oculta: renderiza só o ambiente de fornecedores, sem o
+  // cabeçalho/abas externos (o componente Industries já traz o próprio título).
+  if (!SHOW_COMPRADORES) {
+    return <Industries tipoEntidade="fornecedor" />;
+  }
 
   return (
     <div className="space-y-6">
