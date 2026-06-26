@@ -11,11 +11,12 @@
  *   <Route path="/excambia" component={ExcambiaChat} />
  */
 import React, { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
 import ParameterExtractionModal from "@/components/excambia/ParameterExtractionModal";
-import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2, Settings2 } from "lucide-react";
+import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2, Settings2, FileSpreadsheet, ArrowRightCircle, Eye, Download } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 const ALLOWED_UPLOAD_TYPES = [
@@ -348,7 +349,14 @@ export default function ExcambiaChat() {
           ) : (
             <div className="flex w-full max-w-full sm:max-w-2xl lg:max-w-3xl flex-col gap-4 sm:gap-6 px-3 sm:px-6 pt-4 sm:pt-6 pb-2">
               {mensagens.map((m: any) => (
-                <Message key={m.id} role={m.role} content={m.content} />
+                <Message
+                  key={m.id}
+                  role={m.role}
+                  content={m.content}
+                  toolResults={m.toolResults}
+                  conversaId={activeId}
+                  operacaoId={conv?.operacaoId ?? undefined}
+                />
               ))}
               {optimistic.map((o) => (
                 <Message key={o.id} role="user" content={o.content} />
@@ -522,7 +530,10 @@ function StreamingEvent({ event }: { event: any }) {
   return null;
 }
 
-function Message({ role, content, pending }: { role: string; content: string; pending?: boolean }) {
+function Message({ role, content, pending, toolResults, conversaId, operacaoId }: {
+  role: string; content: string; pending?: boolean;
+  toolResults?: any; conversaId?: number; operacaoId?: number;
+}) {
   if (role === "user") {
     return (
       <div className="max-w-[85%] sm:max-w-[75%] self-end whitespace-pre-wrap break-words rounded-2xl bg-violet-600 px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-[14px] leading-relaxed text-white shadow-sm">
@@ -548,6 +559,7 @@ function Message({ role, content, pending }: { role: string; content: string; pe
               <div className="prose prose-sm max-w-none break-words text-slate-800 prose-p:my-2 prose-p:leading-relaxed prose-headings:font-semibold prose-headings:text-slate-900 prose-strong:text-slate-900 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-a:text-violet-600 prose-a:no-underline hover:prose-a:underline prose-code:rounded prose-code:bg-violet-50 prose-code:px-1 prose-code:py-0.5 prose-code:text-[0.85em] prose-code:text-violet-700 prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:rounded-xl prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-table:text-[13px] prose-th:border prose-th:border-slate-200 prose-th:bg-slate-50 prose-th:px-2 prose-th:py-1 prose-td:border prose-td:border-slate-200 prose-td:px-2 prose-td:py-1">
                 <Streamdown>{content}</Streamdown>
               </div>
+              <CalcResultCard toolResults={toolResults} conversaId={conversaId} operacaoId={operacaoId} />
               <CopyButton text={content} />
             </>
           )}
@@ -556,6 +568,142 @@ function Message({ role, content, pending }: { role: string; content: string; pe
     );
   }
   return null; // system/tool não renderizam
+}
+
+/** Extrai do array de toolResults o cálculo e/ou a planilha gerada. */
+function extractCalc(toolResults: any): {
+  planilha?: { url: string; fileName: string; formato?: string };
+  resumo?: { custo?: number; preco?: number; margemPct?: number };
+} | null {
+  if (!Array.isArray(toolResults)) return null;
+  let planilha: any;
+  let resumo: any;
+  for (const tr of toolResults) {
+    if (!tr || tr.ok === false) continue;
+    if (tr.name === "gerar_relatorio_calculo" && tr.data?.url) {
+      planilha = { url: tr.data.url, fileName: tr.data.fileName ?? "Planilha.xlsx", formato: tr.data.formato };
+    }
+    if (tr.name === "montar_calculo" && tr.data?.summary) {
+      const sm = tr.data.summary;
+      resumo = {
+        custo: sm.netCostTotal,
+        preco: sm.salePriceTotal,
+        margemPct: typeof sm.margemBruta === "number" ? sm.margemBruta * 100 : undefined,
+      };
+    }
+  }
+  if (!planilha && !resumo) return null;
+  return { planilha, resumo };
+}
+
+/**
+ * Card de bifurcação pós-cálculo: após a Excambia calcular/emitir a planilha, a
+ * pessoa decide enviar para Operações (segue o fluxo de importação) ou só ver o
+ * preço. Some quando a conversa já está vinculada a uma operação.
+ */
+function CalcResultCard({ toolResults, conversaId, operacaoId }: {
+  toolResults?: any; conversaId?: number; operacaoId?: number;
+}) {
+  const [, setLocation] = useLocation();
+  const [dismissed, setDismissed] = useState(false);
+  const utils = trpc.useUtils();
+  const createOp = trpc.operations.createFromCalculation.useMutation();
+
+  const calc = extractCalc(toolResults);
+  if (!calc || dismissed) return null;
+
+  const brl = (v?: number) =>
+    v == null ? "—" : `R$ ${v.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}`;
+
+  async function enviarParaOperacoes() {
+    try {
+      const titulo = calc?.planilha?.fileName?.replace(/\.(xlsx|pdf)$/i, "") || "Importação (cálculo Excambia)";
+      const res = await createOp.mutateAsync({
+        conversaId,
+        titulo,
+        planilha: calc?.planilha
+          ? { url: calc.planilha.url, nome: calc.planilha.fileName, formato: calc.planilha.formato === "pdf" ? "pdf" : "excel" }
+          : undefined,
+        snapshot: calc?.resumo ?? {},
+      });
+      await utils.conversas.get.invalidate();
+      utils.conversas.list.invalidate();
+      toast.success("Operação criada. Cálculo e planilha vinculados.");
+      setLocation(`/operacao/${res.operacaoId}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Não foi possível criar a operação. Tente novamente.");
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50/70 to-teal-50/40 p-3 sm:p-4">
+      <div className="flex items-center gap-2">
+        <FileSpreadsheet className="h-4 w-4 text-violet-600" />
+        <span className="text-[13px] font-semibold text-slate-800">Cálculo pronto</span>
+      </div>
+
+      {calc.resumo && (
+        <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+          <Stat label="Custo líquido" value={brl(calc.resumo.custo)} />
+          <Stat label="Preço de venda" value={brl(calc.resumo.preco)} />
+          <Stat label="Margem bruta" value={calc.resumo.margemPct != null ? `${calc.resumo.margemPct.toFixed(1)}%` : "—"} />
+        </div>
+      )}
+
+      {calc.planilha && (
+        <a
+          href={calc.planilha.url}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-violet-700 hover:bg-violet-50"
+        >
+          <Download className="h-3.5 w-3.5" />
+          {calc.planilha.fileName}
+        </a>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {operacaoId ? (
+          <button
+            onClick={() => setLocation(`/operacao/${operacaoId}`)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-violet-700"
+          >
+            <ArrowRightCircle className="h-4 w-4" /> Abrir operação
+          </button>
+        ) : (
+          <button
+            onClick={enviarParaOperacoes}
+            disabled={createOp.isPending}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+          >
+            {createOp.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightCircle className="h-4 w-4" />}
+            Enviar para Operações
+          </button>
+        )}
+        <button
+          onClick={() => setDismissed(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-slate-600 hover:bg-slate-50"
+        >
+          <Eye className="h-4 w-4" /> Só visualizar
+        </button>
+      </div>
+      {!operacaoId && (
+        <p className="mt-2 text-[11px] text-slate-400">
+          Enviar cria uma operação e dá sequência ao fluxo de importação. Só visualizar mantém apenas o preço.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-white/70 px-2 py-1.5">
+      <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="text-[13px] font-semibold text-slate-800">{value}</div>
+    </div>
+  );
 }
 
 /** Indicador de "digitando" enquanto a Excambia processa. */

@@ -11,6 +11,7 @@
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import * as svc from "../services/operacaoService";
+import * as conversaDb from "../db/conversaDb";
 
 export const operationsRouter = router({
   list: protectedProcedure.query(({ ctx }) => svc.listOperacoes(ctx.user.id)),
@@ -52,6 +53,77 @@ export const operationsRouter = router({
       svc.linkCalculation(input.operacaoId, input.calculationId, {
         valorBrlCents: input.valorBrlCents, margemBp: input.margemBp,
       })),
+
+  /**
+   * BIFURCAÇÃO PÓS-CÁLCULO — "Enviar para Operações".
+   * A partir de um cálculo gerado pela Excambia no chat, cria uma operação,
+   * vincula a conversa a ela, anexa a planilha (se houver) e registra o cálculo
+   * como evento na timeline. Retorna o id da operação criada.
+   */
+  createFromCalculation: protectedProcedure
+    .input(z.object({
+      conversaId: z.number().optional(),
+      titulo: z.string().min(1),
+      clienteNome: z.string().optional(),
+      origemPais: z.string().optional(),
+      regimeTributario: z.enum(["lucro_real", "lucro_presumido", "simples_nacional"]).optional(),
+      planilha: z.object({
+        url: z.string(),
+        nome: z.string(),
+        formato: z.enum(["excel", "pdf"]).optional(),
+      }).optional(),
+      snapshot: z.unknown().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const op = await svc.createOperacao({
+        userId: ctx.user.id,
+        titulo: input.titulo,
+        clienteNome: input.clienteNome,
+        origemPais: input.origemPais,
+        regimeTributario: input.regimeTributario,
+      });
+      const operacaoId = (op as { id: number }).id;
+
+      // Vincula a conversa de origem (se houver) à nova operação.
+      if (input.conversaId) {
+        try {
+          await conversaDb.linkConversaToOperacao(input.conversaId, ctx.user.id, operacaoId, "analyze");
+        } catch { /* não bloqueia a criação da operação */ }
+      }
+
+      // Anexa a planilha gerada (se houver).
+      if (input.planilha) {
+        try {
+          await svc.anexarDocumento({
+            userId: ctx.user.id,
+            operacaoId,
+            tipo: input.planilha.formato === "pdf" ? "pdf" : "outro",
+            nome: input.planilha.nome,
+            fileKey: input.planilha.url,
+            fileUrl: input.planilha.url,
+            contentType: input.planilha.formato === "pdf"
+              ? "application/pdf"
+              : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            autor: "excambia",
+            descricao: "Planilha de cálculo enviada do chat da Excambia",
+          });
+        } catch { /* segue mesmo se o anexo falhar */ }
+      }
+
+      // Registra o cálculo na timeline.
+      try {
+        await svc.addEvento({
+          operacaoId,
+          tipo: "calculo_vinculado",
+          estagio: "analyze",
+          autor: "excambia",
+          titulo: "Cálculo enviado para a operação (via chat)",
+          payload: input.snapshot ?? {},
+        } as any);
+      } catch { /* timeline best-effort */ }
+
+      return { operacaoId };
+    }),
 
   decideGoNoGo: protectedProcedure
     .input(z.object({
