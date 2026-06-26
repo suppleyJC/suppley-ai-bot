@@ -88,6 +88,15 @@ export type InvokeParams = {
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
   response_format?: ResponseFormat;
+  /**
+   * Habilita a ferramenta NATIVA de pesquisa web da Anthropic (web_search).
+   * O modelo decide quando pesquisar; a busca roda no servidor da Anthropic e o
+   * texto volta com citações — sem chave de API externa. Use para pesquisa de
+   * legislação, fiscal, logística, mercado financeiro e commodities.
+   */
+  webSearch?: boolean;
+  /** Limite de buscas por chamada (default 5). */
+  webSearchMaxUses?: number;
 };
 
 /** IDs de modelo disponíveis para roteamento por complexidade. */
@@ -267,6 +276,8 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     response_format,
     outputSchema,
     output_schema,
+    webSearch,
+    webSearchMaxUses,
   } = params;
 
   // A Anthropic não tem "response_format: json_schema" como a OpenAI. Para obter
@@ -396,6 +407,19 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = { type: "tool", name: structuredToolName };
   }
 
+  // Ferramenta NATIVA de pesquisa web da Anthropic (server-side). Não é roteada
+  // pelo nosso loop de tools — a Anthropic executa a busca e devolve texto com
+  // citações. Não combina com saída estruturada forçada (structuredToolName).
+  if (webSearch && !structuredToolName) {
+    const existing = (payload.tools as Array<Record<string, unknown>> | undefined) ?? [];
+    payload.tools = [
+      ...existing,
+      { type: "web_search_20250305", name: "web_search", max_uses: webSearchMaxUses ?? 5 },
+    ];
+    // Garante que o modelo PODE escolher pesquisar (nunca força).
+    if (!payload.tool_choice) payload.tool_choice = { type: "auto" };
+  }
+
   // Chamar API Anthropic
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -428,9 +452,12 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       },
     })) || [];
 
-  let textContent = result.content
-    ?.find((block: any) => block.type === "text")
-    ?.text || "";
+  // Concatena TODOS os blocos de texto (a pesquisa web devolve a resposta em
+  // múltiplos blocos com citações; pegar só o primeiro perderia conteúdo).
+  let textContent = (result.content ?? [])
+    .filter((block: any) => block.type === "text" && typeof block.text === "string")
+    .map((block: any) => block.text)
+    .join("") || "";
 
   // Saída estruturada: o JSON vem como input da tool sintética. Devolvemos como
   // string em content (e limpamos tool_calls) para o chamador fazer JSON.parse.

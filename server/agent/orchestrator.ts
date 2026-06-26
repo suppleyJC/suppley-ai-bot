@@ -33,6 +33,10 @@ FERRAMENTAS DISPONÍVEIS (operação e registro):
 - registrar_nacionalizacao: marca o produto como nacionalizado (último passo antes da entrega).
 - lancar_financeiro: registra movimentos financeiros (câmbio, pagamentos, impostos, fretes, despesas, receitas).
 
+PESQUISA WEB (inteligência de mercado ampla):
+- Você tem acesso a PESQUISA NA WEB. Use-a para responder dúvidas atualizadas sobre legislação e parte fiscal (TEC/TIPI, ICMS, benefícios estaduais, normativas da Receita), logística (fretes, rotas, portos, prazos), mercado financeiro (câmbio, juros) e COMMODITIES que impactam o preço dos insumos (aço, alumínio, plásticos, etc.).
+- Ao usar dados da web, cite a fonte e a data. Para CÁLCULO fiscal definitivo, continue usando o motor (montar_calculo) — a web informa o contexto, o motor calcula.
+
 FERRAMENTAS DISPONÍVEIS (completude e inteligência de mercado):
 - coletar_dados_faltantes: analisa a operação atual e identifica os dados essenciais que estão faltando (cliente, fornecedor, origem, prazo, regime, valor). Use SEMPRE no início de uma operação nova ou incompleta para saber o que perguntar.
 - buscar_ativo: busca informações de um ativo/produto (preço de referência, dados de mercado).
@@ -124,6 +128,8 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
       messages: conversation,
       tools: toolSchemas.length > 0 ? toolSchemas : undefined,
       tool_choice: toolSchemas.length > 0 ? "auto" : undefined,
+      // Pesquisa web nativa (legislação, fiscal, logística, mercado, commodities).
+      webSearch: true,
     });
 
     const choice = result.choices?.[0]?.message;
@@ -221,6 +227,8 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
       messages: conversation,
       tools: toolSchemas.length > 0 ? toolSchemas : undefined,
       tool_choice: toolSchemas.length > 0 ? "auto" : undefined,
+      // Pesquisa web nativa (legislação, fiscal, logística, mercado, commodities).
+      webSearch: true,
     });
 
     const choice = result.choices?.[0]?.message;
