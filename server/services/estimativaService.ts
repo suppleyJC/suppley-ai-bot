@@ -90,6 +90,22 @@ export interface EstimativaInput {
   lucroDesejado?: number;       // default 0.05
   irpjRate?: number;            // default 0.25
   csllRate?: number;            // default 0.09
+
+  /**
+   * 2º CENÁRIO — revenda do COMPRADOR (Lucro Real). Quando informado, o motor
+   * calcula também a estimativa de custo líquido e venda do comprador (cliente
+   * da trading que revende). Espelha o "x Lucro Real" do modelo de referência.
+   * Se `incluirComprador` for true sem detalhes, usa defaults (ICMS 12%, lucro 15%).
+   */
+  incluirComprador?: boolean;
+  comprador?: {
+    icmsVendaRate?: number;     // default 0.12 (interna)
+    pisVendaRate?: number;      // default 0.0165
+    cofinsVendaRate?: number;   // default 0.076
+    lucroDesejado?: number;     // default 0.15
+    irpjRate?: number;          // default 0.25
+    csllRate?: number;          // default 0.09
+  };
 }
 
 export interface EstimativaResult extends EngineResult {
@@ -243,6 +259,18 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
     lucroDesejado: input.lucroDesejado ?? 0.05,
     irpjRate: input.irpjRate,
     csllRate: input.csllRate,
+
+    // 2º cenário: revenda do comprador (Lucro Real)
+    buyer: (input.incluirComprador || input.comprador)
+      ? {
+          icmsVendaRate: input.comprador?.icmsVendaRate ?? 0.12,
+          pisVendaRate: input.comprador?.pisVendaRate ?? 0.0165,
+          cofinsVendaRate: input.comprador?.cofinsVendaRate ?? 0.076,
+          lucroDesejado: input.comprador?.lucroDesejado ?? 0.15,
+          irpjRate: input.comprador?.irpjRate,
+          csllRate: input.comprador?.csllRate,
+        }
+      : undefined,
   };
 
   const result = calculateImportCost(globals, items);

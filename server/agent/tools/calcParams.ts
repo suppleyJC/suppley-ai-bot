@@ -57,6 +57,13 @@ export const CALC_SCHEMA_PROPERTIES = {
     type: "string",
     description: "Fase do TTD/benefício estadual de SC: 'primeiros_36m' (2,6%) ou 'apos_36m' (1,0%)",
   },
+  incluirComprador: {
+    type: "boolean",
+    description:
+      "Se true, inclui também a estimativa de custo e venda do COMPRADOR (cliente da trading " +
+      "que revende em Lucro Real) — o cenário 'x Lucro Real' do modelo. Use ao gerar a planilha " +
+      "completa de trading ou quando perguntarem o preço de revenda do cliente.",
+  },
 } as const;
 
 /** Normaliza o modal textual vindo do LLM para o enum do motor. */
@@ -103,5 +110,6 @@ export function mapArgsToEstimativaInput(
     estadoDestino: typeof args.estadoDestino === "string" ? args.estadoDestino : undefined,
     modal: mapModal(args.modal),
     ttdPhase: mapTtdPhase(args.ttdFase),
+    incluirComprador: args.incluirComprador === true,
   };
 }

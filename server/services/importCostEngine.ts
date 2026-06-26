@@ -127,6 +127,30 @@ export interface EngineGlobalInput {
   irpjRate?: number;
   /** CSLL (default 0.09) */
   csllRate?: number;
+
+  /**
+   * 2º CENÁRIO — REVENDA DO COMPRADOR (Lucro Real).
+   * Quando presente, o motor calcula a estimativa de custo líquido e venda do
+   * COMPRADOR (cliente da trading que revende). Espelha o bloco
+   * "ESTIMATIVA DE VENDA DO COMPRADOR - LUCRO REAL" da planilha de referência:
+   *   custo líquido do comprador = NF de venda do importador − créditos
+   *   recuperáveis do comprador (ICMS, PIS, COFINS, IPI) + royalties;
+   *   preço = custo líquido / (1 − (ICMS + PIS + COFINS + margem)).
+   */
+  buyer?: {
+    /** ICMS na revenda do comprador (fração — ex.: 0.12 interna). */
+    icmsVendaRate: number;
+    /** PIS na revenda (Lucro Real 0.0165). */
+    pisVendaRate?: number;
+    /** COFINS na revenda (Lucro Real 0.076). */
+    cofinsVendaRate?: number;
+    /** Lucro líquido desejado do comprador sobre a venda (ex.: 0.15). */
+    lucroDesejado: number;
+    /** IRPJ (default 0.25). */
+    irpjRate?: number;
+    /** CSLL (default 0.09). */
+    csllRate?: number;
+  };
 }
 
 export interface EngineItemResult {
@@ -191,6 +215,22 @@ export interface EngineItemResult {
   royaltiesAllocated: number;   // royalties (+ margem) rateados
   totalWithRoyalties: number;
   unitWithRoyalties: number;
+
+  // ---- 2º cenário: revenda do COMPRADOR (Lucro Real) ----
+  // Preenchidos apenas quando globals.buyer está presente.
+  /** Custo líquido do comprador (NF venda importador − créditos + royalties). */
+  buyerNetCost?: number;
+  buyerNetUnitCost?: number;
+  buyerMarkupFactor?: number;
+  /** Valor dos produtos (venda do comprador). */
+  buyerSalePrice?: number;
+  buyerSaleUnitPrice?: number;
+  buyerIcmsVendaValue?: number;
+  buyerIpiVendaValue?: number;
+  buyerIcmsStValue?: number;
+  /** Total da NF de venda do comprador (preço + IPI + ICMS ST). */
+  buyerTotalInvoiceValue?: number;
+  buyerUnitInvoiceValue?: number;
 }
 
 export interface EngineSummary {
@@ -248,6 +288,39 @@ export interface EngineSummary {
   csllValor: number;
   royaltiesComMargem: number;
   totalOperacaoComRoyalties: number;
+
+  // ---- 2º cenário: revenda do COMPRADOR (Lucro Real) ----
+  // Preenchidos apenas quando globals.buyer está presente.
+  buyer?: {
+    /** Custo líquido total do comprador. */
+    netCostTotal: number;
+    margemBruta: number;
+    markupFactor: number;
+    /** Valor dos produtos (venda do comprador). */
+    salePriceTotal: number;
+    icmsVendaTotal: number;
+    pisVendaTotal: number;
+    cofinsVendaTotal: number;
+    ipiVendaTotal: number;
+    icmsStTotal: number;
+    /** Total da venda do comprador (produtos + IPI + ST). */
+    totalSaleInvoice: number;
+    lucroDesejadoValor: number;
+    irpjValor: number;
+    csllValor: number;
+  };
+
+  // ---- GANHO DA OPERAÇÃO (visão trading) ----
+  ganho: {
+    /** Margem da venda (lucro desejado do importador em R$). */
+    margemVenda: number;
+    /** Margem dos royalties retida. */
+    margemRoyalties: number;
+    /** Ganho do benefício de ICMS (spread TTD). */
+    ganhoIcms: number;
+    /** Soma dos ganhos da operação. */
+    total: number;
+  };
 }
 
 export interface EngineResult {
@@ -333,6 +406,28 @@ export function calculateImportCost(
     );
   }
 
+  // ---- 2º cenário: fator de markup do COMPRADOR (revenda Lucro Real) ----
+  const buyer = globals.buyer;
+  let buyerMargemBruta = 0;
+  let buyerMarkupFactor = 0;
+  let buyerPisVendaRate = 0;
+  let buyerCofinsVendaRate = 0;
+  if (buyer) {
+    buyerPisVendaRate = buyer.pisVendaRate ?? 0.0165;
+    buyerCofinsVendaRate = buyer.cofinsVendaRate ?? 0.076;
+    const buyerIrpj = buyer.irpjRate ?? DEFAULT_IRPJ;
+    const buyerCsll = buyer.csllRate ?? DEFAULT_CSLL;
+    buyerMargemBruta = buyer.lucroDesejado / (1 - (buyerIrpj + buyerCsll));
+    buyerMarkupFactor =
+      1 - (buyer.icmsVendaRate + buyerPisVendaRate + buyerCofinsVendaRate + buyerMargemBruta);
+    if (buyerMarkupFactor <= 0) {
+      throw new Error(
+        "Fator de markup do COMPRADOR ≤ 0: impostos de revenda + margem excedem 100%. " +
+        "Reduza o lucro desejado do comprador ou revise as alíquotas."
+      );
+    }
+  }
+
   // ---- Cálculo por item ----
   const results: EngineItemResult[] = items.map((it) => {
     const totalFob = it.quantity * it.unitPriceFob;
@@ -412,6 +507,31 @@ export function calculateImportCost(
     const royaltiesComMargemTotal = royaltiesTotal * (1 + globals.lucroDesejado);
     const royaltiesAllocated = royaltiesComMargemTotal * share;
 
+    // ---- 2º cenário: revenda do COMPRADOR (Lucro Real) ----
+    // Espelha a coluna BA da planilha: o comprador parte da NF de venda do
+    // importador e recupera, como crédito (Lucro Real), o ICMS, PIS, COFINS e
+    // IPI destacados na compra; soma royalties (+ margem) rateados.
+    let buyerNetCost: number | undefined;
+    let buyerSalePrice: number | undefined;
+    let buyerIcmsVendaValue: number | undefined;
+    let buyerIpiVendaValue: number | undefined;
+    let buyerIcmsStValueOut: number | undefined;
+    let buyerTotalInvoiceValue: number | undefined;
+    if (buyer) {
+      buyerNetCost =
+        totalInvoiceValue            // NF de venda do importador (preço + IPI + ST)
+        - ipiVendaValue              // crédito de IPI
+        - icmsVendaValue             // crédito de ICMS (destacado na venda do importador)
+        - salePrice * buyerPisVendaRate    // crédito de PIS sobre o valor dos produtos
+        - salePrice * buyerCofinsVendaRate // crédito de COFINS
+        + royaltiesAllocated;        // royalties (+ margem) rateados (zerados por padrão)
+      buyerSalePrice = buyerNetCost / buyerMarkupFactor;
+      buyerIcmsVendaValue = buyerSalePrice * buyer.icmsVendaRate;
+      buyerIpiVendaValue = buyerSalePrice * it.ipiRate;
+      buyerIcmsStValueOut = it.icmsStValue ?? 0;
+      buyerTotalInvoiceValue = buyerSalePrice + buyerIpiVendaValue + buyerIcmsStValueOut;
+    }
+
     return {
       description: it.description,
       ncm: it.ncm,
@@ -446,6 +566,18 @@ export function calculateImportCost(
       unitWithRoyalties: it.quantity > 0
         ? (totalInvoiceValue + royaltiesAllocated) / it.quantity
         : 0,
+      buyerNetCost,
+      buyerNetUnitCost: buyerNetCost != null && it.quantity > 0 ? buyerNetCost / it.quantity : undefined,
+      buyerMarkupFactor: buyer ? buyerMarkupFactor : undefined,
+      buyerSalePrice,
+      buyerSaleUnitPrice: buyerSalePrice != null && it.quantity > 0 ? buyerSalePrice / it.quantity : undefined,
+      buyerIcmsVendaValue,
+      buyerIpiVendaValue,
+      buyerIcmsStValue: buyerIcmsStValueOut,
+      buyerTotalInvoiceValue,
+      buyerUnitInvoiceValue: buyerTotalInvoiceValue != null && it.quantity > 0
+        ? buyerTotalInvoiceValue / it.quantity
+        : undefined,
     };
   });
 
@@ -471,6 +603,44 @@ export function calculateImportCost(
   const nfeOutrasDespesas = pisTotal + cofinsTotal + icmsClienteTotal + siscomexTotal + afrmmTotal;
   const lucroDesejadoValor = salePriceTotal * globals.lucroDesejado;
   const margemBrutaValor = salePriceTotal * margemBruta;
+
+  // ---- 2º cenário: consolidação do COMPRADOR ----
+  let buyerSummary: EngineSummary["buyer"];
+  if (buyer) {
+    const buyerNetCostTotal = sum(r => r.buyerNetCost ?? 0);
+    const buyerSalePriceTotal = sum(r => r.buyerSalePrice ?? 0);
+    const buyerIpiVendaTotal = sum(r => r.buyerIpiVendaValue ?? 0);
+    const buyerIcmsStTotal = sum(r => r.buyerIcmsStValue ?? 0);
+    const buyerIrpj = buyer.irpjRate ?? DEFAULT_IRPJ;
+    const buyerCsll = buyer.csllRate ?? DEFAULT_CSLL;
+    const buyerMargemBrutaValor = buyerSalePriceTotal * buyerMargemBruta;
+    buyerSummary = {
+      netCostTotal: buyerNetCostTotal,
+      margemBruta: buyerMargemBruta,
+      markupFactor: buyerMarkupFactor,
+      salePriceTotal: buyerSalePriceTotal,
+      icmsVendaTotal: buyerSalePriceTotal * buyer.icmsVendaRate,
+      pisVendaTotal: buyerSalePriceTotal * buyerPisVendaRate,
+      cofinsVendaTotal: buyerSalePriceTotal * buyerCofinsVendaRate,
+      ipiVendaTotal: buyerIpiVendaTotal,
+      icmsStTotal: buyerIcmsStTotal,
+      totalSaleInvoice: buyerSalePriceTotal + buyerIpiVendaTotal + buyerIcmsStTotal,
+      lucroDesejadoValor: buyerSalePriceTotal * buyer.lucroDesejado,
+      irpjValor: buyerMargemBrutaValor * buyerIrpj,
+      csllValor: buyerMargemBrutaValor * buyerCsll,
+    };
+  }
+
+  // ---- GANHO DA OPERAÇÃO (visão trading) ----
+  // margemVenda = lucro desejado do importador; margemRoyalties = margem retida
+  // sobre royalties; ganhoIcms = spread do benefício TTD repassado/retido.
+  const ganhoMargemRoyalties = royaltiesTotal * globals.lucroDesejado;
+  const ganho = {
+    margemVenda: lucroDesejadoValor,
+    margemRoyalties: ganhoMargemRoyalties,
+    ganhoIcms: ganhoBeneficioIcmsTotal,
+    total: lucroDesejadoValor + ganhoMargemRoyalties + ganhoBeneficioIcmsTotal,
+  };
 
   const summary: EngineSummary = {
     exchangeRate: fx,
@@ -501,6 +671,8 @@ export function calculateImportCost(
     csllValor: margemBrutaValor * csll,
     royaltiesComMargem: royaltiesTotal * (1 + globals.lucroDesejado),
     totalOperacaoComRoyalties: totalSaleInvoice + royaltiesTotal * (1 + globals.lucroDesejado),
+    buyer: buyerSummary,
+    ganho,
   };
 
   if (

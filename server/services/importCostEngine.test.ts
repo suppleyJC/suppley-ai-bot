@@ -148,3 +148,63 @@ describe("importCostEngine — variações de regime e configuração", () => {
     expect(r[0].icmsValue).toBeCloseTo(r[0].icmsBase * 0.01, 2);
   });
 });
+
+describe("importCostEngine — 2º cenário: revenda do COMPRADOR (Lucro Real)", () => {
+  const buyer = {
+    icmsVendaRate: 0.12,
+    pisVendaRate: 0.0165,
+    cofinsVendaRate: 0.076,
+    lucroDesejado: 0.15,
+    irpjRate: 0.25,
+    csllRate: 0.09,
+  };
+
+  it("não calcula o comprador quando buyer está ausente", () => {
+    const { items: r, summary } = calculateImportCost(globals, items);
+    expect(r[0].buyerNetCost).toBeUndefined();
+    expect(summary.buyer).toBeUndefined();
+  });
+
+  it("custo líquido do comprador = NF venda importador − créditos (ICMS, PIS, COFINS, IPI)", () => {
+    const { items: r } = calculateImportCost({ ...globals, royaltiesBrl: 0, buyer }, items);
+    const it0 = r[0];
+    const esperado =
+      it0.totalInvoiceValue -
+      it0.ipiVendaValue -
+      it0.icmsVendaValue -
+      it0.salePrice * buyer.pisVendaRate -
+      it0.salePrice * buyer.cofinsVendaRate;
+    expect(it0.buyerNetCost).toBeCloseTo(esperado, 2);
+  });
+
+  it("markup do comprador = 1 − (ICMS + PIS + COFINS + margem), margem = lucro/(1−IRPJ−CSLL)", () => {
+    const { items: r } = calculateImportCost({ ...globals, buyer }, items);
+    const margem = buyer.lucroDesejado / (1 - (buyer.irpjRate + buyer.csllRate));
+    const markup = 1 - (buyer.icmsVendaRate + buyer.pisVendaRate + buyer.cofinsVendaRate + margem);
+    expect(r[0].buyerMarkupFactor).toBeCloseTo(markup, 10);
+    expect(r[0].buyerSalePrice).toBeCloseTo((r[0].buyerNetCost ?? 0) / markup, 2);
+  });
+
+  it("consolida totais do comprador e o bloco GANHO DA OPERAÇÃO", () => {
+    const { items: r, summary } = calculateImportCost(
+      { ...globals, royaltiesBrl: 0, icmsNegociadoClienteRate: 0.04, buyer },
+      items
+    );
+    expect(summary.buyer).toBeDefined();
+    expect(summary.buyer!.netCostTotal).toBeCloseTo(
+      r.reduce((s, x) => s + (x.buyerNetCost ?? 0), 0), 2
+    );
+    expect(summary.buyer!.salePriceTotal).toBeGreaterThan(0);
+    // Ganho da operação = margem venda + margem royalties + ganho ICMS
+    expect(summary.ganho.total).toBeCloseTo(
+      summary.ganho.margemVenda + summary.ganho.margemRoyalties + summary.ganho.ganhoIcms, 6
+    );
+    expect(summary.ganho.margemVenda).toBeCloseTo(summary.lucroDesejadoValor, 6);
+  });
+
+  it("rejeita markup do comprador impossível", () => {
+    expect(() =>
+      calculateImportCost({ ...globals, buyer: { ...buyer, lucroDesejado: 0.8 } }, items)
+    ).toThrow(/markup do COMPRADOR/i);
+  });
+});
