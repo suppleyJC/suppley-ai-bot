@@ -109,16 +109,22 @@ export type StreamChunk =
 const MAX_TURNS = 6; // teto de idas-e-voltas com tools por mensagem
 
 /**
- * Remove mensagens de texto vazias do histórico. A API da Anthropic rejeita
- * blocos de texto vazios — um histórico com uma resposta vazia (ex.: turno que
- * só rodou tools) quebrava a próxima chamada e a Excambia ficava MUDA. Mantém
- * mensagens com conteúdo em array (multimodal) e as que carregam tool_calls.
+ * Sanitiza o histórico para a API da Anthropic, que rejeita blocos de texto
+ * VAZIOS (ex.: um turno legado que gravou resposta vazia faria a próxima chamada
+ * falhar — e a Excambia ficava muda). IMPORTANTE: não REMOVEMOS a mensagem
+ * vazia, pois isso quebraria a alternância user/assistant exigida pela API;
+ * apenas SUBSTITUÍMOS o conteúdo vazio por um placeholder mínimo, preservando a
+ * estrutura. Mantém intactas as mensagens multimodais (array) e com tool_calls.
  */
+const EMPTY_PLACEHOLDER = "(sem conteúdo)";
 function sanitizeMessages(messages: Message[]): Message[] {
-  return messages.filter((m) => {
-    if (Array.isArray(m.content)) return true;
-    if ((m as { tool_calls?: unknown[] }).tool_calls?.length) return true;
-    return typeof m.content === "string" && m.content.trim().length > 0;
+  return messages.map((m) => {
+    if (Array.isArray(m.content)) return m;
+    if ((m as { tool_calls?: unknown[] }).tool_calls?.length) return m;
+    if (typeof m.content === "string" && m.content.trim().length === 0) {
+      return { ...m, content: EMPTY_PLACEHOLDER };
+    }
+    return m;
   });
 }
 
