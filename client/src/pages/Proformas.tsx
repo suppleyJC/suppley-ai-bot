@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { FileText, Upload, Sparkles, Trash2, Plus, ArrowRight, Loader2, CheckCircle2, Building2, Package, Copy, Edit } from "lucide-react";
+import { FileText, Upload, Sparkles, Trash2, Plus, ArrowRight, Loader2, CheckCircle2, Building2, Package, Copy, Edit, Share2 } from "lucide-react";
 import OperationCard from "@/components/OperationCard";
 
 type ItemDraft = {
@@ -518,21 +518,31 @@ export default function Proformas() {
                     status: p.status,
                     estimatedValue: p.totalFobCents ?? undefined,
                     origin: p.supplierCountry ?? undefined,
-                    lastUpdated: p.updatedAt,
+                    // Mostra data de distribuição se já foi distribuída, senão mostra atualização
+                    lastUpdated: p.status === "distribuida" ? (p.distributedAt ?? p.updatedAt) : p.updatedAt,
                     avatar: {
                       initials: (p.supplierName || "PF").substring(0, 2).toUpperCase(),
                       color: "teal",
                     },
                   }}
                   compact={false}
-                  actions={[
-                    {
-                      label: loadingEditId === p.id ? "Abrindo..." : "Revisar",
-                      icon: <Edit className="h-4 w-4" />,
-                      onClick: () => openForEdit(p.id),
-                    },
-                    { label: "Distribuir", onClick: () => distributeMutation.mutate({ proformaId: p.id }) },
-                  ]}
+                  actions={(() => {
+                    const acts = [
+                      {
+                        label: loadingEditId === p.id ? "Abrindo..." : "Revisar",
+                        icon: <Edit className="h-4 w-4" />,
+                        onClick: async () => { await openForEdit(p.id); },
+                      },
+                    ];
+                    if (p.status !== "distribuida") {
+                      acts.push({
+                        label: "Distribuir",
+                        icon: <Share2 className="h-4 w-4" />,
+                        onClick: async () => { distributeMutation.mutate({ proformaId: p.id }); },
+                      });
+                    }
+                    return acts;
+                  })()}
                 />
               ))}
             </div>

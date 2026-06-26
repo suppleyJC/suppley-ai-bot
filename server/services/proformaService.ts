@@ -10,6 +10,9 @@ import * as db from "../db";
 import { invokeLLM } from "../_core/llm";
 import { suggestNCMWithAI, suggestNCMBatch } from "./ncmService";
 import { suggestNCMSmart } from "./smartNcmService";
+import { inferCategories, findProductByNameAndSupplier } from "./productCategorizationService";
+import { registerSupplierPrice } from "./priceComparisonService";
+import { getExchangeRateAtDate } from "../db/exchangeDb";
 import type { InsertProforma, InsertProformaItem } from "../../drizzle/schema";
 
 // ============================================================
@@ -375,8 +378,11 @@ async function upsertFornecedor(
 /**
  * Distribui uma proforma já cadastrada para a base:
  *  - cria/vincula o fornecedor em industries
- *  - cria os produtos em products (Ativos & Insumos), sugerindo NCM se faltar
+ *  - para cada item:
+ *    • se produto já existe (mesmo nome + fornecedor): registra em supplierPrices (dedup P8)
+ *    • se é novo: cria produto com categorização inferida (P7)
  *  - registra histórico de preços em supplierPrices para rastreamento cronológico
+ *  - marca proforma como "distribuida" com timestamp
  */
 export async function distributeProformaToBase(
   userId: number,
@@ -402,14 +408,30 @@ export async function distributeProformaToBase(
     });
   }
 
+  // Pré-calcula câmbio para BRL (para registrar em supplierPrices)
+  let exchangeRate = 1; // fallback: se não conseguir, usa 1:1
+  if (proforma.currency !== "BRL") {
+    try {
+      const rate = await getExchangeRateAtDate(
+        proforma.currency,
+        "BRL",
+        proforma.quotationDate || new Date(),
+      );
+      if (rate) exchangeRate = rate;
+    } catch {
+      /* segue com fallback */
+    }
+  }
+
   // 2) Itens → products (Ativos & Insumos)
+  //    Com dedup (P8) e categorização (P7)
   const productIds: number[] = [];
   for (const item of items) {
     let ncm = item.ncmCode || undefined;
     if (!ncm) {
       try {
         // Sugestão inteligente: reutiliza NCM de produtos similares já validados,
-        // senão faz busca normal. Melhora a consistência e economiza API calls.
+        // senão faz busca normal.
         const suggestion = await suggestNCMSmart(item.productName, userId);
         ncm = suggestion?.ncmCode;
       } catch {
@@ -417,35 +439,104 @@ export async function distributeProformaToBase(
       }
     }
 
-    const product = await db.createProduct({
+    // P8: Verificar se produto já existe (mesmo nome + mesmo fornecedor)
+    const existingProduct = await findProductByNameAndSupplier(
       userId,
-      name: item.productName,
-      description: item.description ?? undefined,
-      ncmCode: ncm || "00000000",
-      unit: item.unit || "UN",
-      supplierId: industriaId ?? undefined,
-      origem: "cotado_nao_importado",
-      ncmStatus: ncm ? "validado" : "sugerido",
-      custoImportadoRefCents: item.unitPriceCents,
-      // Classificação (novos campos do Sprint 3)
-      classe: undefined,
-      criticidade: undefined,
-      subcategoria: undefined,
-      tags: undefined,
-      aplicacao: undefined,
-      material: undefined,
-      dimensoes: undefined,
-    });
+      item.productName,
+      industriaId ?? undefined,
+    );
 
-    if (product) {
-      productIds.push(product.id);
-      await db.updateProformaItem(item.id, { productId: product.id });
+    if (existingProduct) {
+      // Produto já existe: registra em supplierPrices para enriquecer histórico
+      productIds.push(existingProduct.id);
+      await db.updateProformaItem(item.id, { productId: existingProduct.id });
+
+      try {
+        const unitPriceBrlCents = Math.round(item.unitPriceCents * exchangeRate);
+        await registerSupplierPrice({
+          userId,
+          supplierId: industriaId || 0,
+          productName: item.productName,
+          ncmCode: ncm,
+          unitPriceCents: item.unitPriceCents,
+          currency: proforma.currency,
+          unit: item.unit || "UN",
+          unitPriceBrlCents,
+          exchangeRate: Math.round(exchangeRate * 1000000), // armazena como rate * 1000000
+          quantity: item.quantity || 1,
+          incoterm: proforma.incoterm || undefined,
+          quotationDate: proforma.quotationDate || undefined,
+        });
+      } catch (err) {
+        console.error(
+          `[proformaService] Falha ao registrar preço para produto existente ${existingProduct.id}:`,
+          err,
+        );
+      }
+    } else {
+      // Produto novo: cria com categorização inferida (P7)
+      const categories = await inferCategories(
+        item.productName,
+        userId,
+        ncm,
+      );
+
+      const product = await db.createProduct({
+        userId,
+        name: item.productName,
+        description: item.description ?? undefined,
+        ncmCode: ncm || "00000000",
+        unit: item.unit || "UN",
+        supplierId: industriaId ?? undefined,
+        origem: "cotado_nao_importado",
+        ncmStatus: ncm ? "validado" : "sugerido",
+        custoImportadoRefCents: item.unitPriceCents,
+        // P7: Categorização inferida
+        classe: categories.classe,
+        categoria: categories.categoria,
+        subcategoria: categories.subcategoria,
+        criticidade: undefined,
+        tags: undefined,
+        aplicacao: undefined,
+        material: undefined,
+        dimensoes: undefined,
+      });
+
+      if (product) {
+        productIds.push(product.id);
+        await db.updateProformaItem(item.id, { productId: product.id });
+
+        // Registra o preço inicial em supplierPrices
+        try {
+          const unitPriceBrlCents = Math.round(item.unitPriceCents * exchangeRate);
+          await registerSupplierPrice({
+            userId,
+            supplierId: industriaId || 0,
+            productName: item.productName,
+            ncmCode: ncm,
+            unitPriceCents: item.unitPriceCents,
+            currency: proforma.currency,
+            unit: item.unit || "UN",
+            unitPriceBrlCents,
+            exchangeRate: Math.round(exchangeRate * 1000000),
+            quantity: item.quantity || 1,
+            incoterm: proforma.incoterm || undefined,
+            quotationDate: proforma.quotationDate || undefined,
+          });
+        } catch (err) {
+          console.error(
+            `[proformaService] Falha ao registrar preço para novo produto ${product.id}:`,
+            err,
+          );
+        }
+      }
     }
   }
 
+  // 3) Marca proforma como distribuida com timestamp
   await db.updateProforma(proformaId, userId, {
     industriaId: industriaId ?? undefined,
-    status: "distribuida",
+    status: "distribuida" as const,
     distributedAt: new Date(),
   });
 
