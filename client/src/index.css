@@ -613,9 +613,22 @@
   .excambia-orbital--thinking::before {
     animation-duration: 1.4s;
   }
+  /* Reticências animadas sóbrias para os passos de atividade ("Calculando…") */
+  .excambia-ellipsis::after {
+    content: "…";
+    display: inline-block;
+    width: 1ch;
+    text-align: left;
+    animation: excambia-ellipsis 1.4s steps(4, end) infinite;
+  }
+  @keyframes excambia-ellipsis {
+    0%   { clip-path: inset(0 100% 0 0); }
+    100% { clip-path: inset(0 0 0 0); }
+  }
   @media (prefers-reduced-motion: reduce) {
     .excambia-orbital::before,
     .excambia-orbital--glow { animation: none; }
+    .excambia-ellipsis::after { animation: none; }
   }
 }
 

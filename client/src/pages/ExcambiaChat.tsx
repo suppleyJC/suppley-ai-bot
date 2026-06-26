@@ -246,7 +246,7 @@ export default function ExcambiaChat() {
     const optId = `opt-${Date.now()}`;
     setOptimistic((prev) => [
       ...prev,
-      { id: optId, content: `📎 ${file.name}${text ? `\n\n${text}` : ""}` },
+      { id: optId, content: `Anexo: ${file.name}${text ? `\n\n${text}` : ""}` },
     ]);
     setUploading(true);
     try {
@@ -362,13 +362,11 @@ export default function ExcambiaChat() {
                 <Message key={o.id} role="user" content={o.content} />
               ))}
               {(streaming || uploading) && (
-                <>
-                  {streamingEvents.map((evt, i) => (
-                    <StreamingEvent key={i} event={evt} />
-                  ))}
-                  {streamingReply && <Message role="assistant" content={streamingReply} />}
-                  {!streamingReply && <Message role="assistant" content="…" pending />}
-                </>
+                streamingReply ? (
+                  <Message role="assistant" content={streamingReply} />
+                ) : (
+                  <StreamingActivity events={streamingEvents} />
+                )
               )}
             </div>
           )}
@@ -474,60 +472,78 @@ function Suggestion({ icon, title, sub, onClick }: any) {
   );
 }
 
-/** Renderiza eventos de streaming (thinking, tool_call, tool_result, etc.). */
-function StreamingEvent({ event }: { event: any }) {
-  if (event.type === "thinking") {
-    return (
-      <div className="flex w-full items-start gap-2 sm:gap-3">
-        <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-violet-50 border border-violet-200 p-1">
-          <span className="text-[10px] text-violet-600 font-semibold">💭</span>
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs text-slate-500 italic">{event.thinking}</p>
-        </div>
-      </div>
-    );
-  }
+// Rótulos humanos para as ferramentas — nada de nomes técnicos no chat.
+const TOOL_LABELS: Record<string, string> = {
+  montar_calculo: "Calculando o custo no motor certificado",
+  gerar_relatorio_calculo: "Montando a planilha de cálculo",
+  classificar_ncm: "Classificando a NCM",
+  comparar_cotacoes: "Comparando cotações",
+  enviar_rfq: "Preparando a solicitação de cotação",
+  registrar_cotacao: "Registrando a cotação",
+  registrar_marco_producao: "Registrando o marco da operação",
+  registrar_nacionalizacao: "Registrando a nacionalização",
+  lancar_financeiro: "Lançando o financeiro",
+  coletar_dados_faltantes: "Revisando os dados da operação",
+  buscar_ativo: "Buscando o ativo",
+  comparar_origem: "Comparando origens",
+  benchmark_mercado: "Consultando o mercado",
+  web_search: "Pesquisando na web",
+};
+const labelFor = (name?: string) =>
+  (name && TOOL_LABELS[name]) || "Trabalhando na sua solicitação";
 
-  if (event.type === "tool_call") {
-    return (
-      <div className="flex w-full items-start gap-2 sm:gap-3">
-        <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-teal-50 border border-teal-200 p-1">
-          <span className="text-[10px] text-teal-600 font-semibold">⚙️</span>
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-slate-700">{event.name}</p>
-          {event.input && (
-            <pre className="text-[11px] text-slate-600 mt-1 overflow-x-auto max-w-full">
-              {typeof event.input === "string"
-                ? event.input
-                : JSON.stringify(event.input, null, 2).slice(0, 200)}
-            </pre>
-          )}
-        </div>
-      </div>
-    );
+/**
+ * StreamingActivity — uma única linha de atividade viva, sóbria e sem emoji.
+ * Mostra os passos concluídos esmaecidos (com check) e o passo atual com um
+ * leve pulso. Substitui o despejo de eventos crus, dando fluidez ao chat.
+ */
+function StreamingActivity({ events }: { events: any[] }) {
+  // Deriva os passos a partir dos tool_call/tool_result (ignora "thinking" cru).
+  const steps: Array<{ label: string; done: boolean; ok: boolean }> = [];
+  for (const e of events) {
+    if (e.type === "tool_call") {
+      steps.push({ label: labelFor(e.name), done: false, ok: true });
+    } else if (e.type === "tool_result") {
+      // marca o último passo aberto como concluído
+      for (let i = steps.length - 1; i >= 0; i--) {
+        if (!steps[i].done) { steps[i].done = true; steps[i].ok = e.ok !== false; break; }
+      }
+    }
   }
+  const current = steps.find((s) => !s.done);
 
-  if (event.type === "tool_result") {
-    return (
-      <div className="flex w-full items-start gap-2 sm:gap-3">
-        <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50 border border-emerald-200 p-1">
-          <span className="text-[10px] text-emerald-600 font-semibold">✓</span>
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-slate-700">
-            {event.ok ? "✓ Sucesso" : "✗ Falha"} — {event.name}
-          </p>
-          {event.summary && (
-            <p className="text-xs text-slate-600 mt-1">{event.summary}</p>
-          )}
-        </div>
+  return (
+    <div className="group flex w-full items-start gap-2 sm:gap-3">
+      <Orbital glow thinking className="h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0" />
+      <div className="min-w-0 flex-1 pt-0.5">
+        {steps.length === 0 ? (
+          <TypingDots />
+        ) : (
+          <ul className="space-y-1">
+            {steps.map((s, i) => (
+              <li key={i} className="flex items-center gap-2 text-[13px] leading-relaxed">
+                {s.done ? (
+                  <Check className={`h-3.5 w-3.5 flex-shrink-0 ${s.ok ? "text-teal-500" : "text-rose-400"}`} />
+                ) : (
+                  <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-violet-400" />
+                )}
+                <span className={s.done ? "text-slate-400" : "text-slate-600"}>
+                  {s.label}
+                  {!s.done && <span className="excambia-ellipsis" />}
+                </span>
+              </li>
+            ))}
+            {!current && (
+              <li className="flex items-center gap-2 text-[13px] text-slate-500">
+                <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-violet-400" />
+                <span>Redigindo a resposta<span className="excambia-ellipsis" /></span>
+              </li>
+            )}
+          </ul>
+        )}
       </div>
-    );
-  }
-
-  return null;
+    </div>
+  );
 }
 
 function Message({ role, content, pending, toolResults, conversaId, operacaoId }: {

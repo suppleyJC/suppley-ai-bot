@@ -7,59 +7,10 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import * as conversaDb from "../db/conversaDb";
 import { runExcambia } from "../agent/orchestrator";
-import type { Message, MessageContent } from "../_core/llm";
+import type { Message } from "../_core/llm";
 import { enrichOperacaoFromChat } from "../services/gapEnrichmentService";
-import { isSpreadsheet, spreadsheetBufferToText } from "../services/spreadsheetToText";
+import { buildAttachmentBlock, attachmentMarker } from "../services/attachmentBlock";
 import { TRPCError } from "@trpc/server";
-
-const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
-
-/**
- * Baixa o arquivo anexado e monta o bloco de conteúdo multimodal (base64) que o
- * Claude consegue ler — `document` para PDF, `image` para imagens, e para
- * planilhas (XLSX/XLS/CSV) parseia o conteúdo e devolve como bloco de texto
- * (o Claude não lê o binário de planilha). Mesmo padrão da extração de
- * proformas. Best-effort: erro vira null (segue só texto).
- */
-async function buildAttachmentBlock(att: {
-  url: string;
-  mimeType: string;
-  name: string;
-}): Promise<MessageContent | null> {
-  try {
-    const resp = await fetch(att.url);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const buffer = Buffer.from(await resp.arrayBuffer());
-
-    // Planilhas: converte para texto/Markdown antes de enviar ao LLM.
-    if (isSpreadsheet(att.mimeType, att.name)) {
-      const tabela = await spreadsheetBufferToText(buffer, {
-        name: att.name,
-        mimeType: att.mimeType,
-      });
-      return {
-        type: "text",
-        text: `Conteúdo da planilha anexada (${att.name}):\n\n${tabela}`,
-      };
-    }
-
-    const data = buffer.toString("base64");
-
-    if (att.mimeType === "application/pdf") {
-      return {
-        type: "document",
-        source: { type: "base64", media_type: "application/pdf", data },
-      };
-    }
-    const media = (IMAGE_TYPES as readonly string[]).includes(att.mimeType)
-      ? (att.mimeType as (typeof IMAGE_TYPES)[number])
-      : "image/jpeg";
-    return { type: "image", source: { type: "base64", media_type: media, data } };
-  } catch (err) {
-    console.error("[conversas.send] falha ao ler anexo:", err);
-    return null;
-  }
-}
 
 export const conversasRouter = router({
   /** Lista conversas do usuário (operações e avulsas) */
@@ -150,7 +101,7 @@ export const conversasRouter = router({
       const userMsg = input.messages[input.messages.length - 1];
       if (userMsg?.role === "user") {
         const persisted = input.attachment
-          ? `📎 ${input.attachment.name}${userMsg.content ? `\n\n${userMsg.content}` : ""}`
+          ? attachmentMarker(input.attachment.name, userMsg.content)
           : userMsg.content;
         await conversaDb.addMessage(input.conversaId, "user", persisted);
       }

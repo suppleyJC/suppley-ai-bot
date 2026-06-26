@@ -4,6 +4,7 @@ import * as conversaDb from "../db/conversaDb";
 import { getUserById } from "../services/authService";
 import { runExcambiaStream } from "../agent/orchestrator";
 import { enrichOperacaoFromChat } from "../services/gapEnrichmentService";
+import { applyAttachmentToMessages, attachmentMarker, type AttachmentRef } from "../services/attachmentBlock";
 import type { Message } from "../_core/llm";
 
 const router = Router();
@@ -19,6 +20,7 @@ interface StreamPayload {
   messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
   operacaoId?: number;
   estagio?: string;
+  attachment?: AttachmentRef;
 }
 
 async function verifySessionToken(token: string): Promise<number | null> {
@@ -77,11 +79,20 @@ router.post("/api/chat/stream", async (req: Request, res: Response) => {
       return;
     }
 
-    // Adiciona mensagem do usuário ao histórico
+    // Adiciona mensagem do usuário ao histórico (com marcador do anexo, sem emoji)
     const userMsg = payload.messages[payload.messages.length - 1];
     if (userMsg?.role === "user") {
-      await conversaDb.addMessage(payload.conversaId, "user", userMsg.content);
+      const persisted = payload.attachment
+        ? attachmentMarker(payload.attachment.name, userMsg.content)
+        : userMsg.content;
+      await conversaDb.addMessage(payload.conversaId, "user", persisted);
     }
+
+    // Se houver anexo, transforma a última mensagem em conteúdo multimodal.
+    const agentMessages = await applyAttachmentToMessages(
+      payload.messages as Message[],
+      payload.attachment,
+    );
 
     // Enriquecimento automático (Pilar 2) — tolerante a falha
     if (payload.operacaoId) {
@@ -111,7 +122,7 @@ router.post("/api/chat/stream", async (req: Request, res: Response) => {
         userId: user.id,
         operacaoId: payload.operacaoId,
         estagio: payload.estagio,
-        messages: payload.messages as Message[],
+        messages: agentMessages,
       })) {
         if (chunk.type === "reply") {
           fullReply = chunk.reply;
