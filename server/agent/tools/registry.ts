@@ -27,6 +27,7 @@ import { coletarDadosFaltantesTool } from "./coletar_dados_faltantes";
 import { consultarOperacaoTool } from "./consultarOperacao";
 import { analiseMercadoTool } from "./analiseMercado";
 import { estatisticasComexTool } from "./estatisticasComex";
+import { precificarReferenciaTool } from "./precificarReferencia";
 
 /** Tools de capacidade direta — o "chão de fábrica" que os especialistas acionam. */
 export const BASE_TOOLS: AgentTool[] = [
@@ -47,6 +48,8 @@ export const BASE_TOOLS: AgentTool[] = [
   analiseMercadoTool,
   // Estatísticas oficiais de comércio exterior por NCM (Comex Stat / MDIC-SECEX)
   estatisticasComexTool,
+  // Preço de referência: base própria a valor presente × média oficial → competitivo
+  precificarReferenciaTool,
   // Fase 5 — buscas (lado leitura do ciclo de inteligência)
   buscarAtivoTool,
   compararOrigemTool,

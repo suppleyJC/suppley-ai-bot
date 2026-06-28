@@ -84,6 +84,37 @@ export async function getPtaxSerie(dias = 90): Promise<SeriePonto[]> {
   }
 }
 
+/** PTAX (venda) USD/BRL mais recente; null se indisponível. */
+export async function getPtaxAtual(): Promise<number | null> {
+  const serie = await getPtaxSerie(15);
+  return serie.length ? serie[serie.length - 1].valor : null;
+}
+
+/* ---------- IBGE/SIDRA: IPCA (inflação doméstica) ---------- */
+/**
+ * Variação mensal do IPCA (%) dos últimos `meses` períodos.
+ * Tabela 1737, variável 63 (variação mensal) — API pública do IBGE.
+ */
+export async function getIpcaSerie(meses = 12): Promise<SeriePonto[]> {
+  const url =
+    `https://servicodados.ibge.gov.br/api/v3/agregados/1737/periodos/-${meses}/variaveis/63?localidades=N1[all]`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return [];
+    const json: any = await resp.json();
+    const serie = json?.[0]?.resultados?.[0]?.series?.[0]?.serie ?? {};
+    return Object.entries(serie)
+      .map(([periodo, valor]) => ({
+        data: `${String(periodo).slice(0, 4)}-${String(periodo).slice(4, 6)}-01`,
+        valor: Number(valor),
+      }))
+      .filter((p) => Number.isFinite(p.valor))
+      .sort((a, b) => a.data.localeCompare(b.data));
+  } catch {
+    return [];
+  }
+}
+
 /* ---------- FRED: séries de commodities/macro ---------- */
 export interface FredCommodity { id: string; label: string; unidade: string; }
 
@@ -155,6 +186,21 @@ export async function coletarSinais(): Promise<Sinal[]> {
       if (sig) sinais.push(sig);
     }
   }
+
+  // IPCA (IBGE) — inflação doméstica acumulada em 12 meses (composta).
+  const ipca = await getIpcaSerie(12);
+  if (ipca.length) {
+    const acumPct = (ipca.reduce((p, x) => p * (1 + x.valor / 100), 1) - 1) * 100;
+    const ultimo = ipca[ipca.length - 1].valor;
+    sinais.push({
+      chave: "IPCA 12m", fonte: "IBGE/SIDRA",
+      atual: acumPct, anterior: 0, variacaoPct: acumPct,
+      tendencia: acumPct > 4.5 ? "alta" : acumPct < 3 ? "baixa" : "estavel",
+      unidade: "%",
+      detalhe: `IPCA acumulado 12m: ${acumPct.toFixed(2)}% (último mês ${ultimo.toFixed(2)}%).`,
+    });
+  }
+
   return sinais;
 }
 
@@ -206,6 +252,19 @@ export async function gerarInsights(): Promise<{ sinais: Sinal[]; insights: Insi
           `Pode ser bom momento para comprar insumos ligados a ${s.chave.toLowerCase()}.`,
       });
     }
+  }
+
+  const ipca = sinais.find((s) => s.chave === "IPCA 12m");
+  if (ipca) {
+    insights.push({
+      tipo: "geral",
+      severidade: ipca.tendencia === "alta" ? "atencao" : "info",
+      titulo: `Inflação doméstica (IPCA 12m): ${ipca.atual.toFixed(1)}%`,
+      texto: ipca.tendencia === "alta"
+        ? `A inflação acumulada está alta (${ipca.atual.toFixed(1)}% em 12m), pressionando os preços nacionais. ` +
+          `Em vários casos isso AUMENTA a vantagem do importado — vale comparar com a alternativa nacional.`
+        : `IPCA acumulado em ${ipca.atual.toFixed(1)}% (12m). Pressão de custo doméstico moderada.`,
+    });
   }
 
   if (insights.length === 0) {
