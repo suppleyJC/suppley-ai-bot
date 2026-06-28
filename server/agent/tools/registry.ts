@@ -25,6 +25,7 @@ import { lancarFinanceiroTool } from "./lancarFinanceiroTool";
 import { buscarAtivoTool, compararOrigemTool, benchmarkMercadoTool } from "./fase5Tools";
 import { coletarDadosFaltantesTool } from "./coletar_dados_faltantes";
 import { consultarOperacaoTool } from "./consultarOperacao";
+import { analiseMercadoTool } from "./analiseMercado";
 
 /** Tools de capacidade direta — o "chão de fábrica" que os especialistas acionam. */
 export const BASE_TOOLS: AgentTool[] = [
@@ -41,6 +42,8 @@ export const BASE_TOOLS: AgentTool[] = [
   coletarDadosFaltantesTool,
   // Consulta de andamento da operação (leitura) — base da jornada no chat
   consultarOperacaoTool,
+  // Inteligência de mercado (BCB câmbio + FRED commodities) → insights de decisão
+  analiseMercadoTool,
   // Fase 5 — buscas (lado leitura do ciclo de inteligência)
   buscarAtivoTool,
   compararOrigemTool,

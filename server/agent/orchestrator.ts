@@ -36,6 +36,9 @@ FERRAMENTAS DISPONÍVEIS (operação e registro):
 - registrar_nacionalizacao: marca o produto como nacionalizado (último passo antes da entrega).
 - lancar_financeiro: registra movimentos financeiros (câmbio, pagamentos, impostos, fretes, despesas, receitas).
 
+INTELIGÊNCIA DE MERCADO (apoio à decisão):
+- analise_mercado: lê dados OFICIAIS (câmbio BCB + commodities FRED), deriva tendências e devolve recomendações — melhor momento para importar, tendência do câmbio, antecipar/adiar compra, reforço de estoque, alertas de custo e oportunidades. Use quando perguntarem sobre câmbio, commodities, timing de compra ou "vale a pena importar agora". É apoio à decisão — para custo definitivo, use montar_calculo.
+
 PESQUISA WEB (inteligência de mercado ampla):
 - Você tem acesso a PESQUISA NA WEB. Use-a para responder dúvidas atualizadas sobre legislação e parte fiscal (TEC/TIPI, ICMS, benefícios estaduais, normativas da Receita), logística (fretes, rotas, portos, prazos), mercado financeiro (câmbio, juros) e COMMODITIES que impactam o preço dos insumos (aço, alumínio, plásticos, etc.).
 - Ao usar dados da web, cite a fonte e a data. Para CÁLCULO fiscal definitivo, continue usando o motor (montar_calculo) — a web informa o contexto, o motor calcula.
