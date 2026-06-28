@@ -28,10 +28,11 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 
 
 // Orbital oficial da marca (símbolo do logo) — usada no item Excambia.
-// Recebe className como os ícones do lucide para herdar o tamanho (h-5 w-5);
-// as classes de cor (text-*) são ignoradas por ser uma imagem.
+// Recebe className como os ícones do lucide para herdar o tamanho (h-5 w-5).
+// `brightness-0 invert` deixa o símbolo BRANCO, para destacar sobre o roxo da
+// coluna de ambientes (as classes text-* são ignoradas por ser imagem).
 const OrbitalIcon = ({ className }: { className?: string }) => (
-  <img src="/suppley-icon.png" alt="" aria-hidden="true" className={`${className ?? ""} object-contain`} />
+  <img src="/suppley-icon.png" alt="" aria-hidden="true" className={`${className ?? ""} object-contain brightness-0 invert`} />
 );
 
 const menuItems = [
@@ -180,7 +181,7 @@ function DashboardLayoutContent({
         >
           {/* Logo Header - Destaque */}
           <SidebarHeader className="h-20 justify-center border-b border-sidebar-border/50">
-            <div className="flex items-center gap-3 px-3 transition-all w-full">
+            <div className={`flex items-center gap-3 transition-all w-full ${isCollapsed ? "px-0 justify-start" : "px-3"}`}>
               <button
                 onClick={toggleSidebar}
                 className="h-10 w-10 flex items-center justify-center hover:bg-sidebar-accent rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
@@ -189,16 +190,17 @@ function DashboardLayoutContent({
                 <PanelLeft className="h-5 w-5 text-sidebar-foreground/70" />
               </button>
               {!isCollapsed ? (
-                <div className="flex items-center min-w-0 gap-2">
-                  <img 
-                    src="/logo-suppley.png" 
-                    alt="SUPPLEY" 
-                    className="h-10 w-auto brightness-0 invert"
+                // A LOGO é o destaque (maior); "Comércio Exterior" vira uma
+                // legenda discreta e espaçada — harmonia e sofisticação.
+                <div className="flex flex-col min-w-0 leading-none">
+                  <img
+                    src="/logo-suppley.png"
+                    alt="SUPPLEY"
+                    className="h-12 w-auto brightness-0 invert"
                   />
-                  <div className="flex flex-col">
-                    <span className="logo-text-white text-lg leading-tight">SUPPLEY</span>
-                    <span className="text-[10px] text-sidebar-foreground/60 font-medium tracking-wider uppercase">Comércio Exterior</span>
-                  </div>
+                  <span className="mt-1.5 text-[9px] text-sidebar-foreground/50 font-medium tracking-[0.28em] uppercase">
+                    Comércio Exterior
+                  </span>
                 </div>
               ) : null}
             </div>
