@@ -45,7 +45,12 @@ export default function OperacaoDetail() {
     { enabled: Number.isFinite(id) },
   );
 
-  const invalidate = () => utils.operations.get.invalidate({ id });
+  // Invalida TAMBÉM a lista do Painel: ao mudar de estágio, o card precisa
+  // migrar de coluna na hora (a coluna é derivada do estágio).
+  const invalidate = () => {
+    utils.operations.get.invalidate({ id });
+    utils.operations.list.invalidate();
+  };
 
   const advance = trpc.operations.advanceStage.useMutation({ onSuccess: invalidate });
   const decide = trpc.operations.decideGoNoGo.useMutation({ onSuccess: invalidate });
@@ -96,10 +101,10 @@ export default function OperacaoDetail() {
   return (
     <div className="mx-auto max-w-5xl p-6">
       <button
-        onClick={() => navigate("/")}
+        onClick={() => navigate("/operacoes")}
         className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-violet-700"
       >
-        <ArrowLeft className="h-4 w-4" /> Voltar
+        <ArrowLeft className="h-4 w-4" /> Voltar ao Painel
       </button>
 
       {/* cabeçalho */}
