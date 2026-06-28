@@ -46,10 +46,10 @@
   --color-excambia-purpura: oklch(0.45 0.22 295);
   --color-excambia-turquesa: oklch(0.82 0.15 175);
   
-  /* Typography - Rajdhani for headings, Inter for body */
+  /* Tipografia unificada — Inter em todo o sistema (corpo, títulos e display) */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-display: 'Rajdhani', 'Orbitron', sans-serif;
-  --font-heading: 'Orbitron', sans-serif;
+  --font-display: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 :root {
@@ -147,11 +147,10 @@
     letter-spacing: -0.01em;
   }
   
-  /* Futuristic Typography - Orbitron for headings */
+  /* Tipografia unificada — Inter (corpo e títulos), sem caixa-alta */
   h1, h2, h3, h4 {
-    font-family: 'Orbitron', sans-serif;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.02em;
   }
   
   h1 {
@@ -285,7 +284,7 @@
   
   .stat-value {
     @apply text-4xl font-bold text-foreground tracking-tight;
-    font-family: 'Rajdhani', sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     font-weight: 700;
   }
   
@@ -382,7 +381,7 @@
   
   .form-section-title {
     @apply text-lg font-semibold text-foreground mb-6 flex items-center gap-3;
-    font-family: 'Rajdhani', sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
@@ -426,7 +425,7 @@
     background: linear-gradient(135deg, #28E7C5 0%, #20c9ab 100%);
     color: #0d3d35;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    font-family: 'Rajdhani', sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
@@ -444,7 +443,7 @@
     @apply relative overflow-hidden px-6 py-3 rounded-xl font-semibold text-white;
     background: linear-gradient(135deg, #682ABA 0%, #8B4FD0 100%);
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    font-family: 'Rajdhani', sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
@@ -465,7 +464,7 @@
   
   .table-modern th {
     @apply px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider;
-    font-family: 'Rajdhani', sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
   
   .table-modern td {

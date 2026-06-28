@@ -136,7 +136,7 @@ function RecentQuotations() {
         <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#682ABA]/20 to-[#28E7C5]/20 flex items-center justify-center mx-auto mb-4 float-animation">
           <Calculator className="h-10 w-10 text-[#682ABA]" />
         </div>
-        <h3 className="font-semibold text-lg mb-2" style={{ fontFamily: "'Rajdhani', sans-serif" }}>
+        <h3 className="font-semibold text-lg mb-2" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
           NENHUMA OPORTUNIDADE AINDA
         </h3>
         <p className="text-muted-foreground mb-6">Comece calculando sua primeira importação</p>
@@ -189,7 +189,7 @@ function RecentQuotations() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="font-bold text-lg" style={{ fontFamily: "'Rajdhani', sans-serif" }}>
+                <p className="font-bold text-lg" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
                   {formatCurrency(quotation.totalCostCents)}
                 </p>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -218,7 +218,7 @@ function ExchangeRateWidget() {
           <Globe className="h-6 w-6" />
         </div>
         <div>
-          <h3 className="font-semibold text-lg" style={{ fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.05em" }}>
+          <h3 className="font-semibold text-lg" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", letterSpacing: "0.05em" }}>
             CÂMBIO DO DIA
           </h3>
           <p className="text-xs text-muted-foreground">Cotações PTAX (BCB)</p>
@@ -243,7 +243,7 @@ function ExchangeRateWidget() {
             {item.loading ? (
               <Skeleton className="h-7 w-24" />
             ) : (
-              <span className="font-bold text-xl" style={{ fontFamily: "'Rajdhani', sans-serif" }}>
+              <span className="font-bold text-xl" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
                 R$ {item.rate?.toFixed(4)}
               </span>
             )}
@@ -285,7 +285,7 @@ function PipelineWidget() {
           <Truck className="h-6 w-6" />
         </div>
         <div>
-          <h3 className="font-semibold text-lg" style={{ fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.05em" }}>
+          <h3 className="font-semibold text-lg" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", letterSpacing: "0.05em" }}>
             PIPELINE
           </h3>
           <p className="text-xs text-muted-foreground">Status das cotações</p>
@@ -299,7 +299,7 @@ function PipelineWidget() {
             className="text-center p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-all duration-300 group cursor-default"
             style={{ animationDelay: `${index * 100}ms` }}
           >
-            <div className={`text-3xl font-bold ${item.textColor} group-hover:scale-110 transition-transform`} style={{ fontFamily: "'Rajdhani', sans-serif" }}>
+            <div className={`text-3xl font-bold ${item.textColor} group-hover:scale-110 transition-transform`} style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
               <AnimatedCounter value={item.value} />
             </div>
             <p className="text-xs text-muted-foreground font-medium mt-1 uppercase tracking-wide">{item.label}</p>
@@ -325,7 +325,7 @@ function QuickActions() {
           <Zap className="h-6 w-6" />
         </div>
         <div>
-          <h3 className="font-semibold text-lg" style={{ fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.05em" }}>
+          <h3 className="font-semibold text-lg" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", letterSpacing: "0.05em" }}>
             AÇÕES RÁPIDAS
           </h3>
           <p className="text-xs text-muted-foreground">Acesso direto</p>
@@ -345,7 +345,7 @@ function QuickActions() {
               style={{ animationDelay: `${index * 100}ms` }}
             >
               <action.icon className="h-5 w-5" />
-              <span style={{ fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.03em" }}>
+              <span style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", letterSpacing: "0.03em" }}>
                 {action.label.toUpperCase()}
               </span>
             </Button>
@@ -387,7 +387,7 @@ export default function Dashboard() {
               />
               <div className="min-w-0">
                 <p className="text-white/70 text-[10px] sm:text-sm font-medium mb-0.5 sm:mb-2 uppercase tracking-wider">{greeting}, {firstName}</p>
-                <h1 className="text-lg sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-0.5 sm:mb-3 truncate" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                <h1 className="text-lg sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-0.5 sm:mb-3 truncate" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
                   SUPPLEY<span className="text-[#28E7C5]">CALC</span>
                 </h1>
                 <p className="text-white/80 text-xs sm:text-lg max-w-md hidden sm:block">
@@ -399,7 +399,7 @@ export default function Dashboard() {
             <Link href="/calculate" className="w-full sm:w-auto">
               <Button size="lg" className="btn-suppley gap-2 text-xs sm:text-base h-10 sm:h-14 px-4 sm:px-8 shadow-xl hover:shadow-2xl w-full sm:w-auto">
                 <Plus className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
-                <span style={{ fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.05em" }}>
+                <span style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", letterSpacing: "0.05em" }}>
                   NOVO CÁLCULO
                 </span>
               </Button>
@@ -453,7 +453,7 @@ export default function Dashboard() {
           <div className="card-glass">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-xl font-bold" style={{ fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.05em" }}>
+                <h2 className="text-xl font-bold" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", letterSpacing: "0.05em" }}>
                   OPORTUNIDADES RECENTES
                 </h2>
                 <p className="text-sm text-muted-foreground">Últimas cotações analisadas</p>
