@@ -179,9 +179,10 @@ function DashboardLayoutContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
-          {/* Header da marca — moderno, elegante e corporativo */}
-          <SidebarHeader className="h-24 justify-center border-b border-sidebar-border/50">
-            <div className={`flex items-center transition-all w-full ${isCollapsed ? "px-0 justify-center" : "gap-3 px-4"}`}>
+          {/* Header da marca — logo à esquerda, "Comércio Exterior" à direita.
+              shrink-0 na logo evita que o flex a esprema (causa da distorção). */}
+          <SidebarHeader className="h-20 justify-center border-b border-sidebar-border/50">
+            <div className={`flex items-center transition-all w-full ${isCollapsed ? "px-0 justify-center" : "gap-2.5 px-3"}`}>
               <button
                 onClick={toggleSidebar}
                 className="h-9 w-9 flex items-center justify-center text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
@@ -190,20 +191,15 @@ function DashboardLayoutContent({
                 <PanelLeft className="h-5 w-5" />
               </button>
               {!isCollapsed ? (
-                // A LOGO é o herói (h-12). "Comércio Exterior" vira uma assinatura
-                // discreta, com um filete turquesa da marca para sofisticação.
-                <div className="flex flex-col min-w-0">
+                <div className="flex flex-1 items-center justify-between gap-2 min-w-0">
                   <img
                     src="/logo-suppley.png"
                     alt="SUPPLEY"
-                    className="h-12 w-auto brightness-0 invert"
+                    className="h-9 w-auto shrink-0 brightness-0 invert"
                   />
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <span className="h-px w-4 flex-shrink-0 bg-[#28E7C5]/70" />
-                    <span className="text-[9px] text-sidebar-foreground/55 font-semibold tracking-[0.32em] uppercase whitespace-nowrap">
-                      Comércio Exterior
-                    </span>
-                  </div>
+                  <span className="text-[8px] text-sidebar-foreground/55 font-semibold tracking-[0.16em] uppercase leading-tight text-right shrink-0">
+                    Comércio<br />Exterior
+                  </span>
                 </div>
               ) : null}
             </div>

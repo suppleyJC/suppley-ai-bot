@@ -87,12 +87,12 @@
   --input: oklch(0.94 0.01 290);
   --ring: oklch(0.45 0.22 295);
   
-  /* Excambia Sidebar - Roxo Claro (mesmo tom do hero header) */
-  --sidebar: oklch(0.45 0.18 295);
+  /* Excambia Sidebar — mesmo roxo do botão "+ Nova conversa" (violet-600) */
+  --sidebar: oklch(0.541 0.281 293.009);
   --sidebar-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.52 0.16 295);
+  --sidebar-accent: oklch(0.60 0.24 293);
   --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(0.50 0.14 295);
+  --sidebar-border: oklch(0.62 0.20 293);
   --sidebar-ring: oklch(0.82 0.15 175);
 }
 
