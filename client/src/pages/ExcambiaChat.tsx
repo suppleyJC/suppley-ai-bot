@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
 import ParameterExtractionModal from "@/components/excambia/ParameterExtractionModal";
 import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2, Settings2, FileSpreadsheet, ArrowRightCircle, Eye, Download, Clock, FileText, X as XIcon, Route } from "lucide-react";
-import { Streamdown } from "streamdown";
+import { MessageContent } from "@/components/MessageContent";
 
 const ALLOWED_UPLOAD_TYPES = [
   "application/pdf",
@@ -588,7 +588,7 @@ function Message({ role, content, pending, toolResults, conversaId, operacaoId }
           ) : (
             <>
               <div className="prose prose-sm max-w-none break-words text-slate-800 prose-p:my-2 prose-p:leading-relaxed prose-headings:font-semibold prose-headings:text-slate-900 prose-strong:text-slate-900 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-a:text-violet-600 prose-a:no-underline hover:prose-a:underline prose-code:rounded prose-code:bg-violet-50 prose-code:px-1 prose-code:py-0.5 prose-code:text-[0.85em] prose-code:text-violet-700 prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:rounded-xl prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-table:text-[13px] prose-th:border prose-th:border-slate-200 prose-th:bg-slate-50 prose-th:px-2 prose-th:py-1 prose-td:border prose-td:border-slate-200 prose-td:px-2 prose-td:py-1">
-                <Streamdown>{content}</Streamdown>
+                <MessageContent>{content}</MessageContent>
               </div>
               <CalcResultCard toolResults={toolResults} conversaId={conversaId} operacaoId={operacaoId} />
               <OperationJourneyCard toolResults={toolResults} />

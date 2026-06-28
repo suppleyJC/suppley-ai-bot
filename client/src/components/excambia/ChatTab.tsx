@@ -5,7 +5,7 @@ import { TabsContent } from "@/components/ui/tabs";
 import {
   Send, Loader2, Upload, ExternalLink, Plus, Download,
 } from "lucide-react";
-import { Streamdown } from "streamdown";
+import { MessageContent } from "@/components/MessageContent";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { MessageSkeleton } from "./skeletons";
 
@@ -119,7 +119,7 @@ export function ChatTab({
                     <LoadingSpinner status={msg.statusText} />
                   ) : msg.role === "assistant" ? (
                     <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_pre]:text-xs [&_code]:text-xs">
-                      <Streamdown>{msg.content}</Streamdown>
+                      <MessageContent>{msg.content}</MessageContent>
                     </div>
                   ) : (
                     <div className="whitespace-pre-wrap text-sm sm:text-base break-words">{msg.content}</div>

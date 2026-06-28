@@ -1,44 +1,56 @@
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useEffect } from "react";
-import NotFound from "@/pages/NotFound";
+import { useEffect, lazy, Suspense } from "react";
+import { Loader2 } from "lucide-react";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import DashboardLayout from "./components/DashboardLayout";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
-// Auth Pages
+// Auth Pages — login é eager (primeira pintura); o resto entra sob demanda.
 import Login from "./pages/Login";
-import Register from "./pages/Register";
-import ForgotPassword from "./pages/ForgotPassword";
+const Register = lazy(() => import("./pages/Register"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 
-// Dashboard Pages
-import Dashboard from "./pages/Dashboard";
-import Calculate from "./pages/Calculate";
-import CalculateMultiple from "./pages/CalculateMultiple";
-import Calculations from "./pages/Calculations";
-import Quotations from "./pages/Quotations";
-import QuotationDetail from "./pages/QuotationDetail";
-import Marketplace from "./pages/Marketplace";
-import Products from "./pages/Products";
-import Settings from "./pages/Settings";
+// Dashboard Pages — code-splitting por rota: cada página vira um chunk próprio,
+// e o renderizador pesado (markdown/shiki/mermaid/katex) só baixa onde é usado.
+const NotFound = lazy(() => import("@/pages/NotFound"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Calculate = lazy(() => import("./pages/Calculate"));
+const CalculateMultiple = lazy(() => import("./pages/CalculateMultiple"));
+const Calculations = lazy(() => import("./pages/Calculations"));
+const Quotations = lazy(() => import("./pages/Quotations"));
+const QuotationDetail = lazy(() => import("./pages/QuotationDetail"));
+const Marketplace = lazy(() => import("./pages/Marketplace"));
+const Products = lazy(() => import("./pages/Products"));
+const Settings = lazy(() => import("./pages/Settings"));
 
-import ExcambiaChat from "./pages/ExcambiaChat";
-import ExcambiaMarket from "./pages/ExcambiaMarket";
-import ReformDashboard from "./pages/ReformDashboard";
-import RfqDashboard from "./pages/RfqDashboard";
-import RfqCreate from "./pages/RfqCreate";
-import RfqDetail from "./pages/RfqDetail";
-import IndustryDetail from "./pages/IndustryDetail";
-import Messaging from "./pages/Messaging";
-import Operacoes from "./pages/Operacoes";
-import OperacaoDetail from "./pages/OperacaoDetail";
-import Proformas from "./pages/Proformas";
-import Diagnostics from "./pages/Diagnostics";
+const ExcambiaChat = lazy(() => import("./pages/ExcambiaChat"));
+const ExcambiaMarket = lazy(() => import("./pages/ExcambiaMarket"));
+const ReformDashboard = lazy(() => import("./pages/ReformDashboard"));
+const RfqDashboard = lazy(() => import("./pages/RfqDashboard"));
+const RfqCreate = lazy(() => import("./pages/RfqCreate"));
+const RfqDetail = lazy(() => import("./pages/RfqDetail"));
+const IndustryDetail = lazy(() => import("./pages/IndustryDetail"));
+const Messaging = lazy(() => import("./pages/Messaging"));
+const Operacoes = lazy(() => import("./pages/Operacoes"));
+const OperacaoDetail = lazy(() => import("./pages/OperacaoDetail"));
+const Proformas = lazy(() => import("./pages/Proformas"));
+const Diagnostics = lazy(() => import("./pages/Diagnostics"));
+
+/** Fallback discreto enquanto o chunk da página carrega. */
+function RouteFallback() {
+  return (
+    <div className="flex h-full w-full items-center justify-center py-20">
+      <Loader2 className="h-6 w-6 animate-spin text-violet-400" />
+    </div>
+  );
+}
 
 function AuthenticatedRoutes() {
   return (
     <DashboardLayout>
+      <Suspense fallback={<RouteFallback />}>
       <Switch>
         {/* Excambia é a porta de entrada (cérebro do sistema) */}
         <Route path="/" component={ExcambiaChat} />
@@ -67,23 +79,26 @@ function AuthenticatedRoutes() {
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>
+      </Suspense>
     </DashboardLayout>
   );
 }
 
 function Router() {
   return (
+    <Suspense fallback={<RouteFallback />}>
     <Switch>
       {/* Public auth routes */}
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/forgot-password" component={ForgotPassword} />
-      
+
       {/* Protected routes - DashboardLayout handles auth */}
       <Route>
         <AuthenticatedRoutes />
       </Route>
     </Switch>
+    </Suspense>
   );
 }
 

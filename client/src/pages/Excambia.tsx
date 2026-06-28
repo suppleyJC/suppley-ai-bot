@@ -19,7 +19,7 @@ import { ChatTab } from "@/components/excambia/ChatTab";
 import { ConversationSidebar } from "@/components/excambia/ConversationSidebar";
 import { ConversaOperacaoBar } from "@/components/excambia/ConversaOperacaoBar";
 import { toast } from "sonner";
-import { Streamdown } from "streamdown";
+import { MessageContent } from "@/components/MessageContent";
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -1207,7 +1207,7 @@ export default function Excambia() {
                   </CardHeader>
                   <CardContent>
                     <div className="prose prose-sm dark:prose-invert">
-                      <Streamdown>{typeof marketAnalysis === 'string' ? marketAnalysis : (marketAnalysis as any)?.analysis || "Análise de mercado não disponível."}</Streamdown>
+                      <MessageContent>{typeof marketAnalysis === 'string' ? marketAnalysis : (marketAnalysis as any)?.analysis || "Análise de mercado não disponível."}</MessageContent>
                     </div>
                   </CardContent>
                 </Card>

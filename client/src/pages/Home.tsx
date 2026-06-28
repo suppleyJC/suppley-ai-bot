@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
-import { Streamdown } from 'streamdown';
+import { MessageContent } from "@/components/MessageContent";
 
 /**
  * All content in this page are only for example, replace with your own feature implementation
@@ -21,7 +21,7 @@ export default function Home() {
         <Loader2 className="animate-spin" />
         Example Page
         {/* Example: Streamdown for markdown rendering */}
-        <Streamdown>Any **markdown** content</Streamdown>
+        <MessageContent>Any **markdown** content</MessageContent>
         <Button variant="default">Example Button</Button>
       </main>
     </div>

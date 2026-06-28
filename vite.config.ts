@@ -21,6 +21,26 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      output: {
+        // Separa os vendors pesados em chunks próprios. Combinado ao
+        // code-splitting por rota, o markdown/realce (Streamdown→shiki),
+        // diagramas (mermaid) e matemática (katex) só baixam onde são usados,
+        // e ficam em cache entre deploys.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("mermaid") || id.includes("cytoscape") || id.includes("dagre") || id.includes("khroma")) return "vendor-mermaid";
+          // shiki + streamdown no MESMO chunk (streamdown depende de shiki) —
+          // evita dependência circular entre chunks.
+          if (id.includes("shiki") || id.includes("@shikijs") || id.includes("streamdown")) return "vendor-markdown";
+          if (id.includes("katex")) return "vendor-katex";
+          if (id.includes("react-dom") || id.includes("/react/") || id.includes("scheduler")) return "vendor-react";
+          if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
+          return undefined;
+        },
+      },
+    },
   },
   server: {
     host: true,

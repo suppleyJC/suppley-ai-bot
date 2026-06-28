@@ -15,7 +15,7 @@ import {
   ArrowUpRight, ArrowDownRight, Minus, BarChart3, Zap, Brain
 } from "lucide-react";
 import { toast } from "sonner";
-import { Streamdown } from "streamdown";
+import { MessageContent } from "@/components/MessageContent";
 
 interface MarketIndicator {
   name: string;
@@ -641,7 +641,7 @@ export default function Assistant() {
                           }`}
                         >
                           {msg.role === "assistant" ? (
-                            <Streamdown>{msg.content}</Streamdown>
+                            <MessageContent>{msg.content}</MessageContent>
                           ) : (
                             <p>{msg.content}</p>
                           )}
@@ -812,7 +812,7 @@ export default function Assistant() {
                 </div>
               ) : (
                 <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <Streamdown>{marketAnalysis || "Dados insuficientes para análise."}</Streamdown>
+                  <MessageContent>{marketAnalysis || "Dados insuficientes para análise."}</MessageContent>
                 </div>
               )}
             </CardContent>

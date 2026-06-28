@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TabsContent } from "@/components/ui/tabs";
 import { Loader2, TrendingUp, BarChart3, DollarSign } from "lucide-react";
-import { Streamdown } from "streamdown";
+import { MessageContent } from "@/components/MessageContent";
 
 interface MarketTabProps {
   loadingMarket: boolean;
@@ -65,7 +65,7 @@ export function MarketTab({ loadingMarket, marketAnalysis, exchangeRates }: Mark
               </CardHeader>
               <CardContent>
                 <div className="prose prose-sm dark:prose-invert">
-                  <Streamdown>{typeof marketAnalysis === 'string' ? marketAnalysis : (marketAnalysis as any)?.analysis || "Análise de mercado não disponível."}</Streamdown>
+                  <MessageContent>{typeof marketAnalysis === 'string' ? marketAnalysis : (marketAnalysis as any)?.analysis || "Análise de mercado não disponível."}</MessageContent>
                 </div>
               </CardContent>
             </Card>
