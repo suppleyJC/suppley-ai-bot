@@ -16,9 +16,13 @@ import { buscarCatalogo } from "./agentesFase5";
 import { consultarComexPorNcm } from "../../services/comexStatService";
 import { consultarComtradeGlobal } from "../../services/comtradeService";
 import { getPtaxAtual } from "../../services/marketIntelligenceService";
-import { montarReferencia, type BaseRef, type ExternoRef } from "../../services/referencePricingService";
+import { montarReferencia, valorPresente, type BaseRef, type ExternoRef } from "../../services/referencePricingService";
 import { getLatestExchangeRate, getExchangeRateAtDate } from "../../db/exchangeDb";
 import { precosDoAtivo } from "../../db/fase5Db";
+
+const MAX_FORNECEDORES = 4;
+const fmtBRL = (n: number | null) =>
+  n == null ? "n/d" : "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const schema = defineSchema(
   "precificar_referencia",
@@ -55,43 +59,49 @@ export const precificarReferenciaTool: AgentTool = {
     if (!termo) return { ok: false, summary: "Informe o item para precificar.", error: "termo vazio" };
     const fluxo = args.fluxo === "export" ? "export" : "import";
 
-    // 1) Base própria (proforma preferida — tem moeda+data; senão ativo)
+    // 1) Base própria — TODAS as cotações que casam, a valor presente, para
+    //    comparar fornecedores e apontar o mais competitivo. Proformas primeiro
+    //    (têm fornecedor/moeda/data); se não houver, cai para os ativos.
     const { ativos, proformas } = await buscarCatalogo({ termo, userId: ctx.userId });
     const ptaxUsd = await getPtaxAtual();
 
-    let base: BaseRef | null = null;
-    if (proformas.length) {
-      const p = proformas[0];
+    type Candidato = BaseRef & { brlPresente: number | null };
+    const candidatos: Candidato[] = [];
+
+    for (const p of proformas.slice(0, MAX_FORNECEDORES)) {
       const data = p.quotationDate ? new Date(p.quotationDate) : null;
-      base = {
-        fonte: "proforma",
-        produto: p.productName,
-        ncm: p.ncm,
-        fornecedor: p.supplierName,
-        moeda: (p.currency || "USD").toUpperCase(),
-        precoUnit: p.unitPriceCents / 100,
-        unidade: p.unit || "UN",
-        dataCotacao: data ? data.toISOString().slice(0, 10) : null,
-        cambioNaData: data ? await getExchangeRateAtDate((p.currency || "USD").toUpperCase(), "BRL", data) : null,
-      };
-    } else if (ativos.length) {
-      const a = ativos[0];
-      const precos = await precosDoAtivo(a.id);
-      const ult = precos[0]; // precosDoAtivo ordena por data desc
-      const data = ult?.registradoEm ? new Date(ult.registradoEm) : null;
-      const moeda = (ult?.moeda || "BRL").toUpperCase();
-      base = {
-        fonte: "ativo",
-        produto: a.nome,
-        ncm: a.ncm,
-        fornecedor: null,
-        moeda,
-        precoUnit: (ult?.precoCents ?? a.precoMedioCents ?? 0) / 100,
-        unidade: "UN",
-        dataCotacao: data ? data.toISOString().slice(0, 10) : null,
-        cambioNaData: data ? await getExchangeRateAtDate(moeda, "BRL", data) : null,
-      };
+      const moeda = (p.currency || "USD").toUpperCase();
+      const cambioNaData = data ? await getExchangeRateAtDate(moeda, "BRL", data) : null;
+      const cambioHoje = await cambioMoedaHoje(moeda, ptaxUsd);
+      const precoUnit = p.unitPriceCents / 100;
+      const { brlPresente } = valorPresente(precoUnit, cambioNaData, cambioHoje);
+      candidatos.push({
+        fonte: "proforma", produto: p.productName, ncm: p.ncm, fornecedor: p.supplierName,
+        moeda, precoUnit, unidade: p.unit || "UN",
+        dataCotacao: data ? data.toISOString().slice(0, 10) : null, cambioNaData, brlPresente,
+      });
     }
+    if (candidatos.length === 0) {
+      for (const a of ativos.slice(0, MAX_FORNECEDORES)) {
+        const precos = await precosDoAtivo(a.id);
+        const ult = precos[0]; // precosDoAtivo ordena por data desc
+        const data = ult?.registradoEm ? new Date(ult.registradoEm) : null;
+        const moeda = (ult?.moeda || "BRL").toUpperCase();
+        const cambioNaData = data ? await getExchangeRateAtDate(moeda, "BRL", data) : null;
+        const cambioHoje = await cambioMoedaHoje(moeda, ptaxUsd);
+        const precoUnit = (ult?.precoCents ?? a.precoMedioCents ?? 0) / 100;
+        const { brlPresente } = valorPresente(precoUnit, cambioNaData, cambioHoje);
+        candidatos.push({
+          fonte: "ativo", produto: a.nome, ncm: a.ncm, fornecedor: null,
+          moeda, precoUnit, unidade: "UN",
+          dataCotacao: data ? data.toISOString().slice(0, 10) : null, cambioNaData, brlPresente,
+        });
+      }
+    }
+
+    // Ordena pela mais competitiva (menor valor presente; sem valor vai pro fim).
+    candidatos.sort((x, y) => (x.brlPresente ?? Infinity) - (y.brlPresente ?? Infinity));
+    const base: BaseRef | null = candidatos[0] ?? null;
 
     // 2) Externo em cascata: Brasil (Comex Stat) → global (UN Comtrade).
     //    Se nenhum trouxer número, o externo fica indisponível e o prompt
@@ -147,10 +157,52 @@ export const precificarReferenciaTool: AgentTool = {
       cambioHojeMoedaBrl,
     });
 
+    // Resumo: bloco da base (mono ou multi-fornecedor) + externo + comparação.
+    const partes: string[] = [];
+    const comParesValidos = candidatos.filter((c) => c.brlPresente != null);
+
+    if (comParesValidos.length > 1) {
+      const linhas = comParesValidos.map((c) =>
+        `- ${c.fornecedor || "base interna"}: ${fmtBRL(c.brlPresente)}/${c.unidade} a valor presente ` +
+        `(${c.moeda} ${c.precoUnit.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/${c.unidade}` +
+        `${c.dataCotacao ? `, ${c.dataCotacao}` : ""})`,
+      );
+      partes.push(
+        `Temos ${comParesValidos.length} cotações na base para "${termo}":\n${linhas.join("\n")}\n` +
+        `Mais competitiva: ${comParesValidos[0].fornecedor || "base interna"} (${fmtBRL(comParesValidos[0].brlPresente)}/${comParesValidos[0].unidade}).`,
+      );
+    } else if (ref.base) {
+      partes.push(
+        `Última cotação na base (${ref.base.fornecedor || "base interna"}): ` +
+        `${fmtBRL(ref.base.brlPresente)}/${ref.base.unidade} a valor presente` +
+        `${ref.base.dataCotacao ? ` (cotação de ${ref.base.dataCotacao})` : ""}.`,
+      );
+    }
+
+    // Externo (rótulo sutil só quando global) + comparação competitiva
+    if (ref.externo?.disponivel && ref.externo.precoMedioUsdKg != null) {
+      const rot = ref.externo.escopo === "global"
+        ? "Referência global de mercado"
+        : "Média de importação para o Brasil";
+      partes.push(
+        `${rot}: US$ ${ref.externo.precoMedioUsdKg.toFixed(2)}/kg` +
+        `${ref.externo.brlPorKgPresente != null ? ` (~${fmtBRL(ref.externo.brlPorKgPresente)}/kg)` : ""}.`,
+      );
+      if (ref.comparavel && ref.maisCompetitivo && ref.diffPct != null) {
+        partes.push(
+          ref.maisCompetitivo === "base"
+            ? `Nossa base está ${Math.abs(ref.diffPct).toFixed(0)}% abaixo da referência — bom preço.`
+            : ref.maisCompetitivo === "externo"
+            ? `Nossa base está ${Math.abs(ref.diffPct).toFixed(0)}% acima da referência — há espaço para negociar.`
+            : "Nossa base está em linha com a referência.",
+        );
+      }
+    }
+
     return {
       ok: true,
-      summary: ref.leitura,
-      data: ref,
+      summary: partes.length ? partes.join("\n") : ref.leitura,
+      data: { ...ref, candidatos },
     };
   },
 };

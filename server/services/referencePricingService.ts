@@ -63,6 +63,24 @@ function isKg(unidade: string): boolean {
 }
 
 /**
+ * Valor presente de um preço cotado: traz o preço (na moeda) para BRL de hoje e
+ * para BRL da data da cotação, e calcula a variação cambial entre os dois.
+ */
+export function valorPresente(
+  precoUnit: number,
+  cambioNaData: number | null,
+  cambioHoje: number | null,
+): { brlNaData: number | null; brlPresente: number | null; variacaoCambialPct: number | null } {
+  const taxaHoje = cambioHoje ?? cambioNaData;
+  const taxaData = cambioNaData ?? cambioHoje;
+  return {
+    brlNaData: taxaData != null ? precoUnit * taxaData : null,
+    brlPresente: taxaHoje != null ? precoUnit * taxaHoje : null,
+    variacaoCambialPct: taxaData && taxaHoje ? ((taxaHoje - taxaData) / taxaData) * 100 : null,
+  };
+}
+
+/**
  * Calcula valor presente + comparação. Tudo opcional: se faltar base ou externo,
  * preenche o que dá e a `leitura` reflete o que foi possível.
  */
@@ -79,13 +97,8 @@ export function montarReferencia(input: {
   // ----- Base a valor presente -----
   let baseOut: ReferenciaPreco["base"] = null;
   if (base) {
-    const taxaHoje = cambioHojeMoedaBrl ?? base.cambioNaData;
-    const taxaData = base.cambioNaData ?? cambioHojeMoedaBrl;
-    const brlNaData = taxaData != null ? base.precoUnit * taxaData : null;
-    const brlPresente = taxaHoje != null ? base.precoUnit * taxaHoje : null;
-    const variacaoCambialPct =
-      taxaData && taxaHoje ? ((taxaHoje - taxaData) / taxaData) * 100 : null;
-    baseOut = { ...base, brlNaData, brlPresente, variacaoCambialPct };
+    const vp = valorPresente(base.precoUnit, base.cambioNaData, cambioHojeMoedaBrl);
+    baseOut = { ...base, ...vp };
   }
 
   // ----- Externo (Comex Stat) a valor presente -----
