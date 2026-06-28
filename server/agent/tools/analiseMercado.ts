@@ -14,6 +14,7 @@
  */
 import { defineSchema, type AgentTool, type ToolContext, type ToolResult } from "./types";
 import { gerarInsights, fredDisponivel } from "../../services/marketIntelligenceService";
+import { avaliarJanelaCompra } from "../../services/purchaseTimingService";
 
 const schema = defineSchema(
   "analise_mercado",
@@ -30,16 +31,19 @@ export const analiseMercadoTool: AgentTool = {
   async run(_args, _ctx: ToolContext): Promise<ToolResult> {
     try {
       const { sinais, insights } = await gerarInsights();
+      const timing = avaliarJanelaCompra(sinais);
       const linhas = insights.map((i) => `• ${i.titulo}: ${i.texto}`);
       const nota = fredDisponivel()
         ? ""
-        : "\n(Commodities globais indisponíveis: FRED_API_KEY não configurada — análise limitada ao câmbio.)";
+        : "\n(Commodities globais indisponíveis: FRED_API_KEY não configurada — análise limitada ao câmbio/inflação.)";
+      const janela =
+        `\n\nJanela de compra: ${timing.titulo} (favorabilidade ${timing.score}/100). ${timing.texto}`;
       return {
         ok: true,
         summary:
-          (sinais.length ? `Sinais coletados de fontes oficiais (BCB/FRED).\n\n` : "") +
-          linhas.join("\n") + nota,
-        data: { sinais, insights },
+          (sinais.length ? `Sinais de fontes oficiais (BCB câmbio · FRED commodities · IBGE inflação).\n\n` : "") +
+          linhas.join("\n") + nota + janela,
+        data: { sinais, insights, timing },
       };
     } catch (e: any) {
       return { ok: false, summary: "Não consegui consultar a inteligência de mercado agora.", error: String(e?.message ?? e) };

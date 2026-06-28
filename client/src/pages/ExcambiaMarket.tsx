@@ -173,8 +173,21 @@ export default function ExcambiaMarket() {
     });
 
   // Fetch insights
-  const { data: insights, isLoading: isLoadingInsights, refetch: refetchInsights } = 
+  const { data: insights, isLoading: isLoadingInsights, refetch: refetchInsights } =
     trpc.marketData.getInsights.useQuery({ days: 7 });
+
+  // Inteligência de decisão (sinais oficiais + janela de compra preditiva)
+  const { data: intel, isLoading: isLoadingIntel } = trpc.market.intelligence.useQuery(undefined, {
+    refetchInterval: 10 * 60 * 1000,
+  });
+
+  // Consulta Comex Stat por NCM (benchmark oficial)
+  const [ncmInput, setNcmInput] = useState("");
+  const [ncmQuery, setNcmQuery] = useState("");
+  const { data: comex, isFetching: isFetchingComex } = trpc.market.comex.useQuery(
+    { ncm: ncmQuery, fluxo: "import" },
+    { enabled: ncmQuery.replace(/\D/g, "").length >= 6 },
+  );
 
   // Mutations
   const refreshMutation = trpc.marketData.refresh.useMutation({
@@ -306,6 +319,8 @@ export default function ExcambiaMarket() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="decisao">Decisão</TabsTrigger>
+          <TabsTrigger value="comex">Comex Stat</TabsTrigger>
           <TabsTrigger value="commodities">Commodities</TabsTrigger>
           <TabsTrigger value="indices">Índices</TabsTrigger>
           <TabsTrigger value="insights">Insights</TabsTrigger>
@@ -335,6 +350,168 @@ export default function ExcambiaMarket() {
               ))}
             </>
           )}
+        </TabsContent>
+
+        <TabsContent value="decisao" className="space-y-6 mt-4">
+          {isLoadingIntel ? (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40" />)}
+            </div>
+          ) : intel ? (
+            <>
+              {/* Janela de compra (preditiva) */}
+              <Card className={
+                intel.timing.recomendacao === "comprar" ? "border-l-4 border-l-green-500"
+                : intel.timing.recomendacao === "aguardar" ? "border-l-4 border-l-amber-500"
+                : "border-l-4 border-l-slate-300"
+              }>
+                <CardContent className="p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Janela de compra</p>
+                      <h3 className="text-xl font-bold">{intel.timing.titulo}</h3>
+                      <p className="text-sm text-muted-foreground mt-1 max-w-2xl">{intel.timing.texto}</p>
+                    </div>
+                    <div className="text-center">
+                      <div className={`text-4xl font-bold ${
+                        intel.timing.recomendacao === "comprar" ? "text-green-600"
+                        : intel.timing.recomendacao === "aguardar" ? "text-amber-600"
+                        : "text-slate-500"
+                      }`}>{intel.timing.score}</div>
+                      <p className="text-xs text-muted-foreground">favorabilidade /100</p>
+                    </div>
+                  </div>
+                  <ul className="mt-4 grid gap-1.5 sm:grid-cols-2">
+                    {intel.timing.fatores.map((f, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+
+              {/* Sinais oficiais */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Sinais oficiais</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {intel.sinais.map((s) => (
+                    <Card key={s.chave}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium text-sm">{s.chave}</p>
+                            <p className="text-xs text-muted-foreground">{s.fonte}</p>
+                          </div>
+                          <PriceChange change={s.variacaoPct} changePercent={s.variacaoPct} />
+                        </div>
+                        <p className="mt-2 text-xl font-bold">
+                          {s.atual.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}
+                          {s.unidade ? <span className="text-sm font-normal text-muted-foreground"> {s.unidade}</span> : null}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+
+              {/* Insights de decisão */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Recomendações</h3>
+                <div className="space-y-3">
+                  {intel.insights.map((i, idx) => (
+                    <Card key={idx} className={`border-l-4 ${
+                      i.severidade === "oportunidade" ? "border-l-green-500"
+                      : i.severidade === "atencao" ? "border-l-amber-500"
+                      : "border-l-blue-400"
+                    }`}>
+                      <CardContent className="p-4">
+                        <p className="font-medium text-sm">{i.titulo}</p>
+                        <p className="text-sm text-muted-foreground mt-1">{i.texto}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Inteligência de mercado indisponível no momento.</p>
+          )}
+        </TabsContent>
+
+        <TabsContent value="comex" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Globe className="h-5 w-5 text-primary" /> Comex Stat (MDIC/SECEX)
+              </CardTitle>
+              <CardDescription>
+                Estatísticas oficiais de importação por NCM — valor, preço médio US$/kg e origens.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <input
+                  value={ncmInput}
+                  onChange={(e) => setNcmInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && setNcmQuery(ncmInput)}
+                  placeholder="NCM (8 dígitos) — ex.: 7317.00.20"
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                <Button onClick={() => setNcmQuery(ncmInput)} disabled={ncmInput.replace(/\D/g, "").length < 6}>
+                  Consultar
+                </Button>
+              </div>
+
+              {isFetchingComex ? (
+                <Skeleton className="h-40" />
+              ) : comex && comex.disponivel ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="rounded-lg bg-slate-50 p-3">
+                      <p className="text-xs text-muted-foreground">Total FOB (12m)</p>
+                      <p className="text-lg font-bold">US$ {comex.totalFobUsd.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</p>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-3">
+                      <p className="text-xs text-muted-foreground">Peso</p>
+                      <p className="text-lg font-bold">{comex.totalKg.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} kg</p>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-3">
+                      <p className="text-xs text-muted-foreground">Preço médio</p>
+                      <p className="text-lg font-bold">{comex.precoMedioUsdKg != null ? `US$ ${comex.precoMedioUsdKg.toFixed(2)}/kg` : "n/d"}</p>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-3">
+                      <p className="text-xs text-muted-foreground">Tendência</p>
+                      <p className="text-lg font-bold capitalize">{comex.tendenciaPreco}</p>
+                    </div>
+                  </div>
+                  {comex.topOrigens.length > 0 && (
+                    <div>
+                      <p className="text-sm font-semibold mb-2">Principais origens</p>
+                      <div className="space-y-1.5">
+                        {comex.topOrigens.map((o) => (
+                          <div key={o.pais} className="flex items-center justify-between text-sm">
+                            <span>{o.pais}</span>
+                            <span className="text-muted-foreground">
+                              US$ {o.fobUsd.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                              {o.precoMedioUsdKg != null ? ` · ${o.precoMedioUsdKg.toFixed(2)}/kg` : ""}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : comex ? (
+                <p className="text-sm text-muted-foreground">
+                  Sem dados de importação para esse NCM nos últimos 12 meses (ou fonte indisponível).
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Informe um NCM para consultar a base oficial.</p>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="commodities" className="mt-4">

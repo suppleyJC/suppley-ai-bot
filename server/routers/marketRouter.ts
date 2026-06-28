@@ -11,8 +11,29 @@ import {
   getPriceBenchmark, compareQuoteToMarket, getPriceTrend,
 } from "../services/marketData/marketReferenceService";
 import { tradeData } from "../services/tradeData";
+import { gerarInsights } from "../services/marketIntelligenceService";
+import { avaliarJanelaCompra } from "../services/purchaseTimingService";
+import { consultarComexPorNcm } from "../services/comexStatService";
 
 export const marketRouter = router({
+  /**
+   * Inteligência de decisão (painel): sinais oficiais (BCB câmbio · FRED
+   * commodities · IBGE inflação), insights e a JANELA DE COMPRA (preditiva).
+   */
+  intelligence: protectedProcedure.query(async () => {
+    const { sinais, insights } = await gerarInsights();
+    const timing = avaliarJanelaCompra(sinais);
+    return { sinais, insights, timing };
+  }),
+
+  /** Estatísticas oficiais do Comex Stat (MDIC/SECEX) por NCM. */
+  comex: protectedProcedure
+    .input(z.object({
+      ncm: z.string().min(2),
+      fluxo: z.enum(["import", "export"]).optional(),
+    }))
+    .query(({ input }) => consultarComexPorNcm({ ncm: input.ncm, fluxo: input.fluxo })),
+
   /** Benchmark de preço por NCM (lê tabelas tratadas; rápido). */
   benchmark: protectedProcedure
     .input(z.object({
