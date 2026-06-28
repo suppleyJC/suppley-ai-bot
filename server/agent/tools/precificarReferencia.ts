@@ -14,6 +14,7 @@
 import { defineSchema, type AgentTool, type ToolContext, type ToolResult } from "./types";
 import { buscarCatalogo } from "./agentesFase5";
 import { consultarComexPorNcm } from "../../services/comexStatService";
+import { consultarComtradeGlobal } from "../../services/comtradeService";
 import { getPtaxAtual } from "../../services/marketIntelligenceService";
 import { montarReferencia, type BaseRef, type ExternoRef } from "../../services/referencePricingService";
 import { getLatestExchangeRate, getExchangeRateAtDate } from "../../db/exchangeDb";
@@ -22,10 +23,11 @@ import { precosDoAtivo } from "../../db/fase5Db";
 const schema = defineSchema(
   "precificar_referencia",
   "Estima quanto custaria importar um item: acha o produto na nossa base por " +
-  "similaridade, traz o ÚLTIMO preço cotado a VALOR PRESENTE (câmbio atual), " +
-  "compara com a MÉDIA OFICIAL de importação do NCM (Comex Stat) e indica o mais " +
-  "competitivo. Use quando perguntarem 'quanto custa/custaria importar X', 'qual o " +
-  "preço de referência', 'temos cotação de Y'. Aceita o termo como a pessoa falou.",
+  "similaridade, traz o ÚLTIMO preço cotado a VALOR PRESENTE (câmbio atual) e " +
+  "busca a referência externa em cascata (importação para o Brasil via Comex Stat; " +
+  "se não houver, preço médio GLOBAL via UN Comtrade), comparando e indicando o " +
+  "mais competitivo. Use quando perguntarem 'quanto custa/custaria importar X', " +
+  "'qual o preço de referência', 'temos cotação de Y'. Aceita o termo como a pessoa falou.",
   {
     type: "object",
     properties: {
@@ -91,28 +93,47 @@ export const precificarReferenciaTool: AgentTool = {
       };
     }
 
-    // 2) Externo (Comex Stat) — usa o NCM informado ou o da base
+    // 2) Externo em cascata: Brasil (Comex Stat) → global (UN Comtrade).
+    //    Se nenhum trouxer número, o externo fica indisponível e o prompt
+    //    orienta a Excambia a buscar uma faixa de mercado pela web.
     const ncmAlvo = (typeof args.ncm === "string" && args.ncm.replace(/\D/g, "")) || base?.ncm || "";
     let externo: ExternoRef | null = null;
     if (ncmAlvo) {
       const comex = await consultarComexPorNcm({ ncm: ncmAlvo, fluxo });
-      externo = {
-        disponivel: comex.disponivel,
-        ncm: comex.ncm,
-        precoMedioUsdKg: comex.precoMedioUsdKg,
-        tendenciaPreco: comex.tendenciaPreco,
-        topOrigens: comex.topOrigens.map((o) => ({ pais: o.pais, precoMedioUsdKg: o.precoMedioUsdKg })),
-      };
+      if (comex.disponivel) {
+        externo = {
+          disponivel: true,
+          ncm: comex.ncm,
+          precoMedioUsdKg: comex.precoMedioUsdKg,
+          tendenciaPreco: comex.tendenciaPreco,
+          topOrigens: comex.topOrigens.map((o) => ({ pais: o.pais, precoMedioUsdKg: o.precoMedioUsdKg })),
+          escopo: "brasil",
+        };
+      } else {
+        // sem importação para o Brasil → preço médio GLOBAL
+        const global = await consultarComtradeGlobal({ ncm: ncmAlvo, fluxo });
+        if (global.disponivel) {
+          externo = {
+            disponivel: true,
+            ncm: ncmAlvo,
+            precoMedioUsdKg: global.precoMedioUsdKg,
+            tendenciaPreco: "indef",
+            topOrigens: [],
+            escopo: "global",
+          };
+        }
+      }
     }
 
     if (!base && !externo?.disponivel) {
       return {
         ok: true,
         summary:
-          `Não achei "${termo}" na nossa base (Ativos & Insumos / Proformas)` +
-          (ncmAlvo ? ` e o Comex Stat não retornou dados para o NCM ${ncmAlvo}.` : ` e não tenho a NCM para consultar a média oficial.`) +
-          ` Posso classificar a NCM (classificar_ncm) e montar o cálculo do zero, ou disparar uma cotação (enviar_rfq).`,
-        data: { termo, base: null, externo },
+          `Sem preço na nossa base e sem referência estruturada para "${termo}"${ncmAlvo ? ` (NCM ${ncmAlvo})` : ""}. ` +
+          `PRÓXIMO PASSO: traga uma FAIXA DE PREÇO INTERNACIONAL de referência pela pesquisa web (marketplaces B2B, relatórios de mercado), ` +
+          `apresente como estimativa de mercado COM a fonte, e ofereça a cotação direta (enviar_rfq) para o número real. ` +
+          `Não mencione que a base/Comex não retornou — apenas siga com a estimativa de mercado.`,
+        data: { termo, base: null, externo: externo ?? null },
       };
     }
 

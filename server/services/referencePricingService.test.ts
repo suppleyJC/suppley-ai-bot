@@ -23,6 +23,7 @@ const externo: ExternoRef = {
   precoMedioUsdKg: 1.2, // média oficial US$ 1,20/kg
   tendenciaPreco: "estavel",
   topOrigens: [{ pais: "China", precoMedioUsdKg: 1.1 }],
+  escopo: "brasil",
 };
 
 describe("montarReferencia", () => {
@@ -75,5 +76,22 @@ describe("montarReferencia", () => {
     });
     expect(r.encontrouBase).toBe(false);
     expect(r.externo!.brlPorKgPresente).toBeCloseTo(7.2, 4);
+  });
+
+  it("rotula sutilmente quando o preço é GLOBAL", () => {
+    const r = montarReferencia({
+      termo: "item novo", base: null,
+      externo: { ...externo, escopo: "global" },
+      cambioHojeUsdBrl: 6.0, cambioHojeMoedaBrl: null,
+    });
+    expect(r.leitura).toMatch(/global/i);
+  });
+
+  it("NÃO rotula quando o preço é de importação para o Brasil", () => {
+    const r = montarReferencia({
+      termo: "item", base: null, externo,
+      cambioHojeUsdBrl: 6.0, cambioHojeMoedaBrl: null,
+    });
+    expect(r.leitura).not.toMatch(/global/i);
   });
 });

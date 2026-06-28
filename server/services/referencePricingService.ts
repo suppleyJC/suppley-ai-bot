@@ -32,6 +32,8 @@ export interface ExternoRef {
   precoMedioUsdKg: number | null;
   tendenciaPreco: string;
   topOrigens: Array<{ pais: string; precoMedioUsdKg: number | null }>;
+  /** "brasil" = importação para o Brasil (Comex Stat); "global" = mundo (Comtrade). */
+  escopo: "brasil" | "global";
 }
 
 export interface ReferenciaPreco {
@@ -156,7 +158,11 @@ function montarLeitura(p: {
   }
 
   if (externoOut?.disponivel && externoOut.precoMedioUsdKg != null) {
-    let l = `Média oficial de importação (Comex Stat): US$ ${externoOut.precoMedioUsdKg.toFixed(2)}/kg`;
+    // Brasil (Comex Stat) → sem rótulo. Global (Comtrade) → sinaliza sutilmente.
+    const rotulo = externoOut.escopo === "global"
+      ? "Preço médio de referência global"
+      : "Média de importação para o Brasil";
+    let l = `${rotulo}: US$ ${externoOut.precoMedioUsdKg.toFixed(2)}/kg`;
     if (externoOut.brlPorKgPresente != null) l += ` (~${brl(externoOut.brlPorKgPresente)}/kg)`;
     partes.push(l + ".");
   }
