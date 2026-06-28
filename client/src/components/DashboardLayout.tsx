@@ -179,28 +179,31 @@ function DashboardLayoutContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
-          {/* Logo Header - Destaque */}
-          <SidebarHeader className="h-20 justify-center border-b border-sidebar-border/50">
-            <div className={`flex items-center gap-3 transition-all w-full ${isCollapsed ? "px-0 justify-start" : "px-3"}`}>
+          {/* Header da marca — moderno, elegante e corporativo */}
+          <SidebarHeader className="h-24 justify-center border-b border-sidebar-border/50">
+            <div className={`flex items-center transition-all w-full ${isCollapsed ? "px-0 justify-center" : "gap-3 px-4"}`}>
               <button
                 onClick={toggleSidebar}
-                className="h-10 w-10 flex items-center justify-center hover:bg-sidebar-accent rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                className="h-9 w-9 flex items-center justify-center text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
                 aria-label="Toggle navigation"
               >
-                <PanelLeft className="h-5 w-5 text-sidebar-foreground/70" />
+                <PanelLeft className="h-5 w-5" />
               </button>
               {!isCollapsed ? (
-                // Mesma linha: a LOGO (órbita + SUPPLEY) à esquerda e a legenda
-                // "Comércio Exterior" discreta à direita.
-                <div className="flex flex-1 items-center justify-between gap-2 min-w-0">
+                // A LOGO é o herói (h-12). "Comércio Exterior" vira uma assinatura
+                // discreta, com um filete turquesa da marca para sofisticação.
+                <div className="flex flex-col min-w-0">
                   <img
                     src="/logo-suppley.png"
                     alt="SUPPLEY"
-                    className="h-8 w-auto brightness-0 invert"
+                    className="h-12 w-auto brightness-0 invert"
                   />
-                  <span className="text-[8px] text-sidebar-foreground/50 font-medium tracking-[0.18em] uppercase whitespace-nowrap">
-                    Comércio Exterior
-                  </span>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <span className="h-px w-4 flex-shrink-0 bg-[#28E7C5]/70" />
+                    <span className="text-[9px] text-sidebar-foreground/55 font-semibold tracking-[0.32em] uppercase whitespace-nowrap">
+                      Comércio Exterior
+                    </span>
+                  </div>
                 </div>
               ) : null}
             </div>
