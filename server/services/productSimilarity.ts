@@ -111,6 +111,45 @@ const SEARCH_STOPWORDS = new Set([
   "container", "conteiner", "carga", "lote",
 ]);
 
+/**
+ * Sinônimos PT↔EN do domínio (siderurgia/construção/fixadores). Resolve o caso
+ * de proformas cadastradas em inglês: "prego" casa com "nail", "vergalhão" com
+ * "wire rod/rebar", "arame" com "wire" etc. Tokens normalizados (sem acento).
+ * Bidirecional: a chave também é encontrada a partir do termo em inglês.
+ */
+const TERM_SYNONYMS: Record<string, string[]> = {
+  // fixadores
+  prego: ["nail"], nail: ["prego"],
+  parafuso: ["screw", "bolt"], screw: ["parafuso"], bolt: ["parafuso"],
+  porca: ["nut"], nut: ["porca"],
+  arruela: ["washer"], washer: ["arruela"],
+  abracadeira: ["clamp", "tie", "strap"], clamp: ["abracadeira"], tie: ["abracadeira"],
+  // arame / fios / vergalhão
+  arame: ["wire"], wire: ["arame", "fio"], fio: ["wire"],
+  vergalhao: ["rebar", "rod", "wirerod"], rebar: ["vergalhao"], rod: ["vergalhao", "barra"],
+  // chapas / tubos / telas
+  chapa: ["sheet", "plate"], sheet: ["chapa"], plate: ["chapa"],
+  tubo: ["tube", "pipe"], tube: ["tubo"], pipe: ["tubo"],
+  tela: ["mesh", "net"], mesh: ["tela"],
+  // escoramento (core do negócio)
+  escora: ["shore", "prop", "scaffold"], andaime: ["scaffold", "scaffolding"],
+  // atributos
+  cabeca: ["head"], head: ["cabeca"],
+  simples: ["common", "comum"], common: ["simples", "comum"], comum: ["common", "simples"],
+  duplo: ["duplex", "double"], duplex: ["duplo"], double: ["duplo"],
+  polido: ["polished", "bright"], polished: ["polido"],
+  galvanizado: ["galvanized", "galv", "zinc"], galvanized: ["galvanizado"],
+  aco: ["steel"], steel: ["aco"], ferro: ["iron"], iron: ["ferro"],
+  nylon: ["nylon", "plastic"],
+};
+
+/** True se o token (ou um sinônimo dele) aparece no texto candidato. */
+function tokenPresente(token: string, candidato: string): boolean {
+  if (candidato.includes(token)) return true;
+  const syns = TERM_SYNONYMS[token];
+  return syns ? syns.some((s) => candidato.includes(s)) : false;
+}
+
 /** Tokens de busca — MANTÉM numéricos curtos (17, 27) que diferenciam variantes. */
 function catalogTokens(s: string): string[] {
   return normalizeForSearch(s)
@@ -134,7 +173,8 @@ export function catalogMatchScore(query: string, candidate: string): number {
   let score = productSimilarity(normalizeForSearch(query), c);
   const qt = catalogTokens(query);
   if (qt.length) {
-    const present = qt.filter((t) => c.includes(t)).length;
+    // containment com sinônimos PT↔EN (acha proforma cadastrada em inglês)
+    const present = qt.filter((t) => tokenPresente(t, c)).length;
     score = Math.max(score, (present / qt.length) * 0.95);
   }
   return score;

@@ -142,25 +142,34 @@ export function agregarComex(
   };
 }
 
-/** POST no Comex Stat; retorna a lista de linhas (tolerante ao formato). */
-async function queryComex(body: unknown): Promise<ComexRow[]> {
-  try {
-    const resp = await fetch(COMEXSTAT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) return [];
-    const json: any = await resp.json();
-    const list = json?.data?.list ?? json?.list ?? json?.data ?? [];
-    return Array.isArray(list) ? (list as ComexRow[]) : [];
-  } catch {
-    return [];
-  }
+async function postComex(body: unknown): Promise<ComexRow[]> {
+  const resp = await fetch(COMEXSTAT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) return [];
+  const json: any = await resp.json();
+  const list = json?.data?.list ?? json?.list ?? json?.data ?? [];
+  return Array.isArray(list) ? (list as ComexRow[]) : [];
 }
 
-function montarBody(fluxo: Fluxo, ncm8: string, from: string, to: string, comPais: boolean) {
-  return {
+/**
+ * Corpos de request em dois formatos conhecidos da API do Comex Stat (o schema
+ * mudou entre versões). Tentamos o atual (filterList/detailDatabase/metricList)
+ * e, se vier vazio, o alternativo (filters/details/metrics).
+ */
+function bodiesComex(fluxo: Fluxo, ncm8: string, from: string, to: string, comPais: boolean): unknown[] {
+  const atual = {
+    flow: fluxo,
+    monthDetail: false,
+    period: { from, to },
+    filterList: [{ id: "ncm", text: ncm8, item: [ncm8] }],
+    detailDatabase: comPais ? [{ id: "country", text: "País" }] : [],
+    metricList: ["metricFOB", "metricKG"],
+    langDefault: "pt",
+  };
+  const alternativo = {
     flow: fluxo,
     monthDetail: false,
     period: { from, to },
@@ -168,6 +177,20 @@ function montarBody(fluxo: Fluxo, ncm8: string, from: string, to: string, comPai
     details: comPais ? ["country"] : [],
     metrics: ["metricFOB", "metricKG"],
   };
+  return [atual, alternativo];
+}
+
+/** Consulta o Comex Stat tentando os formatos conhecidos; falha graciosa. */
+async function queryComex(fluxo: Fluxo, ncm8: string, from: string, to: string, comPais: boolean): Promise<ComexRow[]> {
+  for (const body of bodiesComex(fluxo, ncm8, from, to, comPais)) {
+    try {
+      const rows = await postComex(body);
+      if (rows.length) return rows;
+    } catch {
+      /* tenta o próximo formato */
+    }
+  }
+  return [];
 }
 
 /**
@@ -189,8 +212,8 @@ export async function consultarComexPorNcm(input: { ncm: string; fluxo?: Fluxo }
   const fromAnterior = ymMinus(now, DEFASAGEM_MESES + 2 * JANELA_MESES - 1);
 
   const [recente, anterior] = await Promise.all([
-    queryComex(montarBody(fluxo, ncm8, fromRecente, toRecente, true)),
-    queryComex(montarBody(fluxo, ncm8, fromAnterior, toAnterior, false)),
+    queryComex(fluxo, ncm8, fromRecente, toRecente, true),
+    queryComex(fluxo, ncm8, fromAnterior, toAnterior, false),
   ]);
 
   return agregarComex(ncm8, fluxo, recente, anterior);

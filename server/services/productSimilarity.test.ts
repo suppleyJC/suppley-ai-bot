@@ -39,4 +39,20 @@ describe("catalogMatchScore", () => {
     const errado = catalogMatchScore("prego 17x27", "Prego cabeça simples 18x36");
     expect(certo).toBeGreaterThan(errado);
   });
+
+  it("casa PT com proforma cadastrada em INGLÊS (prego→nail, *→x)", () => {
+    const score = catalogMatchScore("prego 17×27 cabeça simples", "Common Nail 17*27 Polished, 1kg/bag");
+    expect(score).toBeGreaterThanOrEqual(0.45);
+  });
+
+  it("prefere a variante correta entre itens em inglês", () => {
+    const comum = catalogMatchScore("prego 17x27 cabeça simples", "Common Nail 17*27 Polished");
+    const duplex = catalogMatchScore("prego 17x27 cabeça simples", "Duplex Nail 17*27 Polished");
+    expect(comum).toBeGreaterThan(duplex);
+  });
+
+  it("arame casa com wire; vergalhão com wire rod/rebar", () => {
+    expect(catalogMatchScore("arame BWG 18", "Black Wire BWG 18, 1kg/bag")).toBeGreaterThanOrEqual(0.45);
+    expect(catalogMatchScore("vergalhão 4.2mm", "Steel Wire Rod 4.2mm")).toBeGreaterThanOrEqual(0.45);
+  });
 });
