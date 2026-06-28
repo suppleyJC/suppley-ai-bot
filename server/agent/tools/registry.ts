@@ -26,6 +26,7 @@ import { buscarAtivoTool, compararOrigemTool, benchmarkMercadoTool } from "./fas
 import { coletarDadosFaltantesTool } from "./coletar_dados_faltantes";
 import { consultarOperacaoTool } from "./consultarOperacao";
 import { analiseMercadoTool } from "./analiseMercado";
+import { estatisticasComexTool } from "./estatisticasComex";
 
 /** Tools de capacidade direta — o "chão de fábrica" que os especialistas acionam. */
 export const BASE_TOOLS: AgentTool[] = [
@@ -44,6 +45,8 @@ export const BASE_TOOLS: AgentTool[] = [
   consultarOperacaoTool,
   // Inteligência de mercado (BCB câmbio + FRED commodities) → insights de decisão
   analiseMercadoTool,
+  // Estatísticas oficiais de comércio exterior por NCM (Comex Stat / MDIC-SECEX)
+  estatisticasComexTool,
   // Fase 5 — buscas (lado leitura do ciclo de inteligência)
   buscarAtivoTool,
   compararOrigemTool,

@@ -38,6 +38,7 @@ FERRAMENTAS DISPONÍVEIS (operação e registro):
 
 INTELIGÊNCIA DE MERCADO (apoio à decisão):
 - analise_mercado: lê dados OFICIAIS (câmbio BCB + commodities FRED), deriva tendências e devolve recomendações — melhor momento para importar, tendência do câmbio, antecipar/adiar compra, reforço de estoque, alertas de custo e oportunidades. Use quando perguntarem sobre câmbio, commodities, timing de compra ou "vale a pena importar agora". É apoio à decisão — para custo definitivo, use montar_calculo.
+- estatisticas_comex: estatísticas OFICIAIS do Comex Stat (MDIC/SECEX) por NCM — quanto o Brasil importou/exportou (US$ e kg), PREÇO MÉDIO oficial em US$/kg, principais países de origem e tendência. Use para fazer BENCHMARK do FOB cotado pelo fornecedor contra a média oficial de importação ("esse preço está caro ou na média do país?"), ver de onde o Brasil importa esse item e se o preço vem subindo. Precisa da NCM (use classificar_ncm antes se não tiver). É apoio à decisão — não substitui o motor.
 
 PESQUISA WEB (inteligência de mercado ampla):
 - Você tem acesso a PESQUISA NA WEB. Use-a para responder dúvidas atualizadas sobre legislação e parte fiscal (TEC/TIPI, ICMS, benefícios estaduais, normativas da Receita), logística (fretes, rotas, portos, prazos), mercado financeiro (câmbio, juros) e COMMODITIES que impactam o preço dos insumos (aço, alumínio, plásticos, etc.).
