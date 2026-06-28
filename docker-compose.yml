@@ -16,6 +16,9 @@ services:
       PORT: 3000
       # IA (Anthropic Claude) — essencial para a Excambia responder
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Inteligência de mercado (opcionais; sem elas o app usa só BCB/IBGE/web)
+      FRED_API_KEY: ${FRED_API_KEY:-}
+      COMTRADE_API_KEY: ${COMTRADE_API_KEY:-}
       # Optional OAuth configuration
       OAUTH_SERVER_URL: ${OAUTH_SERVER_URL:-}
       VITE_APP_ID: ${VITE_APP_ID:-}
