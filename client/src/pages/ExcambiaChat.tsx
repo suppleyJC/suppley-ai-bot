@@ -350,10 +350,8 @@ export default function ExcambiaChat() {
 
       {/* CHAT */}
       <div className="flex flex-1 flex-col bg-[#faf9fc] min-h-0 h-full">
-        {/* topbar fina */}
+        {/* topbar fina — sem logo/nome (a marca já está na sidebar); só o câmbio */}
         <div className="flex h-[54px] flex-shrink-0 items-center gap-2 sm:gap-2.5 px-3 sm:px-6 border-b border-slate-100">
-          <img src="/suppley-icon.png" alt="" className="h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 object-contain" />
-          <span className="text-sm font-semibold tracking-tight text-slate-800">Excambia</span>
           <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
             <FxRate />
           </div>
@@ -455,7 +453,7 @@ export default function ExcambiaChat() {
 function Welcome({ onPick }: { onPick: (t: string) => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-3 sm:px-6 py-8 sm:py-12 text-center min-h-0">
-      <Orbital glow className="h-16 w-16 sm:h-20 sm:w-20 mb-4 sm:mb-5 flex-shrink-0" />
+      <Orbital glow className="h-11 w-11 sm:h-14 sm:w-14 mb-4 sm:mb-5 flex-shrink-0" />
       <h1 className="mb-2 sm:mb-2.5 text-xl sm:text-2xl md:text-[26px] font-semibold tracking-tight text-slate-800">
         Olá, Jean. O que vamos{" "}
         <span className="bg-gradient-to-r from-violet-600 to-teal-600 bg-clip-text text-transparent">importar</span> hoje?

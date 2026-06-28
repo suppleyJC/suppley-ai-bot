@@ -190,15 +190,15 @@ function DashboardLayoutContent({
                 <PanelLeft className="h-5 w-5 text-sidebar-foreground/70" />
               </button>
               {!isCollapsed ? (
-                // A LOGO é o destaque (maior); "Comércio Exterior" vira uma
-                // legenda discreta e espaçada — harmonia e sofisticação.
-                <div className="flex flex-col min-w-0 leading-none">
+                // Mesma linha: a LOGO (órbita + SUPPLEY) à esquerda e a legenda
+                // "Comércio Exterior" discreta à direita.
+                <div className="flex flex-1 items-center justify-between gap-2 min-w-0">
                   <img
                     src="/logo-suppley.png"
                     alt="SUPPLEY"
-                    className="h-12 w-auto brightness-0 invert"
+                    className="h-8 w-auto brightness-0 invert"
                   />
-                  <span className="mt-1.5 text-[9px] text-sidebar-foreground/50 font-medium tracking-[0.28em] uppercase">
+                  <span className="text-[8px] text-sidebar-foreground/50 font-medium tracking-[0.18em] uppercase whitespace-nowrap">
                     Comércio Exterior
                   </span>
                 </div>
