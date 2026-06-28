@@ -16,7 +16,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
 import ParameterExtractionModal from "@/components/excambia/ParameterExtractionModal";
-import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2, Settings2, FileSpreadsheet, ArrowRightCircle, Eye, Download } from "lucide-react";
+import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2, Settings2, FileSpreadsheet, ArrowRightCircle, Eye, Download, Clock, FileText, X as XIcon, Route } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 const ALLOWED_UPLOAD_TYPES = [
@@ -593,6 +593,7 @@ function Message({ role, content, pending, toolResults, conversaId, operacaoId }
                 <Streamdown>{content}</Streamdown>
               </div>
               <CalcResultCard toolResults={toolResults} conversaId={conversaId} operacaoId={operacaoId} />
+              <OperationJourneyCard toolResults={toolResults} />
               <CopyButton text={content} />
             </>
           )}
@@ -742,6 +743,129 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg bg-white/70 px-2 py-1.5">
       <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
       <div className="text-[13px] font-semibold text-slate-800">{value}</div>
+    </div>
+  );
+}
+
+// --- Jornada da operação no chat (mockup) ---
+const OP_STAGES = [
+  { key: "demand", label: "Demanda" },
+  { key: "source", label: "Fornecedores" },
+  { key: "analyze", label: "Viabilidade" },
+  { key: "execute", label: "Operação" },
+  { key: "finance", label: "Câmbio" },
+];
+const MARCO_LABEL: Record<string, string> = {
+  pedido_confirmado: "Pedido confirmado", producao_iniciada: "Produção iniciada",
+  produto_embarcado: "Produto embarcado", di_registrada: "DI registrada",
+  nacionalizado: "Nacionalizado", entregue: "Entregue",
+};
+
+/** Extrai do toolResults os dados da operação consultada (consultar_operacao). */
+function extractOperacao(toolResults: any): { operacao: any; marcos: any[]; anexos: any[] } | null {
+  if (!Array.isArray(toolResults)) return null;
+  for (const tr of toolResults) {
+    if (tr?.name === "consultar_operacao" && tr.ok !== false && tr.data?.operacao) {
+      return { operacao: tr.data.operacao, marcos: tr.data.marcos ?? [], anexos: tr.data.anexos ?? [] };
+    }
+  }
+  return null;
+}
+
+/**
+ * OperationJourneyCard — a jornada da operação renderizada no chat: esteira de
+ * estágios, marcos com status e documentos. Coeso com o Painel de operações,
+ * mas vivendo na conversa (a dinâmica que o usuário pediu).
+ */
+function OperationJourneyCard({ toolResults }: { toolResults?: any }) {
+  const [, setLocation] = useLocation();
+  const data = extractOperacao(toolResults);
+  if (!data) return null;
+  const { operacao, marcos, anexos } = data;
+
+  const currentIdx = OP_STAGES.findIndex((s) => s.key === operacao.estagioAtual);
+
+  return (
+    <div className="mt-3 rounded-xl border border-violet-200 bg-white p-3 sm:p-4">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <Route className="h-4 w-4 text-violet-600" />
+        <span className="text-[13px] font-semibold text-slate-800">
+          {operacao.codigo ?? `OP-${operacao.id}`} · {operacao.titulo}
+        </span>
+        <span className="ml-auto rounded-md bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-600">
+          {operacao.status}
+        </span>
+      </div>
+
+      {/* Esteira de estágios */}
+      <div className="mt-3 flex items-center gap-1">
+        {OP_STAGES.map((s, i) => {
+          const done = currentIdx >= 0 && i < currentIdx;
+          const current = i === currentIdx;
+          return (
+            <div key={s.key} className="flex flex-1 flex-col items-center gap-1">
+              <div className="flex w-full items-center">
+                <span className={`h-1.5 flex-1 rounded-full ${i === 0 ? "opacity-0" : done || current ? "bg-violet-400" : "bg-slate-200"}`} />
+                <span className={`mx-0.5 h-2.5 w-2.5 flex-shrink-0 rounded-full ${
+                  done ? "bg-teal-500" : current ? "bg-violet-600 ring-2 ring-violet-200" : "bg-slate-300"
+                }`} />
+                <span className={`h-1.5 flex-1 rounded-full ${i === OP_STAGES.length - 1 ? "opacity-0" : done ? "bg-violet-400" : "bg-slate-200"}`} />
+              </div>
+              <span className={`text-[9px] ${current ? "font-semibold text-violet-700" : "text-slate-400"}`}>{s.label}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Marcos */}
+      {marcos.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          {marcos.slice(0, 8).map((m: any, i: number) => {
+            const ok = m.status === "realizado";
+            const cancel = m.status === "cancelado";
+            return (
+              <div key={i} className="flex items-start gap-2 text-[12.5px]">
+                {ok ? <Check className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-teal-500" />
+                  : cancel ? <XIcon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-rose-400" />
+                  : <Clock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />}
+                <span className="text-slate-700">
+                  <span className="font-medium">{MARCO_LABEL[m.tipo] ?? m.tipo}</span>
+                  {m.descricao ? <span className="text-slate-500"> — {m.descricao}</span> : null}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Documentos */}
+      {anexos.length > 0 && (
+        <div className="mt-3">
+          <div className="text-[10px] uppercase tracking-wide text-slate-400 mb-1.5">Documentos</div>
+          <div className="flex flex-wrap gap-1.5">
+            {anexos.slice(0, 8).map((a: any, i: number) => (
+              <a
+                key={i}
+                href={a.fileUrl || a.fileKey || "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11.5px] text-slate-600 hover:bg-slate-100"
+              >
+                <FileText className="h-3 w-3 text-violet-500" />
+                {a.nome}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={() => setLocation(`/operacao/${operacao.id}`)}
+        className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-violet-700"
+      >
+        <ArrowRightCircle className="h-4 w-4" /> Abrir operação
+      </button>
     </div>
   );
 }
