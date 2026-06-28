@@ -16,6 +16,8 @@ import {
 } from "../../services/quotationExtractorService";
 import * as ncmService from "../../services/ncmService";
 import * as fase5Db from "../../db/fase5Db";
+import * as proformaDb from "../../db/proformaDb";
+import { catalogMatchScore } from "../../services/productSimilarity";
 
 /* ============================================================
  * Tipos compartilhados do pipeline
@@ -216,20 +218,96 @@ export async function agenteQualidade(input: {
 /* ============================================================
  * Tools de BUSCA (lado "leitura" do ciclo) — usadas pela Excambia
  * ============================================================ */
-export async function buscarAtivo(input: { termo: string; userId: number }) {
-  const ativos = await fase5Db.buscarAtivos(input.userId, input.termo);
-  // anexa um resumo de preços a cada ativo encontrado
-  const comPrecos = await Promise.all(ativos.map(async (a) => {
-    const precos = await fase5Db.precosDoAtivo(a.id);
-    const cents = precos.map((p) => p.precoCents).filter((v) => v > 0);
-    const medio = cents.length ? Math.round(cents.reduce((x, y) => x + y, 0) / cents.length) : null;
-    const menor = cents.length ? Math.min(...cents) : null;
-    return {
-      id: a.id, nome: a.name, ncm: a.ncmCode, origem: a.origem,
-      precoMedioCents: medio, menorPrecoCents: menor, totalRegistros: precos.length,
-    };
-  }));
-  return comPrecos;
+// Abaixo deste score a correspondência é fraca demais para sugerir.
+const CATALOGO_MATCH_THRESHOLD = 0.45;
+
+export interface AtivoHit {
+  id: number;
+  nome: string;
+  ncm: string | null;
+  origem: string | null;
+  precoMedioCents: number | null;
+  menorPrecoCents: number | null;
+  totalRegistros: number;
+}
+
+export interface ProformaHit {
+  proformaId: number;
+  numero: string | null;
+  productName: string;
+  ncm: string | null;
+  supplierName: string | null;
+  unitPriceCents: number;
+  currency: string;
+  unit: string;
+  quantity: number;
+  quotationDate: Date;
+}
+
+/**
+ * Busca no CATÁLOGO inteiro: Ativos & Insumos (products) E Proformas cadastradas
+ * (proformaItems). O casamento é fuzzy (token/containment via catalogMatchScore),
+ * então identifica o produto mesmo que a pessoa escreva de outra forma no chat
+ * ("prego 17×27 cabeça simples" acha "Prego cabeça simples 17x27"). Inclui a
+ * proforma mesmo que ainda não tenha sido distribuída para a base — é a fonte de
+ * preço real que a pessoa cadastrou.
+ */
+export async function buscarCatalogo(input: { termo: string; userId: number }): Promise<{
+  ativos: AtivoHit[];
+  proformas: ProformaHit[];
+}> {
+  // 1) ATIVOS (products) — fuzzy sobre nome + descrição
+  const todos = await fase5Db.listAtivos(input.userId);
+  const ativosRank = todos
+    .map((a) => ({ a, score: catalogMatchScore(input.termo, `${a.name} ${a.description ?? ""}`) }))
+    .filter((r) => r.score >= CATALOGO_MATCH_THRESHOLD)
+    .sort((x, y) => y.score - x.score)
+    .slice(0, 8);
+
+  const ativos: AtivoHit[] = await Promise.all(
+    ativosRank.map(async ({ a }) => {
+      const precos = await fase5Db.precosDoAtivo(a.id);
+      const cents = precos.map((p) => p.precoCents).filter((v) => v > 0);
+      const medio = cents.length
+        ? Math.round(cents.reduce((x, y) => x + y, 0) / cents.length)
+        : (a.custoImportadoRefCents ?? a.custoNacionalRefCents ?? null);
+      const menor = cents.length
+        ? Math.min(...cents)
+        : (a.custoImportadoRefCents ?? a.custoNacionalRefCents ?? null);
+      return {
+        id: a.id, nome: a.name, ncm: a.ncmCode, origem: a.origem,
+        precoMedioCents: medio, menorPrecoCents: menor, totalRegistros: precos.length,
+      };
+    }),
+  );
+
+  // 2) PROFORMAS (proformaItems) — preço cotado direto, mesmo sem distribuir.
+  //    Dedup por produto+fornecedor, mantendo a cotação MAIS RECENTE.
+  const itens = await proformaDb.getProformaItemsWithContext(input.userId);
+  const byKey = new Map<string, { it: (typeof itens)[number]; score: number }>();
+  for (const it of itens) {
+    const score = catalogMatchScore(input.termo, it.productName);
+    if (score < CATALOGO_MATCH_THRESHOLD) continue;
+    const key = `${it.productName.toLowerCase()}::${(it.supplierName ?? "").toLowerCase()}`;
+    const prev = byKey.get(key);
+    if (!prev || it.quotationDate > prev.it.quotationDate) byKey.set(key, { it, score });
+  }
+  const proformas: ProformaHit[] = Array.from(byKey.values())
+    .sort((x, y) => y.score - x.score)
+    .slice(0, 8)
+    .map(({ it }) => ({
+      proformaId: it.proformaId, numero: it.numero, productName: it.productName,
+      ncm: it.ncmCode, supplierName: it.supplierName, unitPriceCents: it.unitPriceCents,
+      currency: it.currency, unit: it.unit, quantity: it.quantity, quotationDate: it.quotationDate,
+    }));
+
+  return { ativos, proformas };
+}
+
+/** Compat: retorna só os ativos (products). Usado pelo router fase5. */
+export async function buscarAtivo(input: { termo: string; userId: number }): Promise<AtivoHit[]> {
+  const { ativos } = await buscarCatalogo(input);
+  return ativos;
 }
 
 export async function compararNacionalImportado(input: {

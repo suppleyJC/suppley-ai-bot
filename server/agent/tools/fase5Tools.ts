@@ -5,21 +5,27 @@
  * documentos ingeridos → bases → a Excambia responde perguntas sobre elas.
  */
 import { defineSchema, type AgentTool, type ToolContext, type ToolResult } from "./types";
-import { buscarAtivo, compararNacionalImportado } from "./agentesFase5";
+import { buscarCatalogo, compararNacionalImportado } from "./agentesFase5";
 import { analiseBenchmark } from "./inteligenciaMercado";
 
 const fmt = (cents?: number | null) =>
   cents == null ? "n/d" : (cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
 
+const fmtData = (d?: Date | null) =>
+  d ? new Date(d).toLocaleDateString("pt-BR", { month: "short", year: "numeric" }) : "s/data";
+
 export const buscarAtivoTool: AgentTool = {
   name: "buscar_ativo",
   schema: defineSchema(
     "buscar_ativo",
-    "Busca ativos/insumos já cadastrados pelo nome e retorna preço médio e menor preço " +
-    "histórico. Use para perguntas como 'preço médio do prego 17x27' ou 'tenho esse item cadastrado?'.",
+    "Consulta a BASE da empresa por um produto: Ativos & Insumos cadastrados E Proformas/cotações. " +
+    "Retorna NCM, preço de referência e fornecedor. O casamento é inteligente — acha o item mesmo " +
+    "que escrito de forma diferente (ordem das palavras, '×' vs 'x', acentos). " +
+    "Use SEMPRE antes de afirmar que um produto não está cadastrado e no início de um cálculo, " +
+    "para reaproveitar NCM e preço já registrados. Ex.: 'tenho prego 17x27?', 'preço da escora 4m'.",
     {
       type: "object",
-      properties: { termo: { type: "string", description: "Nome ou parte do nome do ativo" } },
+      properties: { termo: { type: "string", description: "Nome ou descrição do produto como a pessoa falou" } },
       required: ["termo"],
     },
   ),
@@ -27,17 +33,36 @@ export const buscarAtivoTool: AgentTool = {
     const termo = typeof args.termo === "string" ? args.termo.trim() : "";
     if (!termo) return { ok: false, summary: "Informe o termo de busca.", error: "termo vazio" };
 
-    const resultados = await buscarAtivo({ termo, userId: ctx.userId });
-    if (resultados.length === 0) {
-      return { ok: true, summary: `Nenhum ativo encontrado para "${termo}".`, data: [] };
+    const { ativos, proformas } = await buscarCatalogo({ termo, userId: ctx.userId });
+
+    if (ativos.length === 0 && proformas.length === 0) {
+      return {
+        ok: true,
+        summary: `Nada encontrado na base (nem em Ativos & Insumos, nem em Proformas) para "${termo}". ` +
+          `Pode ser um item novo — dá para montar o cálculo do zero.`,
+        data: { ativos: [], proformas: [] },
+      };
     }
-    const linhas = resultados.slice(0, 5).map((a) =>
-      `${a.nome} (NCM ${a.ncm || "n/d"}): médio ${fmt(a.precoMedioCents)}, menor ${fmt(a.menorPrecoCents)} (${a.totalRegistros} registro(s))`,
-    );
+
+    const partes: string[] = [];
+    if (ativos.length) {
+      const linhas = ativos.slice(0, 5).map((a) =>
+        `- ${a.nome} (NCM ${a.ncm || "n/d"}): médio ${fmt(a.precoMedioCents)}, menor ${fmt(a.menorPrecoCents)} [${a.totalRegistros} preço(s)]`,
+      );
+      partes.push(`Ativos & Insumos cadastrados:\n${linhas.join("\n")}`);
+    }
+    if (proformas.length) {
+      const linhas = proformas.slice(0, 5).map((p) =>
+        `- ${p.productName} — ${p.supplierName || "fornecedor n/d"}: ${p.currency} ${fmt(p.unitPriceCents)}/${p.unit} ` +
+        `(NCM ${p.ncm || "n/d"}, ${fmtData(p.quotationDate)}, proforma ${p.numero || "s/nº"})`,
+      );
+      partes.push(`Proformas/cotações na base:\n${linhas.join("\n")}`);
+    }
+
     return {
       ok: true,
-      summary: `Encontrei ${resultados.length} ativo(s):\n${linhas.join("\n")}`,
-      data: resultados,
+      summary: `Encontrei na base para "${termo}":\n\n${partes.join("\n\n")}`,
+      data: { ativos, proformas },
     };
   },
 };

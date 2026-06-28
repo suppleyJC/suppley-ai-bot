@@ -178,6 +178,19 @@ export async function buscarAtivos(userId: number, termo: string) {
     .limit(20);
 }
 
+/**
+ * Lista todos os ativos do usuário (cap de segurança). Base para a busca
+ * "fuzzy" feita em memória (token/containment), que tolera ordem de palavras,
+ * símbolo × vs x e acentuação — coisa que o LIKE do SQL não faz.
+ */
+export async function listAtivos(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(products)
+    .where(eq(products.userId, userId))
+    .limit(2000);
+}
+
 export async function getAtivo(ativoId: number, userId: number) {
   const db = await getDb();
   if (!db) return null;

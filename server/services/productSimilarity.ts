@@ -90,6 +90,57 @@ export function findSimilarProduct(
 }
 
 /**
+ * Normaliza um texto para BUSCA de catálogo, tolerando as variações típicas do
+ * domínio: o símbolo de multiplicação (× / ✕ / *) vira "x" (para "17×27" casar
+ * com "17x27"), acentos são removidos, tudo minúsculo e só alfanumérico.
+ */
+export function normalizeForSearch(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .replace(/[×✕*]/g, "x")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // remove acentos
+    .replace(/[^a-z0-9\s]/g, " ") // só letras/números
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Ruído comum que não ajuda a identificar a variante do produto.
+const SEARCH_STOPWORDS = new Set([
+  "de", "da", "do", "para", "com", "e", "um", "uma", "the", "of",
+  "container", "conteiner", "carga", "lote",
+]);
+
+/** Tokens de busca — MANTÉM numéricos curtos (17, 27) que diferenciam variantes. */
+function catalogTokens(s: string): string[] {
+  return normalizeForSearch(s)
+    .split(" ")
+    .filter((t) => (t.length >= 2 || /\d/.test(t)) && !SEARCH_STOPWORDS.has(t));
+}
+
+/**
+ * Score 0..1 entre o que a pessoa digitou e um item do catálogo.
+ * Combina a similaridade textual (Levenshtein + Jaccard) com CONTAINMENT de
+ * tokens: se todos os tokens da consulta aparecem no item, casa com alta
+ * confiança. Isso resolve os dois problemas reais do domínio:
+ *   - ordem das palavras diferente ("prego 17x27 cabeça simples" ×
+ *     "Prego cabeça simples 17x27");
+ *   - símbolo × vs letra x e acentuação.
+ */
+export function catalogMatchScore(query: string, candidate: string): number {
+  const c = normalizeForSearch(candidate);
+  if (!normalizeForSearch(query) || !c) return 0;
+
+  let score = productSimilarity(normalizeForSearch(query), c);
+  const qt = catalogTokens(query);
+  if (qt.length) {
+    const present = qt.filter((t) => c.includes(t)).length;
+    score = Math.max(score, (present / qt.length) * 0.95);
+  }
+  return score;
+}
+
+/**
  * Encontra os N produtos mais similares, ordenados por score (descendente).
  */
 export function findTopSimilarProducts(
