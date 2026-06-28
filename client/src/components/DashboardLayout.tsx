@@ -45,8 +45,8 @@ const menuItems = [
   { icon: FileText, label: "Proformas", path: "/proformas", section: "operacoes" },
 
   // BASE OPERACIONAL (Cadastros) — ambiente unificado: fornecedores + compradores
-  { icon: Building2, label: "Fornecedores & Compradores", path: "/suppliers", section: "base" },
-  { icon: Package, label: "Ativos & Insumos", path: "/products", section: "base" },
+  { icon: Building2, label: "Fornecedores", path: "/suppliers", section: "base" },
+  { icon: Package, label: "Ativos", path: "/products", section: "base" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -196,7 +196,7 @@ function DashboardLayoutContent({
                   <img
                     src="/logo-suppley.png"
                     alt="SUPPLEY"
-                    className="h-11 w-auto shrink-0 brightness-0 invert"
+                    className="h-9 w-auto shrink-0 brightness-0 invert"
                   />
                   <span className="h-8 w-px shrink-0 bg-sidebar-foreground/25" aria-hidden="true" />
                   <span className="text-[9px] text-sidebar-foreground/60 font-semibold tracking-[0.12em] uppercase leading-tight">
