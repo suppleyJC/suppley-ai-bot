@@ -587,7 +587,7 @@ function Message({ role, content, pending, toolResults, conversaId, operacaoId }
             <TypingDots />
           ) : (
             <>
-              <div className="prose prose-sm max-w-none break-words text-slate-800 prose-p:my-2 prose-p:leading-relaxed prose-headings:font-semibold prose-headings:text-slate-900 prose-strong:text-slate-900 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-a:text-violet-600 prose-a:no-underline hover:prose-a:underline prose-code:rounded prose-code:bg-violet-50 prose-code:px-1 prose-code:py-0.5 prose-code:text-[0.85em] prose-code:text-violet-700 prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:rounded-xl prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-table:text-[13px] prose-th:border prose-th:border-slate-200 prose-th:bg-slate-50 prose-th:px-2 prose-th:py-1 prose-td:border prose-td:border-slate-200 prose-td:px-2 prose-td:py-1">
+              <div className="min-w-0 max-w-none break-words">
                 <MessageContent>{content}</MessageContent>
               </div>
               <CalcResultCard toolResults={toolResults} conversaId={conversaId} operacaoId={operacaoId} />

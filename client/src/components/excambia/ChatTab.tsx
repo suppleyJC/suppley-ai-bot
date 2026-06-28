@@ -118,7 +118,7 @@ export function ChatTab({
                   {msg.role === "assistant" && msg.streaming && !msg.content ? (
                     <LoadingSpinner status={msg.statusText} />
                   ) : msg.role === "assistant" ? (
-                    <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_pre]:text-xs [&_code]:text-xs">
+                    <div className="max-w-none break-words">
                       <MessageContent>{msg.content}</MessageContent>
                     </div>
                   ) : (

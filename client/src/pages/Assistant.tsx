@@ -811,7 +811,7 @@ export default function Assistant() {
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <div className="prose prose-sm max-w-none dark:prose-invert">
+                <div className="max-w-none break-words">
                   <MessageContent>{marketAnalysis || "Dados insuficientes para análise."}</MessageContent>
                 </div>
               )}

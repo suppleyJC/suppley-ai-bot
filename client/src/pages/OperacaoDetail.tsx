@@ -98,6 +98,12 @@ export default function OperacaoDetail() {
     update.mutate({ operacaoId: operacao.id, prazoDesejado: v ? new Date(v) : null });
   }
 
+  function handleBlurOrigem(e: React.FocusEvent<HTMLInputElement>) {
+    const v = e.target.value.trim();
+    if (v === (op.origemDesejada ?? "")) return; // sem mudança, não dispara
+    update.mutate({ operacaoId: operacao.id, origemDesejada: v });
+  }
+
   return (
     <div className="mx-auto max-w-5xl p-6">
       <button
@@ -156,14 +162,19 @@ export default function OperacaoDetail() {
             />
           </label>
 
-          <div className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1">
             <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
               <Globe2 className="mr-1 inline h-3 w-3" /> Origem desejada
             </span>
-            <p className="px-2 py-1.5 text-sm font-medium text-slate-700">
-              {op.origemDesejada || "—"}
-            </p>
-          </div>
+            <input
+              type="text"
+              defaultValue={op.origemDesejada ?? ""}
+              onBlur={handleBlurOrigem}
+              disabled={update.isPending}
+              placeholder="Ex.: China, Índia, Coreia do Sul…"
+              className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-medium text-slate-700 placeholder:font-normal placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
+            />
+          </label>
         </div>
       </header>
 

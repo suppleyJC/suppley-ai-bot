@@ -64,7 +64,7 @@ export function MarketTab({ loadingMarket, marketAnalysis, exchangeRates }: Mark
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="prose prose-sm dark:prose-invert">
+                <div className="max-w-none break-words">
                   <MessageContent>{typeof marketAnalysis === 'string' ? marketAnalysis : (marketAnalysis as any)?.analysis || "Análise de mercado não disponível."}</MessageContent>
                 </div>
               </CardContent>
