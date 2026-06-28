@@ -182,8 +182,8 @@ function DashboardLayoutContent({
           {/* Header da marca — [toggle] [logo em destaque] | [COMÉRCIO EXTERIOR],
               espelhando o modelo. shrink-0 na logo evita que o flex a esprema
               (causa da distorção); a logo ganha altura (h-12) para não ficar pequena. */}
-          <SidebarHeader className="h-24 justify-center border-b border-sidebar-border/50">
-            <div className={`flex items-center transition-all w-full ${isCollapsed ? "px-0 justify-center" : "gap-2.5 px-2.5"}`}>
+          <SidebarHeader className="h-28 justify-center border-b border-sidebar-border/50">
+            <div className={`flex items-center transition-all w-full ${isCollapsed ? "px-0 justify-center" : "gap-2 px-2"}`}>
               <button
                 onClick={toggleSidebar}
                 className="h-8 w-8 flex items-center justify-center text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
@@ -192,14 +192,14 @@ function DashboardLayoutContent({
                 <PanelLeft className="h-5 w-5" />
               </button>
               {!isCollapsed ? (
-                <div className="flex flex-1 items-center gap-2.5 min-w-0">
+                <div className="flex flex-1 items-center gap-2 min-w-0">
                   <img
                     src="/logo-suppley.png"
                     alt="SUPPLEY"
-                    className="h-14 w-auto shrink-0 brightness-0 invert"
+                    className="h-16 w-auto shrink-0 brightness-0 invert"
                   />
-                  <span className="h-10 w-px shrink-0 bg-sidebar-foreground/25" aria-hidden="true" />
-                  <span className="text-[10px] text-sidebar-foreground/60 font-semibold tracking-[0.14em] uppercase leading-tight">
+                  <span className="h-9 w-px shrink-0 bg-sidebar-foreground/25" aria-hidden="true" />
+                  <span className="text-[9px] text-sidebar-foreground/60 font-semibold tracking-[0.12em] uppercase leading-tight">
                     Comércio<br />Exterior
                   </span>
                 </div>
