@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -29,23 +28,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { toast } from "sonner";
 import {
   Package,
   Plus,
   Pencil,
   Trash2,
-  Barcode,
-  Scale,
-  Box,
   Loader2,
   TrendingUp,
   Search,
@@ -55,7 +43,11 @@ import {
   Building2,
   Tag as TagIcon,
   SlidersHorizontal,
-  ChevronDown,
+  ChevronRight,
+  Boxes,
+   Scale,
+  Box,
+  Barcode,
 } from "lucide-react";
 import { NCMAutocomplete } from "@/components/NCMAutocomplete";
 import { PriceHistoryView } from "@/components/PriceHistoryView";
@@ -132,6 +124,23 @@ function fmtDate(d: string | Date): string {
     month: "2-digit",
     year: "numeric",
   });
+}
+
+/**
+ * Normaliza nome para AGRUPAR variações do mesmo modelo (mesmo item de
+ * fornecedores/preços diferentes). Tira acentos, unifica × / * → x, colapsa
+ * espaços. Itens "parecidos mas com especificidades" (medidas/cores) têm nomes
+ * diferentes e por isso continuam como modelos separados — sempre sob a mesma
+ * classe macro.
+ */
+function normalizeName(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[×✕*]/g, "x")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** Input de tags: adiciona com Enter/vírgula, remove clicando no X. */
@@ -387,18 +396,30 @@ function ProductForm({
   );
 }
 
+/** Um "modelo" = todas as variações com o mesmo nome normalizado. */
+interface ModelGroup {
+  key: string;
+  name: string;
+  ncmCode: string;
+  classe: string | null;
+  criticidade: string | null;
+  description: string | null;
+  primary: any;
+  variants: any[];
+  price: { unitPriceCents: number; currency: string; quotationDate: string | Date; supplierName: string | null } | null;
+  suppliersCount: number;
+}
+
 export default function Products() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formData, setFormData] = useState<ProductFormData>(initialFormData);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Busca e filtros facetados
+  // Busca + navegação por classe (macro) + criticidade + seleção do modelo
   const [search, setSearch] = useState("");
-  const [selectedClasses, setSelectedClasses] = useState<Set<string>>(new Set());
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
-  const [selectedSuppliers, setSelectedSuppliers] = useState<Set<number>>(new Set());
-  const [selectedCriticidades, setSelectedCriticidades] = useState<Set<string>>(new Set());
-  const [priceRange, setPriceRange] = useState<[number, number] | null>(null);
+  const [selectedClass, setSelectedClass] = useState<string | null>(null); // chave normalizada
+  const [selectedCrit, setSelectedCrit] = useState<Set<string>>(new Set());
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"name" | "price" | "date">("name");
 
   const { data: products, isLoading } = trpc.products.list.useQuery();
@@ -412,9 +433,7 @@ export default function Products() {
       setFormData(initialFormData);
       utils.products.list.invalidate();
     },
-    onError: (error) => {
-      toast.error(`Erro ao cadastrar: ${error.message}`);
-    },
+    onError: (error) => toast.error(`Erro ao cadastrar: ${error.message}`),
   });
 
   const updateMutation = trpc.products.update.useMutation({
@@ -423,9 +442,7 @@ export default function Products() {
       setFormData(initialFormData);
       utils.products.list.invalidate();
     },
-    onError: (error) => {
-      toast.error(`Erro ao atualizar: ${error.message}`);
-    },
+    onError: (error) => toast.error(`Erro ao atualizar: ${error.message}`),
   });
 
   const deleteMutation = trpc.products.delete.useMutation({
@@ -433,9 +450,7 @@ export default function Products() {
       toast.success("Produto excluído com sucesso");
       utils.products.list.invalidate();
     },
-    onError: (error) => {
-      toast.error(`Erro ao excluir: ${error.message}`);
-    },
+    onError: (error) => toast.error(`Erro ao excluir: ${error.message}`),
   });
 
   const buildPayload = () => ({
@@ -454,119 +469,100 @@ export default function Products() {
     tags: formData.tags.length ? formData.tags : undefined,
   });
 
-  const handleCreate = () => {
-    createMutation.mutate(buildPayload());
-  };
-
-
+  const handleCreate = () => createMutation.mutate(buildPayload());
 
   const suppliersList = suppliers?.map((s) => ({ id: s.id, name: s.name })) || [];
   const supplierName = (id: number | null) =>
     id ? suppliers?.find((s) => s.id === id)?.name ?? null : null;
 
-  // Coleta todos os valores únicos para filtros facetados
-  const facets = useMemo(() => {
-    const classes = new Set<string>();
-    const categories = new Set<string>();
-    const supplierIds = new Set<number>();
-    let minPrice = Infinity;
-    let maxPrice = 0;
-
-    (products ?? []).forEach((p) => {
-      if (p.classe) classes.add(p.classe);
-      if (p.categoria) categories.add(p.categoria);
-      if (p.supplierId) supplierIds.add(p.supplierId);
-      if (p.latestPrice?.unitPriceCents) {
-        minPrice = Math.min(minPrice, p.latestPrice.unitPriceCents);
-        maxPrice = Math.max(maxPrice, p.latestPrice.unitPriceCents);
-      }
-    });
-
-    return {
-      classes: Array.from(classes).sort((a, b) => a.localeCompare(b, "pt-BR")),
-      categories: Array.from(categories).sort((a, b) => a.localeCompare(b, "pt-BR")),
-      supplierIds: Array.from(supplierIds),
-      priceRange: minPrice === Infinity ? null : [minPrice / 100, maxPrice / 100],
-    };
+  // CLASSE MACRO — deduplicada por chave (trim + minúsculas), resolve "Pregos" x "Pregos ".
+  const classFacets = useMemo(() => {
+    const m = new Map<string, { label: string; count: number }>();
+    for (const p of products ?? []) {
+      const raw = (p.classe || "").trim();
+      if (!raw) continue;
+      const key = raw.toLowerCase();
+      const e = m.get(key) ?? { label: raw, count: 0 };
+      e.count++;
+      m.set(key, e);
+    }
+    return Array.from(m.entries())
+      .map(([key, v]) => ({ key, label: v.label, count: v.count }))
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   }, [products]);
 
-  // Aplica todos os filtros facetados + busca
+  const semClasse = useMemo(
+    () => (products ?? []).filter((p) => !(p.classe || "").trim()).length,
+    [products],
+  );
+
+  // Filtro: classe + criticidade + busca textual
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (products ?? [])
-      .filter((p) => {
-        if (selectedClasses.size > 0 && !selectedClasses.has(p.classe || "")) return false;
-        if (selectedCategories.size > 0 && !selectedCategories.has(p.categoria || "")) return false;
-        if (selectedSuppliers.size > 0 && !selectedSuppliers.has(p.supplierId || -1)) return false;
-        if (selectedCriticidades.size > 0 && !selectedCriticidades.has(p.criticidade || "")) return false;
+    return (products ?? []).filter((p) => {
+      const cls = (p.classe || "").trim().toLowerCase();
+      if (selectedClass === "__none__" && cls) return false;
+      if (selectedClass && selectedClass !== "__none__" && cls !== selectedClass) return false;
+      if (selectedCrit.size > 0 && !selectedCrit.has(p.criticidade || "")) return false;
+      if (!q) return true;
+      const tags = ((p.tags as string[] | null) ?? []).join(" ");
+      const haystack = [
+        p.name, p.ncmCode, p.classe, p.categoria, p.subcategoria,
+        p.aplicacao, p.description, supplierName(p.supplierId),
+        p.latestPrice?.supplierName, tags,
+      ].filter(Boolean).join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [products, search, selectedClass, selectedCrit, suppliers]);
 
-        if (priceRange && p.latestPrice?.unitPriceCents) {
-          const price = p.latestPrice.unitPriceCents / 100;
-          if (price < priceRange[0] || price > priceRange[1]) return false;
-        }
+  // CAMADA MODELO — agrupa variações pelo nome normalizado.
+  const models = useMemo<ModelGroup[]>(() => {
+    const m = new Map<string, any[]>();
+    for (const p of filtered) {
+      const key = normalizeName(p.name);
+      const arr = m.get(key) ?? [];
+      arr.push(p);
+      m.set(key, arr);
+    }
+    const list = Array.from(m.entries()).map(([key, variants]) => {
+      const primary = variants.find((v) => v.description) ?? variants[0];
+      const price = variants.find((v) => v.latestPrice)?.latestPrice ?? null;
+      const supplierIds = new Set(variants.map((v) => v.supplierId).filter(Boolean));
+      const crit = variants.find((v) => v.criticidade)?.criticidade ?? null;
+      return {
+        key,
+        name: variants[0].name,
+        ncmCode: variants[0].ncmCode,
+        classe: variants.find((v) => v.classe)?.classe ?? null,
+        criticidade: crit,
+        description: primary.description ?? null,
+        primary,
+        variants,
+        price,
+        suppliersCount: supplierIds.size,
+      };
+    });
+    list.sort((a, b) => {
+      if (sortBy === "name") return a.name.localeCompare(b.name, "pt-BR");
+      if (sortBy === "price") {
+        return (a.price?.unitPriceCents ?? Infinity) - (b.price?.unitPriceCents ?? Infinity);
+      }
+      if (sortBy === "date") {
+        return new Date(b.price?.quotationDate ?? 0).getTime() - new Date(a.price?.quotationDate ?? 0).getTime();
+      }
+      return 0;
+    });
+    return list;
+  }, [filtered, sortBy]);
 
-        if (!q) return true;
-        const tags = ((p.tags as string[] | null) ?? []).join(" ");
-        const haystack = [
-          p.name,
-          p.ncmCode,
-          p.classe,
-          p.categoria,
-          p.subcategoria,
-          p.aplicacao,
-          p.description,
-          supplierName(p.supplierId),
-          p.latestPrice?.supplierName,
-          tags,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(q);
-      })
-      .sort((a, b) => {
-        if (sortBy === "name") return a.name.localeCompare(b.name, "pt-BR");
-        if (sortBy === "price") {
-          const aPrice = a.latestPrice?.unitPriceCents ?? Infinity;
-          const bPrice = b.latestPrice?.unitPriceCents ?? Infinity;
-          return aPrice - bPrice;
-        }
-        if (sortBy === "date") {
-          const aDate = a.latestPrice?.quotationDate ?? "";
-          const bDate = b.latestPrice?.quotationDate ?? "";
-          return new Date(bDate).getTime() - new Date(aDate).getTime();
-        }
-        return 0;
-      });
-  }, [
-    products,
-    search,
-    selectedClasses,
-    selectedCategories,
-    selectedSuppliers,
-    selectedCriticidades,
-    priceRange,
-    sortBy,
-    suppliers,
-  ]);
+  const selected = models.find((mo) => mo.key === selectedKey) ?? null;
 
-  const hasFilters =
-    search.trim() !== "" ||
-    selectedClasses.size > 0 ||
-    selectedCategories.size > 0 ||
-    selectedSuppliers.size > 0 ||
-    selectedCriticidades.size > 0 ||
-    priceRange !== null;
-
+  const hasFilters = search.trim() !== "" || selectedClass !== null || selectedCrit.size > 0;
   const clearAllFilters = () => {
     setSearch("");
-    setSelectedClasses(new Set());
-    setSelectedCategories(new Set());
-    setSelectedSuppliers(new Set());
-    setSelectedCriticidades(new Set());
-    setPriceRange(null);
+    setSelectedClass(null);
+    setSelectedCrit(new Set());
   };
-
 
   if (isLoading) {
     return (
@@ -588,27 +584,41 @@ export default function Products() {
     );
   }
 
+  const detail = selected ? (
+    <ModelDetail
+      model={selected}
+      supplierName={supplierName}
+      suppliers={suppliersList}
+      onClose={() => setSelectedKey(null)}
+      onDelete={(id) => {
+        deleteMutation.mutate({ id });
+        setSelectedKey(null);
+      }}
+      updateMutation={updateMutation}
+    />
+  ) : null;
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 border-b">
         <div>
-          <h1 className="text-3xl font-bold">Produtos</h1>
+          <h1 className="text-3xl font-bold">Ativos</h1>
           <p className="text-muted-foreground">
-            Gerencie seu catálogo de produtos para importação
+            Catálogo de itens por classe — selecione um item para ver ficha técnica e fornecedores
           </p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2 w-fit" onClick={() => setFormData(initialFormData)}>
               <Plus className="h-4 w-4" />
-              Novo Produto
+              Novo Ativo
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Cadastrar Produto</DialogTitle>
-              <DialogDescription>Adicione um novo produto ao catálogo</DialogDescription>
+              <DialogTitle>Cadastrar Ativo</DialogTitle>
+              <DialogDescription>Adicione um novo item ao catálogo</DialogDescription>
             </DialogHeader>
             <ProductForm
               data={formData}
@@ -622,7 +632,7 @@ export default function Products() {
         </Dialog>
       </div>
 
-      {/* Search + View Toggle */}
+      {/* Busca + ordenação */}
       {products && products.length > 0 && (
         <div className="flex flex-col md:flex-row md:items-center gap-3 py-4 border-b">
           <div className="relative flex-1">
@@ -630,7 +640,7 @@ export default function Products() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nome, NCM, classe, fornecedor…"
+              placeholder="Buscar por nome, NCM, classe, especificação…"
               className="pl-9"
             />
           </div>
@@ -638,10 +648,10 @@ export default function Products() {
             variant="outline"
             size="sm"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="gap-2 md:hidden"
+            className="gap-2 lg:hidden"
           >
             <SlidersHorizontal className="h-4 w-4" />
-            Filtros
+            Classes
           </Button>
           <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
             <SelectTrigger className="md:w-48">
@@ -666,239 +676,361 @@ export default function Products() {
         <Card className="flex-1 flex items-center justify-center">
           <CardContent className="py-16 text-center">
             <Package className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-lg font-semibold mb-2">Nenhum produto cadastrado</h3>
-            <p className="text-muted-foreground mb-4">Comece cadastrando seu primeiro produto</p>
+            <h3 className="text-lg font-semibold mb-2">Nenhum ativo cadastrado</h3>
+            <p className="text-muted-foreground mb-4">Comece cadastrando seu primeiro item</p>
             <Button onClick={() => setIsCreateOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Cadastrar Produto
+              Cadastrar Ativo
             </Button>
-          </CardContent>
-        </Card>
-      ) : filtered.length === 0 ? (
-        <Card className="flex-1 flex items-center justify-center">
-          <CardContent className="py-16 text-center">
-            <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-lg font-semibold mb-1">Nenhum resultado</h3>
-            <p className="text-muted-foreground">
-              Ajuste a busca ou os filtros para encontrar o que procura.
-            </p>
           </CardContent>
         </Card>
       ) : (
         <div className="flex gap-6 flex-1 min-h-0 py-4">
-          {/* Sidebar Filtros */}
+          {/* CAMADA 1 — Classe macro (navegação) */}
           <aside
-            className={`${
-              sidebarOpen ? "w-64" : "hidden"
-            } md:block md:w-64 flex-shrink-0 border-r pr-4 overflow-y-auto`}
+            className={`${sidebarOpen ? "block" : "hidden"} lg:block w-full lg:w-56 flex-shrink-0 border-r pr-4 overflow-y-auto`}
           >
             <div className="space-y-6">
-              {/* Classes */}
-              {facets.classes.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <Layers className="h-4 w-4" />
-                    Classes
-                  </h3>
-                  <div className="space-y-2">
-                    {facets.classes.map((cls) => {
-                      const count = products?.filter((p) => p.classe === cls).length ?? 0;
-                      return (
-                        <label key={cls} className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox
-                            checked={selectedClasses.has(cls)}
-                            onCheckedChange={(checked) => {
-                              const newSet = new Set(selectedClasses);
-                              if (checked) newSet.add(cls);
-                              else newSet.delete(cls);
-                              setSelectedClasses(newSet);
-                            }}
-                          />
-                          <span className="text-sm flex-1">{cls}</span>
-                          <span className="text-xs text-muted-foreground">{count}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Categories */}
-              {facets.categories.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-3">Categorias</h3>
-                  <div className="space-y-2">
-                    {facets.categories.map((cat) => {
-                      const count = products?.filter((p) => p.categoria === cat).length ?? 0;
-                      return (
-                        <label key={cat} className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox
-                            checked={selectedCategories.has(cat)}
-                            onCheckedChange={(checked) => {
-                              const newSet = new Set(selectedCategories);
-                              if (checked) newSet.add(cat);
-                              else newSet.delete(cat);
-                              setSelectedCategories(newSet);
-                            }}
-                          />
-                          <span className="text-sm flex-1">{cat}</span>
-                          <span className="text-xs text-muted-foreground">{count}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Criticidade */}
               <div>
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  Criticidade
+                  <Layers className="h-4 w-4" /> Classes
                 </h3>
-                <div className="space-y-2">
-                  {Object.entries(CRIT_META).map(([value, meta]) => {
-                    const count = products?.filter((p) => p.criticidade === value).length ?? 0;
+                <div className="space-y-1">
+                  <ClassButton
+                    label="Todas"
+                    count={products.length}
+                    active={selectedClass === null}
+                    onClick={() => { setSelectedClass(null); setSidebarOpen(false); }}
+                  />
+                  {classFacets.map((c) => (
+                    <ClassButton
+                      key={c.key}
+                      label={c.label}
+                      count={c.count}
+                      active={selectedClass === c.key}
+                      onClick={() => { setSelectedClass(c.key); setSidebarOpen(false); }}
+                    />
+                  ))}
+                  {semClasse > 0 && (
+                    <ClassButton
+                      label="Sem classe"
+                      count={semClasse}
+                      active={selectedClass === "__none__"}
+                      onClick={() => { setSelectedClass("__none__"); setSidebarOpen(false); }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" /> Criticidade
+                </h3>
+                <div className="space-y-1">
+                  {(["alta", "media", "baixa"] as const).map((value) => {
+                    const meta = CRIT_META[value];
+                    const count = products.filter((p) => p.criticidade === value).length;
+                    const active = selectedCrit.has(value);
                     return (
-                      <label key={value} className="flex items-center gap-2 cursor-pointer">
-                        <Checkbox
-                          checked={selectedCriticidades.has(value)}
-                          onCheckedChange={(checked) => {
-                            const newSet = new Set(selectedCriticidades);
-                            if (checked) newSet.add(value);
-                            else newSet.delete(value);
-                            setSelectedCriticidades(newSet);
-                          }}
-                        />
-                        <span className="text-sm flex-1">{meta.label}</span>
+                      <button
+                        key={value}
+                        onClick={() => {
+                          const next = new Set(selectedCrit);
+                          if (active) next.delete(value); else next.add(value);
+                          setSelectedCrit(next);
+                        }}
+                        className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors ${
+                          active ? "bg-violet-50 text-violet-700" : "hover:bg-muted"
+                        }`}
+                      >
+                        <span className="h-2 w-2 rounded-full" style={{ background: meta.dot }} />
+                        <span className="flex-1 text-left">{meta.label}</span>
                         <span className="text-xs text-muted-foreground">{count}</span>
-                      </label>
+                      </button>
                     );
                   })}
                 </div>
               </div>
-
-              {/* Suppliers */}
-              {facets.supplierIds.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
-                    Fornecedores
-                  </h3>
-                  <div className="space-y-2">
-                    {facets.supplierIds.map((supplierId) => {
-                      const name = supplierName(supplierId) || `Fornecedor ${supplierId}`;
-                      const count = products?.filter((p) => p.supplierId === supplierId).length ?? 0;
-                      return (
-                        <label key={supplierId} className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox
-                            checked={selectedSuppliers.has(supplierId)}
-                            onCheckedChange={(checked) => {
-                              const newSet = new Set(selectedSuppliers);
-                              if (checked) newSet.add(supplierId);
-                              else newSet.delete(supplierId);
-                              setSelectedSuppliers(newSet);
-                            }}
-                          />
-                          <span className="text-sm flex-1 truncate">{name}</span>
-                          <span className="text-xs text-muted-foreground">{count}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
           </aside>
 
-          {/* Main Table Area */}
+          {/* CAMADA 2 — Modelos (lista) */}
           <div className="flex-1 min-w-0 flex flex-col">
-            <p className="text-sm text-muted-foreground mb-4">
-              {filtered.length} {filtered.length === 1 ? "item" : "itens"}
-              {hasFilters ? ` de ${products.length}` : ""}
+            <p className="text-sm text-muted-foreground mb-3">
+              {models.length} {models.length === 1 ? "item" : "itens"}
+              {hasFilters ? ` · filtro ativo` : ""}
             </p>
-            <div className="flex-1 overflow-auto border rounded-lg">
-              <Table>
-                <TableHeader className="sticky top-0 bg-muted/50">
-                  <TableRow>
-                    <TableHead className="w-32">Produto</TableHead>
-                    <TableHead className="w-24">Classe</TableHead>
-                    <TableHead className="w-24">Categoria</TableHead>
-                    <TableHead className="w-32">Fornecedor</TableHead>
-                    <TableHead className="text-right w-28">Preço</TableHead>
-                    <TableHead className="text-center w-24">Data</TableHead>
-                    <TableHead className="text-center w-20">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((product) => {
-                    const forn = supplierName(product.supplierId) ?? product.latestPrice?.supplierName ?? "—";
-                    const crit = product.criticidade
-                      ? CRIT_META[product.criticidade as "alta" | "media" | "baixa"]
-                      : null;
-                    return (
-                      <TableRow key={product.id} className="hover:bg-muted/50">
-                        <TableCell>
-                          <div className="min-w-0">
-                            <div className="font-medium truncate">{product.name}</div>
-                            <div className="text-xs text-muted-foreground font-mono">
-                              {product.ncmCode}
-                            </div>
-                            {crit && (
-                              <Badge variant="outline" className={`mt-1 ${crit.badge}`}>
-                                {crit.label}
+            {models.length === 0 ? (
+              <Card className="flex-1 flex items-center justify-center">
+                <CardContent className="py-16 text-center">
+                  <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-lg font-semibold mb-1">Nenhum resultado</h3>
+                  <p className="text-muted-foreground">Ajuste a busca, a classe ou a criticidade.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="flex-1 overflow-auto pr-1 space-y-1.5">
+                {models.map((mo) => {
+                  const crit = mo.criticidade ? CRIT_META[mo.criticidade as "alta" | "media" | "baixa"] : null;
+                  const isSel = mo.key === selectedKey;
+                  return (
+                    <button
+                      key={mo.key}
+                      onClick={() => setSelectedKey(mo.key)}
+                      className={`w-full rounded-xl border p-3 text-left transition-all ${
+                        isSel
+                          ? "border-violet-400 bg-violet-50/60 ring-1 ring-violet-200"
+                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="font-semibold text-slate-800 truncate">{mo.name}</span>
+                            {mo.variants.length > 1 && (
+                              <Badge variant="secondary" className="gap-1 text-[10px]">
+                                <Boxes className="h-3 w-3" /> {mo.variants.length} variações
                               </Badge>
                             )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm">{product.classe || "—"}</span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            {product.categoria || "—"}
-                            {product.subcategoria && (
-                              <div className="text-xs text-muted-foreground">{product.subcategoria}</div>
+                            {crit && (
+                              <Badge variant="outline" className={`text-[10px] ${crit.badge}`}>{crit.label}</Badge>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm truncate max-w-[128px] block">{forn}</span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {product.latestPrice ? (
-                            <div className="text-sm font-medium">
-                              {fmtMoney(product.latestPrice.unitPriceCents, product.latestPrice.currency)}
-                              <div className="text-xs text-muted-foreground">
-                                /{product.unit}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">Sem cotação</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center text-sm">
-                          {product.latestPrice ? fmtDate(product.latestPrice.quotationDate) : "—"}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <ProductActionMenu
-                              product={product}
-                              onDelete={(id) => deleteMutation.mutate({ id })}
-                              updateMutation={updateMutation}
-                              suppliers={suppliersList}
-                            />
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                            <span className="font-mono">{mo.ncmCode}</span>
+                            {mo.classe && <span className="inline-flex items-center gap-1"><Layers className="h-3 w-3" />{mo.classe.trim()}</span>}
+                            <span className="inline-flex items-center gap-1">
+                              <Building2 className="h-3 w-3" />
+                              {mo.suppliersCount > 0 ? `${mo.suppliersCount} fornecedor${mo.suppliersCount > 1 ? "es" : ""}` : "sem fornecedor"}
+                            </span>
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="text-right">
+                            {mo.price ? (
+                              <>
+                                <div className="text-sm font-semibold text-slate-800">
+                                  {fmtMoney(mo.price.unitPriceCents, mo.price.currency)}
+                                </div>
+                                <div className="text-[11px] text-muted-foreground">{fmtDate(mo.price.quotationDate)}</div>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-muted-foreground">Sem cotação</span>
+                            )}
+                          </div>
+                          <ChevronRight className={`h-4 w-4 ${isSel ? "text-violet-500" : "text-slate-300"}`} />
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* CAMADA 3 — detalhe inline (telas menores) */}
+            {detail && <div className="lg:hidden mt-4">{detail}</div>}
           </div>
+
+          {/* CAMADA 3 — detalhe lateral (desktop) */}
+          <aside className="hidden lg:block w-[380px] flex-shrink-0 overflow-y-auto">
+            {detail ?? (
+              <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 p-10 text-center">
+                <Box className="mb-3 h-10 w-10 text-slate-300" />
+                <p className="text-sm text-slate-400">Selecione um item para ver a ficha técnica e os fornecedores.</p>
+              </div>
+            )}
+          </aside>
         </div>
       )}
+    </div>
+  );
+}
+
+function ClassButton({
+  label, count, active, onClick,
+}: { label: string; count: number; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors ${
+        active ? "bg-violet-600 text-white" : "hover:bg-muted text-slate-700"
+      }`}
+    >
+      <span className="flex-1 truncate text-left">{label}</span>
+      <span className={`text-xs ${active ? "text-violet-100" : "text-muted-foreground"}`}>{count}</span>
+    </button>
+  );
+}
+
+/** CAMADA 3 — ficha técnica do modelo + fornecedores e preços. */
+function ModelDetail({
+  model, suppliers, supplierName, onClose, onDelete, updateMutation,
+}: {
+  model: ModelGroup;
+  suppliers: Array<{ id: number; name: string }>;
+  supplierName: (id: number | null) => string | null;
+  onClose: () => void;
+  onDelete: (id: number) => void;
+  updateMutation: any;
+}) {
+  const crit = model.criticidade ? CRIT_META[model.criticidade as "alta" | "media" | "baixa"] : null;
+  const p = model.primary;
+  const tags = (p.tags as string[] | null) ?? [];
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white">
+      {/* cabeçalho */}
+      <div className="flex items-start gap-2 border-b border-slate-100 p-4">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-base font-bold text-slate-900">{model.name}</h2>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-mono">{model.ncmCode}</span>
+            {model.classe && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5">
+                <Layers className="h-3 w-3" /> {model.classe.trim()}
+              </span>
+            )}
+            {crit && <Badge variant="outline" className={`text-[10px] ${crit.badge}`}>{crit.label}</Badge>}
+          </div>
+        </div>
+        <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100" title="Fechar">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="space-y-4 p-4">
+        {/* ações */}
+        <div className="flex items-center gap-2">
+          <ProductActionMenu
+            product={p}
+            onDelete={onDelete}
+            updateMutation={updateMutation}
+            suppliers={suppliers}
+          />
+        </div>
+
+        {/* descrição */}
+        <div>
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Ficha técnica</p>
+          <p className="text-sm leading-relaxed text-slate-600">
+            {model.description || <span className="text-slate-400">Sem descrição cadastrada.</span>}
+          </p>
+        </div>
+
+        {/* specs */}
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <Spec icon={<Box className="h-3.5 w-3.5" />} label="Unidade" value={p.unit} />
+          <Spec icon={<Scale className="h-3.5 w-3.5" />} label="Peso" value={p.weightKg != null ? `${p.weightKg} kg` : "—"} />
+          <Spec icon={<Barcode className="h-3.5 w-3.5" />} label="Volume" value={p.volumeM3 != null ? `${p.volumeM3} m³` : "—"} />
+          <Spec icon={<Layers className="h-3.5 w-3.5" />} label="Categoria" value={[p.categoria, p.subcategoria].filter(Boolean).join(" · ") || "—"} />
+        </div>
+        {p.aplicacao && (
+          <div className="text-sm">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Aplicação</span>
+            <p className="text-slate-600">{p.aplicacao}</p>
+          </div>
+        )}
+        {tags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <TagIcon className="h-3.5 w-3.5 text-slate-400" />
+            {tags.map((t) => (
+              <Badge key={t} variant="secondary" className="text-[10px]">{t}</Badge>
+            ))}
+          </div>
+        )}
+
+        {/* fornecedores & preços */}
+        <div>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+            Fornecedores e preços
+          </p>
+          <SupplierPrices productName={model.name} fallbackSupplier={supplierName(p.supplierId)} unit={p.unit} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Spec({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-1.5">
+      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+        {icon} {label}
+      </div>
+      <div className="text-sm font-medium text-slate-700">{value}</div>
+    </div>
+  );
+}
+
+/** Lista fornecedores com o ÚLTIMO preço de cada um (camada de variações). */
+function SupplierPrices({
+  productName, fallbackSupplier, unit,
+}: { productName: string; fallbackSupplier: string | null; unit: string }) {
+  const { data, isLoading } = trpc.proforma.productPriceHistory.useQuery({ productName });
+
+  const rows = useMemo(() => {
+    const m = new Map<string, { supplier: string; unitPriceCents: number; currency: string; date: string | Date }>();
+    for (const pt of data?.points ?? []) {
+      const k = pt.supplierName || "—";
+      const cur = m.get(k);
+      if (!cur || new Date(pt.quotationDate).getTime() > new Date(cur.date).getTime()) {
+        m.set(k, { supplier: k, unitPriceCents: pt.unitPriceCents, currency: pt.currency, date: pt.quotationDate });
+      }
+    }
+    return Array.from(m.values()).sort((a, b) => a.unitPriceCents - b.unitPriceCents);
+  }, [data]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando fornecedores…
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-400">
+        {fallbackSupplier
+          ? `Fornecedor cadastrado: ${fallbackSupplier}. Sem cotação no histórico ainda — suba proformas para alimentar os preços.`
+          : "Sem cotações no histórico ainda. Suba proformas para ver fornecedores e preços."}
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200">
+      <table className="w-full text-[13px]">
+        <thead className="bg-slate-50 text-slate-500">
+          <tr>
+            <th className="px-3 py-2 text-left font-semibold">Fornecedor</th>
+            <th className="px-3 py-2 text-right font-semibold">Último preço</th>
+            <th className="px-3 py-2 text-right font-semibold">Data</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.supplier} className="border-t border-slate-100">
+              <td className="px-3 py-2">
+                <span className="text-slate-700">{r.supplier}</span>
+                {i === 0 && rows.length > 1 && (
+                  <span className="ml-2 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                    Mais competitivo
+                  </span>
+                )}
+              </td>
+              <td className="px-3 py-2 text-right font-medium text-slate-800">
+                {fmtMoney(r.unitPriceCents, r.currency)}
+                <span className="text-[11px] text-muted-foreground">/{unit}</span>
+              </td>
+              <td className="px-3 py-2 text-right text-muted-foreground">{fmtDate(r.date)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="border-t border-slate-100 px-3 py-2">
+        <ProductPriceHistoryDialog productName={productName} />
+      </div>
     </div>
   );
 }
@@ -962,22 +1094,16 @@ function ProductActionMenu({
 
   return (
     <>
-      <ProductPriceHistoryDialog productName={product.name} />
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleOpenEdit}
-            title="Editar"
-          >
-            <Pencil className="h-4 w-4" />
+          <Button variant="outline" size="sm" onClick={handleOpenEdit} className="gap-1">
+            <Pencil className="h-3.5 w-3.5" /> Editar
           </Button>
         </DialogTrigger>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Editar Produto</DialogTitle>
-            <DialogDescription>Atualize as informações do produto</DialogDescription>
+            <DialogTitle>Editar Ativo</DialogTitle>
+            <DialogDescription>Atualize as informações do item</DialogDescription>
           </DialogHeader>
           <ProductForm
             data={editFormData}
@@ -991,15 +1117,15 @@ function ProductActionMenu({
       </Dialog>
       <AlertDialog>
         <AlertDialogTrigger asChild>
-          <Button variant="ghost" size="sm" title="Excluir" className="text-destructive hover:text-destructive">
-            <Trash2 className="h-4 w-4" />
+          <Button variant="outline" size="sm" className="gap-1 text-destructive hover:text-destructive">
+            <Trash2 className="h-3.5 w-3.5" /> Excluir
           </Button>
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
+            <AlertDialogTitle>Excluir item?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita. O produto "{product.name}" será permanentemente excluído.
+              Esta ação não pode ser desfeita. O item "{product.name}" será permanentemente excluído.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1028,9 +1154,8 @@ function ProductPriceHistoryDialog({ productName }: { productName: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="flex-1">
-          <TrendingUp className="h-4 w-4 mr-1" />
-          Histórico
+        <Button variant="ghost" size="sm" className="w-full gap-1 text-violet-700 hover:text-violet-800">
+          <TrendingUp className="h-4 w-4" /> Ver histórico de preços
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl">
