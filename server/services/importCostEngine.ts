@@ -213,7 +213,11 @@ export interface EngineItemResult {
   recoverableCredits: number;   // conforme regime
   netImportCost: number;        // custo total − créditos
   netTotalCost: number;         // + pacote logístico rateado
-  netUnitCost: number;
+  netUnitCost: number;          // custo líquido por unidade de medida do item (PC/kg/milheiro/…)
+
+  // Peso e custo por kg (quando o peso é informado)
+  weightKgTotal: number;        // peso bruto total do item (kg)
+  netCostPerKg: number;         // custo líquido por kg (0 se sem peso)
 
   // Venda
   markupFactor: number;         // fator divisor
@@ -579,6 +583,10 @@ export function calculateImportCost(
       recoverableCredits: credits,
       netImportCost, netTotalCost,
       netUnitCost: it.quantity > 0 ? netTotalCost / it.quantity : 0,
+      weightKgTotal: (it.unitWeightKg ?? 0) * it.quantity,
+      netCostPerKg: (it.unitWeightKg ?? 0) * it.quantity > 0
+        ? netTotalCost / ((it.unitWeightKg ?? 0) * it.quantity)
+        : 0,
       markupFactor,
       salePrice,
       saleUnitPrice: it.quantity > 0 ? salePrice / it.quantity : 0,

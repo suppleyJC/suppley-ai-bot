@@ -30,7 +30,10 @@ const schema = defineSchema(
   "montar_calculo",
   "Calcula o custo nacionalizado, CMV e margem de uma importação usando o motor " +
   "certificado. Use quando tiver os dados do produto (NCM, quantidade, preço FOB), " +
-  "frete, câmbio e regime tributário. NÃO invente alíquotas — o motor as aplica.",
+  "frete, câmbio e regime tributário. NÃO invente alíquotas — o motor as aplica. " +
+  "IMPORTANTE: liste CADA item da proforma como uma entrada separada em 'itens' " +
+  "(com sua unidade e peso) — NUNCA agregue vários produtos numa linha só; o custo " +
+  "é segregado e reportado por item.",
   {
     type: "object",
     properties: CALC_SCHEMA_PROPERTIES,
@@ -96,13 +99,24 @@ export const montarCalculoTool: AgentTool = {
     const margemPct = typeof margemFrac === "number" ? (margemFrac * 100).toFixed(1) : undefined;
     const precoVenda = resultado?.summary?.salePriceTotal;
 
+    // Preço final POR ITEM (segregado) — na unidade de medida de cada item + por kg.
+    const brl = (n: number) => Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+    const itensResultado = Array.isArray(resultado?.items) ? resultado.items : [];
+    const porItem = itensResultado.length > 1
+      ? `Preço final por item — ${itensResultado.map((it: any) =>
+          `${it.description}: R$ ${brl(it.netTotalCost)} (R$ ${brl(it.netUnitCost)}/${it.unit}` +
+          (it.netCostPerKg > 0 ? `; R$ ${brl(it.netCostPerKg)}/kg` : "") + ")",
+        ).join(" · ")}. `
+      : "";
+
     return {
       ok: true,
       summary:
         `Cálculo concluído pelo motor certificado. ` +
-        (custo != null ? `Custo líquido ~ R$ ${Number(custo).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}. ` : "") +
-        (precoVenda != null ? `Preço de venda sugerido ~ R$ ${Number(precoVenda).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}. ` : "") +
+        (custo != null ? `Custo líquido ~ R$ ${brl(custo)}. ` : "") +
+        (precoVenda != null ? `Preço de venda sugerido ~ R$ ${brl(precoVenda)}. ` : "") +
         (margemPct != null ? `Margem bruta ${margemPct}%. ` : "") +
+        porItem +
         (resultado?.ncmWarnings?.length ? `⚠️ ${resultado.ncmWarnings.length} aviso(s) de NCM estimada — confirme antes de fechar.` : ""),
       data: resultado,
     };

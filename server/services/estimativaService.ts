@@ -26,6 +26,8 @@ export interface EstimativaProductInput {
   unit?: string;
   /** Preço unitário FOB na moeda da cotação */
   unitPrice: number;
+  /** Peso bruto TOTAL do item em kg (T.G.W). Habilita custo por kg. */
+  pesoTotalKg?: number;
   /** Override de alíquotas (fração: 12,6% = 0.126). Se ausente, busca por NCM. */
   iiRateOverride?: number;
   ipiRateOverride?: number;
@@ -205,6 +207,8 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
       quantity: p.quantity,
       unit: p.unit,
       unitPriceFob: p.unitPrice,
+      // Peso TOTAL → peso unitário (o motor trabalha com peso por unidade).
+      unitWeightKg: p.pesoTotalKg != null && p.quantity > 0 ? p.pesoTotalKg / p.quantity : undefined,
       iiRate: iiRate!,
       ipiRate: ipiRate!,
       icmsStValue: p.icmsStValue,

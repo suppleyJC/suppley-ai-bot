@@ -232,6 +232,7 @@ export async function generateEstimativaExcel(
     { key: "netimp", header: "CUSTO LÍQ. IMPORT.", fmt: MONEY, group: "imp", value: (it) => it.netImportCost, formula: (r, C) => netLiquidoFormula(r, C, opts.regime) },
     { key: "nettotal", header: "CUSTO LÍQUIDO TOTAL", fmt: MONEY, group: "imp", value: (it) => it.netTotalCost, formula: (r, C, P) => `${C("netimp")}${r}+(${P("PACOTE")}*${C("pvalor")}${r})` },
     { key: "netunit", header: "CUSTO UNIT. LIQ.", fmt: MONEY, group: "imp", value: (it) => it.netUnitCost, formula: (r, C) => `${C("nettotal")}${r}/${C("qtd")}${r}` },
+    { key: "netkg", header: "CUSTO/KG LIQ.", fmt: MONEY, group: "imp", value: (it) => it.netCostPerKg },
     { key: "mkp", header: "MKP", fmt: PCT, group: "imp", value: (it) => it.markupFactor, formula: (_r, _C, P) => `${P("V_MKP")}` },
     { key: "produtos", header: "VALOR DOS PRODUTOS", fmt: MONEY, group: "imp", value: (it) => it.salePrice, formula: (r, C) => `${C("nettotal")}${r}/${C("mkp")}${r}` },
     { key: "vicmsrate", header: "% ICMS VENDA", fmt: PCT, group: "imp", value: () => icmsVendaRate, formula: (_r, _C, P) => `${P("V_ICMS")}` },
@@ -414,6 +415,36 @@ function buildEstSheet(
   if (opts.clientName) put(`Cliente: ${opts.clientName}`);
   if (opts.supplierName) put(`Fornecedor: ${opts.supplierName}${opts.originCountry ? ` (${opts.originCountry})` : ""}`);
   put(`Câmbio: ${s.exchangeRate.toFixed(4)}  ·  Regime: ${regimeLabel(opts.regime)}`);
+  r++;
+
+  // ---- PREÇO FINAL POR ITEM (segregado, em destaque no topo) ----
+  // Larguras das colunas usadas pela tabela por item.
+  [[3, 9], [4, 7], [5, 16], [6, 15], [7, 14]].forEach(([col, w]) => (est.getColumn(col).width = w));
+  section("PREÇO FINAL POR ITEM — custo nacionalizado líquido");
+  const itemHdr = est.getRow(r++);
+  ([[2, "Item"], [3, "Qtd"], [4, "Un."], [5, "Custo líq. total"], [6, "Custo / unid."], [7, "Custo / kg"]] as [number, string][])
+    .forEach(([col, label]) => {
+      const cell = itemHdr.getCell(col);
+      cell.value = label;
+      cell.font = { bold: true, size: 10, color: { argb: COLORS.header } };
+      fillCell(cell, COLORS.section);
+    });
+  result.items.forEach((it) => {
+    const row = est.getRow(r++);
+    row.getCell(2).value = it.description;
+    row.getCell(3).value = it.quantity;
+    row.getCell(4).value = it.unit;
+    const cTot = row.getCell(5); cTot.value = it.netTotalCost; cTot.numFmt = MONEY; cTot.font = { bold: true };
+    const cUn = row.getCell(6); cUn.value = it.netUnitCost; cUn.numFmt = MONEY; cUn.font = { bold: true };
+    if (it.netCostPerKg > 0) { const cKg = row.getCell(7); cKg.value = it.netCostPerKg; cKg.numFmt = MONEY; }
+  });
+  if (result.items.length > 1) {
+    const totRow = est.getRow(r++);
+    totRow.getCell(2).value = "TOTAL";
+    totRow.getCell(5).value = result.items.reduce((a, it) => a + it.netTotalCost, 0);
+    totRow.getCell(5).numFmt = MONEY;
+    totRow.font = { bold: true };
+  }
   r++;
 
   section("VALOR ADUANEIRO");

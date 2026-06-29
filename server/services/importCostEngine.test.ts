@@ -237,3 +237,39 @@ describe("importCostEngine — finalidade: consumo próprio", () => {
     expect(summary.salePriceTotal).toBeGreaterThan(summary.netCostTotal);
   });
 });
+
+describe("importCostEngine — segregação por item: unidade, peso e custo/kg", () => {
+  const g = {
+    exchangeRate: 5.0,
+    freightTotalFob: 1000,
+    regime: "lucro_real" as const,
+    icmsVendaRate: 0.04,
+    pisVendaRate: 0.0165,
+    cofinsVendaRate: 0.076,
+    lucroDesejado: 0.05,
+  };
+  const its = [
+    { description: "Janela UPVC", ncm: "7610.10.00", quantity: 70, unit: "PC", unitPriceFob: 49, iiRate: 0, ipiRate: 0, unitWeightKg: 24 }, // 70 PC, 1680 kg
+    { description: "Porta de correr", ncm: "7610.90.00", quantity: 10, unit: "PC", unitPriceFob: 240, iiRate: 0, ipiRate: 0 }, // sem peso
+  ];
+  const { items: r } = calculateImportCost(g, its);
+
+  it("mantém os itens segregados (não agrega)", () => {
+    expect(r.length).toBe(2);
+    expect(r[0].unit).toBe("PC");
+  });
+
+  it("calcula peso total e custo por kg quando há peso", () => {
+    expect(r[0].weightKgTotal).toBeCloseTo(1680, 6);
+    expect(r[0].netCostPerKg).toBeCloseTo(r[0].netTotalCost / 1680, 6);
+  });
+
+  it("custo por kg = 0 quando o item não tem peso", () => {
+    expect(r[1].weightKgTotal).toBe(0);
+    expect(r[1].netCostPerKg).toBe(0);
+  });
+
+  it("custo unitário líquido é por unidade de medida do item", () => {
+    expect(r[0].netUnitCost).toBeCloseTo(r[0].netTotalCost / 70, 6);
+  });
+});

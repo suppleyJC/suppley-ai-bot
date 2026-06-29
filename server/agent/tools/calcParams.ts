@@ -13,6 +13,8 @@ export interface ItemArg {
   quantidade: number;
   precoFobUnitarioUsd: number;
   ncm?: string;
+  unidade?: string;
+  pesoTotalKg?: number;
 }
 
 /** Propriedades de cálculo do schema (reusadas por montar_calculo e o relatório). */
@@ -20,13 +22,19 @@ export const CALC_SCHEMA_PROPERTIES = {
   ncm: { type: "string", description: "Código NCM de 8 dígitos (ex: 7308.40.00)" },
   itens: {
     type: "array",
-    description: "Itens da importação",
+    description:
+      "Itens da importação — SEMPRE liste CADA item/linha da proforma SEPARADAMENTE. " +
+      "NUNCA agregue vários itens em uma linha só. Cada item com seu NCM, unidade, " +
+      "quantidade, preço e peso quando houver — o custo é segregado por item.",
     items: {
       type: "object",
       properties: {
         descricao: { type: "string" },
-        quantidade: { type: "number" },
-        precoFobUnitarioUsd: { type: "number", description: "Preço FOB unitário em USD" },
+        quantidade: { type: "number", description: "Quantidade na unidade de medida do item" },
+        precoFobUnitarioUsd: { type: "number", description: "Preço FOB unitário em USD (por unidade de medida)" },
+        ncm: { type: "string", description: "NCM específico deste item (pode diferir entre itens)" },
+        unidade: { type: "string", description: "Unidade de medida do item: PC/UN/KG/MILHEIRO/CX etc. O custo unitário sai nesta unidade." },
+        pesoTotalKg: { type: "number", description: "Peso bruto TOTAL do item em kg (T.G.W) — habilita o custo por kg" },
       },
       required: ["quantidade", "precoFobUnitarioUsd"],
     },
@@ -132,6 +140,8 @@ export function mapArgsToEstimativaInput(
       ncmCode: i.ncm ?? ncmTopo,
       quantity: Number(i.quantidade),
       unitPrice: Number(i.precoFobUnitarioUsd),
+      unit: typeof i.unidade === "string" ? i.unidade : undefined,
+      pesoTotalKg: typeof i.pesoTotalKg === "number" ? i.pesoTotalKg : undefined,
     })),
     exchangeRate: args.cambioBrl as number,
     currency: "USD",
