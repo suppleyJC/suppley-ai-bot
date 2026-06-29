@@ -238,8 +238,10 @@ export default function ExcambiaChat() {
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (file) await processFile(file);
+  }
 
+  async function processFile(file: File) {
     const nome = file.name.toLowerCase();
     const extOk = ALLOWED_UPLOAD_EXTS.some((ext) => nome.endsWith(ext));
     if (!ALLOWED_UPLOAD_TYPES.includes(file.type) && !extOk) {
@@ -338,6 +340,21 @@ export default function ExcambiaChat() {
     }
   }
 
+  // Arrastar-e-soltar arquivo no chat (reaproveita o mesmo processFile do botão).
+  const [dragOver, setDragOver] = useState(false);
+  function handleDragOver(e: React.DragEvent) {
+    if (!Array.from(e.dataTransfer.types ?? []).includes("Files")) return;
+    e.preventDefault();
+    if (!uploading && !streaming) setDragOver(true);
+  }
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    if (uploading || streaming) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) void processFile(file);
+  }
+
   const mensagens = conv?.mensagens ?? [];
   const vazio = mensagens.length === 0 && optimistic.length === 0;
 
@@ -349,7 +366,22 @@ export default function ExcambiaChat() {
       />
 
       {/* CHAT */}
-      <div className="flex flex-1 flex-col bg-[#faf9fc] min-h-0 h-full">
+      <div
+        className="relative flex flex-1 flex-col bg-[#faf9fc] min-h-0 h-full"
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragOver}
+        onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
+        onDrop={handleDrop}
+      >
+        {dragOver && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-violet-50/80 backdrop-blur-sm pointer-events-none">
+            <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-violet-400 bg-white/90 px-8 py-6 text-violet-700 shadow-lg">
+              <Paperclip className="h-7 w-7" />
+              <p className="text-sm font-semibold">Solte o arquivo aqui</p>
+              <p className="text-xs text-violet-400">PDF, imagem ou planilha (XLSX/XLS/CSV) · até 16MB</p>
+            </div>
+          </div>
+        )}
         {/* topbar fina — sem logo/nome (a marca já está na sidebar); só o câmbio */}
         <div className="flex h-[54px] flex-shrink-0 items-center gap-2 sm:gap-2.5 px-3 sm:px-6 border-b border-slate-100">
           <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
