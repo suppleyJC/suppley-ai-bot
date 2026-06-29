@@ -106,7 +106,11 @@
   Excambia `comparar_rotas_importacao` + testes. Inclui **frete rodoviário interno**
   (hub→destino) e a **vantagem líquida** (economia de ICMS − frete). Campo de frete
   rodoviário exposto também na ferramenta de cálculo (`freteRodoviarioBrl` →
-  freteInternoBrl, entra no custo nacionalizado). Falta opcional: UI dedicada.
+  freteInternoBrl, entra no custo nacionalizado).
+- ✅ **UI do comparador**: aba **"Rota de importação"** em Parâmetros de cálculo —
+  formulário (hub/destino/base/valor de saída/frete/antecipado/modelo/etapa/crédito)
+  e resultado lado a lado (ICMS importação + eventos por rota), com destaques de
+  economia de ICMS, frete e vantagem líquida.
 - ✅ **Fase 4 — Página "Parâmetros de Cálculo"** (`/parametros`): UI em 4 abas
   (tributos & taxas · custos portuários · ex-tarifário · benefícios), edição
   versionada de tributos e CRUD de portos/ex-tarifário/benefícios.

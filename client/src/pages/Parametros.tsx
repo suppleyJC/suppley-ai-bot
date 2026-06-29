@@ -17,7 +17,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { SlidersHorizontal, Anchor, FileMinus2, Gift, Plus, History } from "lucide-react";
+import { SlidersHorizontal, Anchor, FileMinus2, Gift, Plus, History, Route, ArrowRight } from "lucide-react";
 
 /* ---------- helpers de formato ---------- */
 const pctFromBp = (bp?: number | null) => (bp == null ? "—" : `${(bp / 100).toFixed(2)}%`);
@@ -53,12 +53,14 @@ export default function Parametros() {
           <TabsTrigger value="portos"><Anchor className="mr-1.5 h-4 w-4" /> Custos portuários</TabsTrigger>
           <TabsTrigger value="ex"><FileMinus2 className="mr-1.5 h-4 w-4" /> Ex-tarifário</TabsTrigger>
           <TabsTrigger value="beneficios"><Gift className="mr-1.5 h-4 w-4" /> Benefícios</TabsTrigger>
+          <TabsTrigger value="rota"><Route className="mr-1.5 h-4 w-4" /> Rota de importação</TabsTrigger>
         </TabsList>
 
         <TabsContent value="tributos"><TributosTab /></TabsContent>
         <TabsContent value="portos"><PortosTab /></TabsContent>
         <TabsContent value="ex"><ExTarifarioTab /></TabsContent>
         <TabsContent value="beneficios"><BeneficiosTab /></TabsContent>
+        <TabsContent value="rota"><RotaImportacaoTab /></TabsContent>
       </Tabs>
     </div>
   );
@@ -437,6 +439,168 @@ function BeneficioDialog({ row, onClose, onSaved }: { row: any | null; onClose: 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ============================================================
+ * ROTA DE IMPORTAÇÃO — comparador direta vs. via estado-hub
+ * ============================================================ */
+const UFS = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
+
+type RotaInput = {
+  hubState: string; destinationState: string; baseIcmsCents: number;
+  valorSaidaCents?: number; modelo: "trading_revenda" | "transferencia_filial";
+  destinatarioCreditaIcms: boolean; etapaFinal: "consumidor_final" | "revenda_contribuinte";
+  hubAntecipadoBpOverride?: number; freteRodoviarioCents?: number;
+};
+
+function RotaImportacaoTab() {
+  const [hub, setHub] = useState("SC");
+  const [dest, setDest] = useState("SP");
+  const [base, setBase] = useState("");
+  const [valorSaida, setValorSaida] = useState("");
+  const [frete, setFrete] = useState("");
+  const [antecipado, setAntecipado] = useState("");
+  const [modelo, setModelo] = useState<RotaInput["modelo"]>("trading_revenda");
+  const [credita, setCredita] = useState(true);
+  const [etapa, setEtapa] = useState<RotaInput["etapaFinal"]>("revenda_contribuinte");
+  const [params, setParams] = useState<RotaInput | null>(null);
+
+  const { data, isFetching } = trpc.statePricing.compararRotasImportacao.useQuery(
+    params as RotaInput, { enabled: !!params },
+  );
+
+  function comparar() {
+    const baseNum = Number(base.replace(",", "."));
+    if (!Number.isFinite(baseNum) || baseNum <= 0) { toast.error("Informe a base do ICMS de importação (R$)"); return; }
+    const num = (s: string) => { const n = Number(s.replace(",", ".")); return Number.isFinite(n) && n > 0 ? n : undefined; };
+    setParams({
+      hubState: hub, destinationState: dest,
+      baseIcmsCents: Math.round(baseNum * 100),
+      valorSaidaCents: num(valorSaida) != null ? Math.round(num(valorSaida)! * 100) : undefined,
+      freteRodoviarioCents: num(frete) != null ? Math.round(num(frete)! * 100) : undefined,
+      hubAntecipadoBpOverride: num(antecipado) != null ? Math.round(num(antecipado)! * 100) : undefined,
+      modelo, destinatarioCreditaIcms: credita, etapaFinal: etapa,
+    });
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[340px_1fr]">
+      {/* formulário */}
+      <Card>
+        <div className="space-y-3 p-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Estado-hub (benefício)"><UfSelect value={hub} onChange={setHub} /></Field>
+            <Field label="Estado de destino"><UfSelect value={dest} onChange={setDest} /></Field>
+          </div>
+          <Field label="Base do ICMS importação (R$)">
+            <Input value={base} onChange={(e) => setBase(e.target.value)} placeholder="CIF + II + IPI + PIS + COFINS + despesas" />
+          </Field>
+          <Field label="Valor de saída hub→destino (R$) — opcional">
+            <Input value={valorSaida} onChange={(e) => setValorSaida(e.target.value)} placeholder="default: usa a base" />
+          </Field>
+          <Field label="Frete rodoviário hub→destino (R$)">
+            <Input value={frete} onChange={(e) => setFrete(e.target.value)} placeholder="ex: 8.000" />
+          </Field>
+          <Field label="Antecipado do hub (%) — opcional">
+            <Input value={antecipado} onChange={(e) => setAntecipado(e.target.value)} placeholder="ex: 1 ou 2,6 (TTD 409). Vazio = usa benefício cadastrado" />
+          </Field>
+          <Field label="Modelo">
+            <select value={modelo} onChange={(e) => setModelo(e.target.value as RotaInput["modelo"])} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+              <option value="trading_revenda">Trading revende a cliente</option>
+              <option value="transferencia_filial">Transferência entre filiais</option>
+            </select>
+          </Field>
+          <Field label="Etapa final no destino">
+            <select value={etapa} onChange={(e) => setEtapa(e.target.value as RotaInput["etapaFinal"])} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+              <option value="revenda_contribuinte">Revenda a contribuinte</option>
+              <option value="consumidor_final">Consumidor final (DIFAL)</option>
+            </select>
+          </Field>
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={credita} onCheckedChange={setCredita} /> Destinatário aproveita crédito de ICMS
+          </label>
+          <Button className="w-full" onClick={comparar} disabled={isFetching}>
+            {isFetching ? "Comparando…" : "Comparar rotas"}
+          </Button>
+        </div>
+      </Card>
+
+      {/* resultado */}
+      <div>
+        {!data ? (
+          <Placeholder text="Preencha os dados e clique em Comparar para ver as rotas lado a lado." />
+        ) : (
+          <div className="space-y-4">
+            {/* destaques */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <Stat label="Economia no ICMS de importação" value={brlFromCents(data.economiaImportacaoCents)} good={data.economiaImportacaoCents >= 0} />
+              <Stat label={`Frete rodoviário ${data.viaHub.estado}→${data.direta.estado}`} value={brlFromCents(data.freteRodoviarioCents)} />
+              <Stat label="Vantagem líquida da rota via hub" value={brlFromCents(data.vantagemLiquidaCents)} good={data.vantagemLiquidaCents >= 0} strong />
+            </div>
+
+            {/* rotas lado a lado */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <RotaCard r={data.direta} />
+              <RotaCard r={data.viaHub} highlight />
+            </div>
+
+            {/* alertas */}
+            {data.alertas?.length > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[13px] text-amber-800">
+                <ul className="list-disc space-y-1 pl-4">
+                  {data.alertas.map((a: string, i: number) => <li key={i}>{a}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UfSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+      {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
+    </select>
+  );
+}
+
+function Stat({ label, value, good, strong }: { label: string; value: string; good?: boolean; strong?: boolean }) {
+  const color = good === undefined ? "text-slate-800" : good ? "text-teal-700" : "text-rose-700";
+  return (
+    <div className={`rounded-xl border bg-white p-3 ${strong ? "border-violet-200 ring-1 ring-violet-100" : "border-slate-200"}`}>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className={`mt-1 text-lg font-bold ${color}`}>{value}</p>
+    </div>
+  );
+}
+
+function RotaCard({ r, highlight }: { r: any; highlight?: boolean }) {
+  return (
+    <div className={`rounded-2xl border bg-white p-4 ${highlight ? "border-violet-200" : "border-slate-200"}`}>
+      <div className="flex items-center gap-2">
+        <Route className={`h-4 w-4 ${highlight ? "text-violet-600" : "text-slate-400"}`} />
+        <h3 className="font-semibold text-slate-800">{r.rota}</h3>
+      </div>
+      <div className="mt-3 flex items-center justify-between border-b border-slate-100 pb-2">
+        <span className="text-sm text-slate-500">ICMS na importação</span>
+        <span className="font-bold text-slate-900">{brlFromCents(r.icmsImportacaoCents)}</span>
+      </div>
+      <ul className="mt-2 space-y-2">
+        {r.legs.map((l: any, i: number) => (
+          <li key={i} className="text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1 text-slate-600"><ArrowRight className="h-3 w-3 text-slate-300" /> {l.label}</span>
+              <span className="font-medium text-slate-700">{brlFromCents(l.valueCents)}</span>
+            </div>
+            {l.obs && <p className="pl-4 text-[11px] text-slate-400">{l.obs}</p>}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
