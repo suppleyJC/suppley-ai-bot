@@ -28,6 +28,7 @@ import { consultarOperacaoTool } from "./consultarOperacao";
 import { analiseMercadoTool } from "./analiseMercado";
 import { estatisticasComexTool } from "./estatisticasComex";
 import { precificarReferenciaTool } from "./precificarReferencia";
+import { registrarMemoriaTool } from "./registrarMemoria";
 
 /** Tools de capacidade direta — o "chão de fábrica" que os especialistas acionam. */
 export const BASE_TOOLS: AgentTool[] = [
@@ -50,6 +51,8 @@ export const BASE_TOOLS: AgentTool[] = [
   estatisticasComexTool,
   // Preço de referência: base própria a valor presente × média oficial → competitivo
   precificarReferenciaTool,
+  // Memória persistente — a Excambia grava aprendizados duráveis do usuário/empresa
+  registrarMemoriaTool,
   // Fase 5 — buscas (lado leitura do ciclo de inteligência)
   buscarAtivoTool,
   compararOrigemTool,

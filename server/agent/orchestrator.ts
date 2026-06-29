@@ -16,6 +16,7 @@ import { invokeLLM, type Message } from "../_core/llm";
 import { getToolSchemas, runTool } from "./tools";
 import type { ToolContext } from "./tools/types";
 import { checkBudget } from "./guardrails";
+import { getLearningContext } from "../db";
 
 const EXCAMBIA_SYSTEM_PROMPT = `Você é a Excambia, inteligência especialista em comércio exterior da plataforma SUPPLEY.
 Seu papel é conduzir a operação de importação ponta a ponta, conversando de forma clara e objetiva em português.
@@ -143,6 +144,29 @@ const MAX_TURNS = 6; // teto de idas-e-voltas com tools por mensagem
  * apenas SUBSTITUÍMOS o conteúdo vazio por um placeholder mínimo, preservando a
  * estrutura. Mantém intactas as mensagens multimodais (array) e com tool_calls.
  */
+/**
+ * Injeta a MEMÓRIA persistente do usuário no system prompt (best-effort).
+ * Lê excambia_learning_context (preferências, regras, padrões) e anexa os itens
+ * mais relevantes. Nunca quebra o chat se a leitura falhar.
+ */
+async function buildSystemContent(userId: number): Promise<string> {
+  try {
+    const ctx = await getLearningContext(userId); // já ordenado por importância desc
+    const top = ctx.filter((c) => c.value?.trim()).slice(0, 20);
+    if (!top.length) return EXCAMBIA_SYSTEM_PROMPT;
+    const linhas = top.map((c) => `- [${c.contextType}] ${c.key}: ${c.value}`).join("\n");
+    return (
+      EXCAMBIA_SYSTEM_PROMPT +
+      `\n\n## Memória do usuário (aprendizados persistentes)\n` +
+      `Use estes aprendizados quando forem relevantes; não os repita de volta sem ` +
+      `necessidade. Se algo mudar ou você descobrir um novo padrão durável, registre ` +
+      `com a ferramenta registrar_memoria.\n${linhas}`
+    );
+  } catch {
+    return EXCAMBIA_SYSTEM_PROMPT;
+  }
+}
+
 const EMPTY_PLACEHOLDER = "(sem conteúdo)";
 function sanitizeMessages(messages: Message[]): Message[] {
   return messages.map((m) => {
@@ -168,7 +192,7 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
 
   // monta a conversa com o system prompt da Excambia
   const conversation: Message[] = [
-    { role: "system", content: EXCAMBIA_SYSTEM_PROMPT },
+    { role: "system", content: await buildSystemContent(input.userId) },
     ...sanitizeMessages(input.messages),
   ];
 
@@ -260,7 +284,7 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
   const toolResults: OrchestratorOutput["toolResults"] = [];
 
   const conversation: Message[] = [
-    { role: "system", content: EXCAMBIA_SYSTEM_PROMPT },
+    { role: "system", content: await buildSystemContent(input.userId) },
     ...sanitizeMessages(input.messages),
   ];
 
