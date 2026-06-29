@@ -38,6 +38,14 @@ export const operationsRouter = router({
     }))
     .mutation(({ input }) => svc.advanceStage(input)),
 
+  // Move manual entre colunas do Kanban (drag-and-drop) — qualquer direção.
+  setStage: protectedProcedure
+    .input(z.object({
+      operacaoId: z.number(),
+      to: z.enum(["demand", "source", "analyze", "execute", "finance", "closed", "lost"]),
+    }))
+    .mutation(({ input }) => svc.setStageManual(input)),
+
   linkQuotation: protectedProcedure
     .input(z.object({ operacaoId: z.number(), quotationId: z.number() }))
     .mutation(({ input }) => svc.linkQuotation(input.operacaoId, input.quotationId)),

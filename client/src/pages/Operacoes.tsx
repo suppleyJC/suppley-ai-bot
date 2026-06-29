@@ -77,6 +77,34 @@ export default function Operacoes() {
     onError: (e) => toast.error(e.message || "Erro ao excluir operação"),
   });
 
+  // Mover card entre colunas (drag-and-drop), com atualização otimista.
+  const [dragId, setDragId] = useState<number | null>(null);
+  const [overCol, setOverCol] = useState<Estagio | null>(null);
+
+  const setStage = trpc.operations.setStage.useMutation({
+    onError: (e) => {
+      utils.operations.list.invalidate();
+      toast.error(e.message || "Não foi possível mover a operação");
+    },
+    onSettled: () => utils.operations.list.invalidate(),
+  });
+
+  function handleDrop(toCol: Estagio) {
+    const id = dragId;
+    setDragId(null);
+    setOverCol(null);
+    if (id == null) return;
+    const atual = (utils.operations.list.getData() as OperacaoRow[] | undefined)?.find((o) => o.id === id);
+    if (!atual || atual.estagioAtual === toCol) return;
+    // Otimista: move o card na lista em cache imediatamente.
+    utils.operations.list.setData(undefined, (old) =>
+      (old as OperacaoRow[] | undefined)?.map((o) =>
+        o.id === id ? { ...o, estagioAtual: toCol } : o,
+      ) as any,
+    );
+    setStage.mutate({ operacaoId: id, to: toCol });
+  }
+
   const operacoes = (data ?? []) as OperacaoRow[];
   const ativas = operacoes.filter((o) => !["closed", "lost"].includes(o.estagioAtual));
   const encerradas = operacoes.filter((o) => ["closed", "lost"].includes(o.estagioAtual));
@@ -137,8 +165,20 @@ export default function Operacoes() {
             {COLUNAS.map((col) => {
               const itens = ativas.filter((o) => o.estagioAtual === col.key);
               const Icon = col.Icon;
+              const isOver = overCol === col.key;
               return (
-                <div key={col.key} className="flex flex-col rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+                <div
+                  key={col.key}
+                  onDragOver={(e) => { e.preventDefault(); if (overCol !== col.key) setOverCol(col.key); }}
+                  onDragLeave={(e) => {
+                    // só limpa se sair da coluna de fato (não ao passar por filhos)
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) setOverCol((c) => (c === col.key ? null : c));
+                  }}
+                  onDrop={() => handleDrop(col.key)}
+                  className={`flex flex-col rounded-2xl border p-3 transition-colors ${
+                    isOver ? "border-violet-400 bg-violet-50/70 ring-2 ring-violet-200" : "border-slate-200 bg-slate-50/60"
+                  }`}
+                >
                   <div className="mb-3 flex items-center gap-2 px-1">
                     <Icon className="h-4 w-4 text-violet-600" />
                     <span className="text-sm font-semibold text-slate-700">{col.label}</span>
@@ -146,13 +186,21 @@ export default function Operacoes() {
                       {itens.length}
                     </span>
                   </div>
-                  <div className="flex flex-col gap-2">
+                  <div className="flex min-h-[40px] flex-col gap-2">
                     {itens.length === 0 ? (
-                      <p className="px-1 py-4 text-center text-xs text-slate-300">—</p>
+                      <p className={`px-1 py-4 text-center text-xs ${isOver ? "text-violet-400" : "text-slate-300"}`}>
+                        {isOver ? "Soltar aqui" : "—"}
+                      </p>
                     ) : (
                       itens.map((o) => (
-                        <OperationCard
+                        <div
                           key={o.id}
+                          draggable
+                          onDragStart={(e) => { setDragId(o.id); e.dataTransfer.effectAllowed = "move"; }}
+                          onDragEnd={() => { setDragId(null); setOverCol(null); }}
+                          className={`cursor-grab active:cursor-grabbing ${dragId === o.id ? "opacity-50" : ""}`}
+                        >
+                        <OperationCard
                           entity={{
                             id: o.id,
                             title: o.titulo,
@@ -179,6 +227,7 @@ export default function Operacoes() {
                             { label: "Excluir", icon: <Trash2 className="h-4 w-4" />, onClick: () => setDelTarget(o), variant: "destructive" },
                           ]}
                         />
+                        </div>
                       ))
                     )}
                   </div>

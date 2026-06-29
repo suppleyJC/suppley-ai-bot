@@ -211,6 +211,58 @@ export async function advanceStage(input: {
 }
 
 // ---------------------------------------------------------------------------
+// Mover de estágio MANUALMENTE (Kanban drag-and-drop)
+// Diferente de advanceStage: permite mover em qualquer direção (inclusive
+// voltar), sem checagem de gate — é uma ação explícita do usuário arrastando
+// o card. Registra o movimento na timeline.
+// ---------------------------------------------------------------------------
+const STAGE_LABEL_PT: Record<Estagio, string> = {
+  demand: "Estudo do item", source: "Cotação / RFQ", analyze: "Viabilidade",
+  execute: "Produção & Embarque", finance: "Nacionalização & Entrega",
+  closed: "Encerrada", lost: "Perdida",
+};
+export async function setStageManual(input: {
+  operacaoId: number;
+  to: Estagio;
+}): Promise<{ ok: boolean; estagio?: Estagio; message?: string }> {
+  const db = await getDb();
+  if (!db) return { ok: false, message: "sem conexão" };
+
+  const [op] = await db.select().from(operacoes).where(eq(operacoes.id, input.operacaoId)).limit(1);
+  if (!op) return { ok: false, message: "operação não encontrada" };
+
+  const current = op.estagioAtual as Estagio;
+  if (current === input.to) return { ok: true, estagio: current };
+
+  // Fecha o estágio atual (se ainda aberto)
+  await db.update(operacaoEstagios)
+    .set({ saiuEm: sql`now()` })
+    .where(and(
+      eq(operacaoEstagios.operacaoId, op.id),
+      eq(operacaoEstagios.estagio, current as any),
+      sql`${operacaoEstagios.saiuEm} is null`,
+    ));
+
+  // Abre o novo (se for um dos 5 estágios operacionais)
+  if (["demand", "source", "analyze", "execute", "finance"].includes(input.to)) {
+    await db.insert(operacaoEstagios).values({ operacaoId: op.id, estagio: input.to as any });
+  }
+
+  // Sincroniza status quando move para estados finais (e destrava se voltar).
+  const patch: Record<string, unknown> = { estagioAtual: input.to as any };
+  if (input.to === "closed") patch.status = "concluida";
+  else if (input.to === "lost") patch.status = "perdida";
+  else if (op.status === "concluida" || op.status === "perdida") patch.status = "ativa";
+  await db.update(operacoes).set(patch).where(eq(operacoes.id, op.id));
+
+  await addEvento({
+    operacaoId: op.id, tipo: "estagio_avancado", estagio: input.to, autor: "usuario",
+    titulo: `Movido para ${STAGE_LABEL_PT[input.to]}`,
+  });
+  return { ok: true, estagio: input.to };
+}
+
+// ---------------------------------------------------------------------------
 // Vincular cotação vencedora / cálculo de viabilidade
 // ---------------------------------------------------------------------------
 export async function linkQuotation(operacaoId: number, quotationId: number) {

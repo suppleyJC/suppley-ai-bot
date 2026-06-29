@@ -164,7 +164,7 @@ export default function OperacaoDetail() {
 
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
-              <Globe2 className="mr-1 inline h-3 w-3" /> Origem desejada
+              <Globe2 className="mr-1 inline h-3 w-3" /> Origem
             </span>
             <input
               type="text"
