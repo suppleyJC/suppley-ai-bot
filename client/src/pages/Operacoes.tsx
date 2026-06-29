@@ -116,7 +116,7 @@ export default function Operacoes() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="mx-auto max-w-[1600px]">
       {/* cabeçalho */}
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -160,8 +160,8 @@ export default function Operacoes() {
         </div>
       ) : (
         <>
-          {/* KANBAN — 5 colunas da esteira */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {/* KANBAN — esteira horizontal (rola em telas estreitas) */}
+          <div className="flex gap-4 overflow-x-auto px-1 pb-3 -mx-1 snap-x">
             {COLUNAS.map((col) => {
               const itens = ativas.filter((o) => o.estagioAtual === col.key);
               const Icon = col.Icon;
@@ -175,7 +175,7 @@ export default function Operacoes() {
                     if (!e.currentTarget.contains(e.relatedTarget as Node)) setOverCol((c) => (c === col.key ? null : c));
                   }}
                   onDrop={() => handleDrop(col.key)}
-                  className={`flex flex-col rounded-2xl border p-3 transition-colors ${
+                  className={`flex w-[300px] flex-shrink-0 snap-start flex-col rounded-2xl border p-3 transition-colors ${
                     isOver ? "border-violet-400 bg-violet-50/70 ring-2 ring-violet-200" : "border-slate-200 bg-slate-50/60"
                   }`}
                 >

@@ -15,6 +15,7 @@ import {
   formatTimeAgo,
   type Priority,
 } from "@/lib/operationStatus";
+import { STAGE_LABELS } from "@/lib/stageLabels";
 
 export interface OperationCardEntity {
   id: number;
@@ -190,9 +191,10 @@ export default function OperationCard({
             {entity.origin}
           </Badge>
         )}
-        {entity.stage && (
+        {/* No kanban (compact) a coluna já indica o estágio — evita badge cru/redundante. */}
+        {!compact && entity.stage && (
           <Badge variant="outline" className="text-[10px]">
-            {entity.stage}
+            {(STAGE_LABELS as Record<string, string>)[entity.stage] ?? entity.stage}
           </Badge>
         )}
         {lastUpdate && (
