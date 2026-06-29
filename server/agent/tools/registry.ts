@@ -30,6 +30,7 @@ import { estatisticasComexTool } from "./estatisticasComex";
 import { precificarReferenciaTool } from "./precificarReferencia";
 import { registrarMemoriaTool } from "./registrarMemoria";
 import { compararRotasImportacaoTool } from "./compararRotasImportacao";
+import { calcularCubagemTool } from "./calcularCubagem";
 
 /** Tools de capacidade direta — o "chão de fábrica" que os especialistas acionam. */
 export const BASE_TOOLS: AgentTool[] = [
@@ -56,6 +57,8 @@ export const BASE_TOOLS: AgentTool[] = [
   registrarMemoriaTool,
   // Estratégia interestadual — compara importar direto vs. via estado-hub com benefício
   compararRotasImportacaoTool,
+  // Cubagem — quantas unidades cabem em 20'/40'/40HC (volume + peso)
+  calcularCubagemTool,
   // Fase 5 — buscas (lado leitura do ciclo de inteligência)
   buscarAtivoTool,
   compararOrigemTool,
