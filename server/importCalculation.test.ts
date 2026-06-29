@@ -19,6 +19,8 @@ vi.mock("./db", () => ({
     importRate: 400, // 4%
     interstateRate: 1200,
   }),
+  getActiveTaxParameters: vi.fn().mockResolvedValue({}),
+  getActiveNcmException: vi.fn().mockResolvedValue(null),
 }));
 
 describe("isMercosulCountry", () => {

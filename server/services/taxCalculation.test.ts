@@ -20,6 +20,9 @@ vi.mock('../db', () => ({
     interstateRate: 1200, // 12%
     hasIncentive: true,
   }),
+  // Parâmetros versionados/ex-tarifário: vazio → fallback p/ constantes 2026.
+  getActiveTaxParameters: vi.fn().mockResolvedValue({}),
+  getActiveNcmException: vi.fn().mockResolvedValue(null),
 }));
 
 describe('Tax Calculation Service - 2026', () => {

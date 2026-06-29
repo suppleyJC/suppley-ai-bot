@@ -7,7 +7,7 @@
  *  - Aplicar defaults da legislação (TTD 409, Res. 13/2012, LC 224/2025)
  *    permitindo override de qualquer parâmetro
  */
-import { getNcmTaxRate } from "../db";
+import { getNcmTaxRate, getActiveNcmException } from "../db";
 import {
   calculateImportCost,
   type EngineGlobalInput,
@@ -16,6 +16,7 @@ import {
   type RegimeTributario,
 } from "./importCostEngine";
 import { getStateIcmsInternalRate, getStateName } from "./statePricingService";
+import { isMercosulCountry } from "./taxCalculationService";
 
 export interface EstimativaProductInput {
   productName: string;
@@ -50,6 +51,12 @@ export interface EstimativaInput {
    * Se ausente, assume SC (com aviso).
    */
   estadoDestino?: string;
+  /**
+   * País de origem da mercadoria. Se for país do Mercosul (Argentina, Paraguai,
+   * Uruguai, Venezuela), aplica-se o II preferencial (mercosulIiRate do NCM,
+   * em geral 0%) — mediante Certificado de Origem.
+   */
+  paisOrigem?: string;
   /**
    * Modal logístico. AFRMM (25% do frete) só incide no modal marítimo;
    * para aéreo/rodoviário/ferroviário o AFRMM é zerado automaticamente.
@@ -127,6 +134,9 @@ const DEFAULT_II_FALLBACK = 0.14; // média TEC quando NCM não encontrado
 export async function calculateEstimativa(input: EstimativaInput): Promise<EstimativaResult> {
   const ncmWarnings: string[] = [];
 
+  // Origem Mercosul → II preferencial (mediante Certificado de Origem).
+  const isMercosul = input.paisOrigem ? isMercosulCountry(input.paisOrigem) : false;
+
   // ---- Resolver alíquotas por NCM ----
   const items: EngineItemInput[] = [];
   for (const p of input.products) {
@@ -137,8 +147,31 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
       const ncmClean = p.ncmCode.replace(/\D/g, "");
       const rates = await getNcmTaxRate(ncmClean);
       if (rates) {
+        // Mercosul: usa a alíquota preferencial do NCM (em geral 0%).
+        if (isMercosul && p.iiRateOverride === undefined) {
+          iiRate = (rates.mercosulIiRate ?? 0) / 10000;
+          ncmWarnings.push(
+            `NCM ${p.ncmCode}: origem ${input.paisOrigem} (Mercosul) — II preferencial ` +
+            `${(iiRate * 100).toFixed(1)}% aplicado. Exige Certificado de Origem Mercosul.`,
+          );
+        }
         iiRate ??= rates.iiRate / 10000;   // bp → fração
         ipiRate ??= rates.ipiRate / 10000;
+
+        // Ex-Tarifário vigente: reduz II/IPI (aplica a menor alíquota).
+        const ex = await getActiveNcmException(ncmClean);
+        if (ex) {
+          if (ex.reducedIiRate != null && iiRate !== undefined) {
+            iiRate = Math.min(iiRate, ex.reducedIiRate / 10000);
+          }
+          if (ex.reducedIpiRate != null && ipiRate !== undefined) {
+            ipiRate = Math.min(ipiRate, ex.reducedIpiRate / 10000);
+          }
+          ncmWarnings.push(
+            `NCM ${p.ncmCode}: Ex-Tarifário ${ex.exCode ?? ""} aplicado ` +
+            `(${ex.legalBasis ?? "base legal a confirmar"}). Confirme a vigência.`,
+          );
+        }
         // A II vem do seed oficial MDIC (notes registra a origem). Só alertamos
         // quando a alíquota é uma estimativa por capítulo (fonte não cobriu o NCM)
         // ou quando há uma elevação temporária (DCC) prestes a expirar.

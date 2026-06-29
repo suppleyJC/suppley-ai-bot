@@ -243,7 +243,12 @@ generateExcelReport: protectedProcedure
     const settings = await db.getCompanySettings(ctx.user.id);
     const taxRegime = (settings?.taxRegime as 'simples_nacional' | 'lucro_presumido' | 'lucro_real') || 'lucro_presumido';
     const markup = (quotation.markupPercent || 3000) / 100;
-    
+
+    // Parâmetros versionados (corrige Siscomex/AFRMM hardcoded). Fallback p/ valores legados.
+    const params = await db.getActiveTaxParameters();
+    const siscomexBaseBrl = (params["SISCOMEX_BASE"]?.valueCents ?? 18500) / 100;
+    const afrmmRateDec = (params["AFRMM_RATE"]?.valueBp ?? 2500) / 10000;
+
     // Build calculation results for Excel with viability analysis
     const calculationResults = calculations.map(calc => {
       const exchangeRate = (calc.exchangeRate || 5000000) / 1000000;
@@ -262,8 +267,8 @@ generateExcelReport: protectedProcedure
       
       const thc = 1200 / calculations.length;
       const liberacao = 400 / calculations.length;
-      const afrmm = freightBrl * 0.25;
-      const siscomex = 214.50 / calculations.length;
+      const afrmm = freightBrl * afrmmRateDec;
+      const siscomex = siscomexBaseBrl / calculations.length;
       const customsBroker = (quotation.customsBrokerCents || 0) / 100 / calculations.length;
       const storageCosts = (quotation.storageCents || 0) / 100 / calculations.length;
       const otherCosts = (quotation.otherCostsCents || 0) / 100 / calculations.length;

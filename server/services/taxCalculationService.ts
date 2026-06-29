@@ -1,4 +1,4 @@
-import { getNcmTaxRate, getIcmsRate } from "../db";
+import { getNcmTaxRate, getIcmsRate, getActiveTaxParameters, getActiveNcmException } from "../db";
 
 /**
  * Tax Calculation Service - SUPPLEY Calc
@@ -151,16 +151,24 @@ export async function getTaxRatesForNcm(
 ): Promise<TaxRates> {
   const ncmRates = await getNcmTaxRate(ncmCode);
   const icmsRate = await getIcmsRate(destinationState);
+  // Parâmetros versionados (fallback p/ constantes se o banco estiver vazio).
+  const params = await getActiveTaxParameters();
+  // Ex-Tarifário vigente para o NCM (reduz II/IPI quando aplicável).
+  const exception = await getActiveNcmException(ncmCode);
 
   // II: 0% para Mercosul com certificado de origem
   let iiRate = ncmRates?.iiRate ?? DEFAULT_II_RATE;
   if (isMercosul) {
     iiRate = ncmRates?.mercosulIiRate ?? 0;
   }
+  // Ex-Tarifário: aplica a menor alíquota entre a vigente e a reduzida.
+  if (exception?.reducedIiRate != null) {
+    iiRate = Math.min(iiRate, exception.reducedIiRate);
+  }
 
-  // PIS e COFINS: usar do NCM se disponível, senão padrão 2026
-  const pisRate = ncmRates?.pisRate ?? DEFAULT_PIS_IMPORT_RATE;
-  const cofinsRate = ncmRates?.cofinsRate ?? DEFAULT_COFINS_IMPORT_RATE;
+  // PIS e COFINS: NCM > parâmetro versionado > constante 2026
+  const pisRate = ncmRates?.pisRate ?? params["PIS_IMPORT"]?.valueBp ?? DEFAULT_PIS_IMPORT_RATE;
+  const cofinsRate = ncmRates?.cofinsRate ?? params["COFINS_IMPORT"]?.valueBp ?? DEFAULT_COFINS_IMPORT_RATE;
 
   // ICMS na importação: depende do estado e benefício fiscal
   let icmsImportRate: number;
@@ -177,9 +185,14 @@ export async function getTaxRatesForNcm(
     icmsImportRate = icmsRate?.internalRate ?? DEFAULT_ICMS_INTERNAL_RATE;
   }
 
+  let ipiRate = ncmRates?.ipiRate ?? DEFAULT_IPI_RATE;
+  if (exception?.reducedIpiRate != null) {
+    ipiRate = Math.min(ipiRate, exception.reducedIpiRate);
+  }
+
   return {
     ii: iiRate,
-    ipi: ncmRates?.ipiRate ?? DEFAULT_IPI_RATE,
+    ipi: ipiRate,
     pis: pisRate,
     cofins: cofinsRate,
     icms: icmsImportRate,
@@ -221,6 +234,12 @@ export async function calculateImportTaxes(
   const icmsRate = await getIcmsRate(destinationState);
   const hasIncentive = icmsRate?.hasIncentive && destinationState.toUpperCase() === "SC";
 
+  // Parâmetros versionados p/ AFRMM e Siscomex (fallback p/ constantes).
+  const params = await getActiveTaxParameters();
+  const afrmmRate = params["AFRMM_RATE"]?.valueBp ?? AFRMM_RATE;
+  const siscomexBaseCents = params["SISCOMEX_BASE"]?.valueCents ?? SISCOMEX_BASE_CENTS;
+  const siscomexAdicaoCents = params["SISCOMEX_ADICAO"]?.valueCents ?? SISCOMEX_ITEM_ADICIONAL_CENTS;
+
   // 1. II (Imposto de Importação)
   // Base: CIF (valor aduaneiro)
   const baseII = cifValueCents;
@@ -260,10 +279,10 @@ export async function calculateImportTaxes(
   }
 
   // 6. AFRMM (apenas frete marítimo)
-  const afrmmValueCents = Math.round((freightCents * AFRMM_RATE) / 10000);
+  const afrmmValueCents = Math.round((freightCents * afrmmRate) / 10000);
 
   // 7. Siscomex
-  const siscomexValueCents = SISCOMEX_BASE_CENTS + Math.max(0, (numItems - 1)) * SISCOMEX_ITEM_ADICIONAL_CENTS;
+  const siscomexValueCents = siscomexBaseCents + Math.max(0, (numItems - 1)) * siscomexAdicaoCents;
 
   // Total de impostos
   const totalTaxesCents = iiValueCents + ipiValueCents + pisValueCents +

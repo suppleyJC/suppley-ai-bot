@@ -46,6 +46,13 @@ export const CALC_SCHEMA_PROPERTIES = {
       "SC usa o benefício TTD 409 (antecipado); demais estados usam o ICMS importação cheio " +
       "com a alíquota interna do estado. Impacta diretamente o custo — sempre pergunte se não souber.",
   },
+  paisOrigem: {
+    type: "string",
+    description:
+      "País de origem da mercadoria (ex: China, Argentina, Paraguai). Se for país do Mercosul " +
+      "(Argentina, Paraguai, Uruguai, Venezuela), aplica-se o Imposto de Importação preferencial " +
+      "(geralmente 0%) MEDIANTE Certificado de Origem. Informe para o benefício ser aplicado.",
+  },
   modal: {
     type: "string",
     enum: ["maritimo", "aereo", "rodoviario", "ferroviario"],
@@ -124,6 +131,7 @@ export function mapArgsToEstimativaInput(
     insurance: typeof args.seguroUsd === "number" ? args.seguroUsd : undefined,
     taxRegime: args.regimeTributario as estimativaService.EstimativaInput["taxRegime"],
     estadoDestino: typeof args.estadoDestino === "string" ? args.estadoDestino : undefined,
+    paisOrigem: typeof args.paisOrigem === "string" ? args.paisOrigem : undefined,
     modal: mapModal(args.modal),
     ttdPhase: mapTtdPhase(args.ttdFase),
     incluirComprador: args.incluirComprador === true,
