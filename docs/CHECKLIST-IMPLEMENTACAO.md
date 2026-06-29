@@ -103,8 +103,10 @@
   destinatário · etapa final consumidor/revenda). Destaque defensável no **ICMS de
   importação** (antecipado vs. cheio); eventos a jusante (4% interestadual, DIFAL)
   rotulados. Endpoint `statePricing.compararRotasImportacao` + ferramenta da
-  Excambia `comparar_rotas_importacao` + testes. ⚠️ Estimativa — validar c/ contador.
-  Falta opcional: UI dedicada (hoje acessível via chat e endpoint).
+  Excambia `comparar_rotas_importacao` + testes. Inclui **frete rodoviário interno**
+  (hub→destino) e a **vantagem líquida** (economia de ICMS − frete). Campo de frete
+  rodoviário exposto também na ferramenta de cálculo (`freteRodoviarioBrl` →
+  freteInternoBrl, entra no custo nacionalizado). Falta opcional: UI dedicada.
 - ✅ **Fase 4 — Página "Parâmetros de Cálculo"** (`/parametros`): UI em 4 abas
   (tributos & taxas · custos portuários · ex-tarifário · benefícios), edição
   versionada de tributos e CRUD de portos/ex-tarifário/benefícios.

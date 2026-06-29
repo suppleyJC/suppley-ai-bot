@@ -33,6 +33,14 @@ export const CALC_SCHEMA_PROPERTIES = {
   },
   freteUsd: { type: "number", description: "Frete internacional total em USD" },
   seguroUsd: { type: "number", description: "Seguro em USD (opcional)" },
+  freteRodoviarioBrl: {
+    type: "number",
+    description:
+      "Frete rodoviário INTERNO em R$ — transporte da mercadoria do porto/estado de " +
+      "desembaraço até o destino final. Use principalmente quando a importação entra " +
+      "por um estado (ex.: SC com benefício) e a mercadoria segue para outro estado. " +
+      "Entra como despesa no custo nacionalizado.",
+  },
   cambioBrl: { type: "number", description: "Taxa de câmbio USD→BRL (PTAX)" },
   regimeTributario: {
     type: "string",
@@ -129,6 +137,7 @@ export function mapArgsToEstimativaInput(
     currency: "USD",
     freight: typeof args.freteUsd === "number" ? args.freteUsd : undefined,
     insurance: typeof args.seguroUsd === "number" ? args.seguroUsd : undefined,
+    freteInternoBrl: typeof args.freteRodoviarioBrl === "number" ? args.freteRodoviarioBrl : undefined,
     taxRegime: args.regimeTributario as estimativaService.EstimativaInput["taxRegime"],
     estadoDestino: typeof args.estadoDestino === "string" ? args.estadoDestino : undefined,
     paisOrigem: typeof args.paisOrigem === "string" ? args.paisOrigem : undefined,

@@ -31,6 +31,7 @@ export const compararRotasImportacaoTool: AgentTool = {
         destinatarioCreditaIcms: { type: "boolean", description: "Destinatário aproveita crédito de ICMS (Lucro Real/Presumido=true; Simples/consumo=false)" },
         etapaFinal: { type: "string", enum: ["consumidor_final", "revenda_contribuinte"], description: "consumidor final (gera DIFAL) ou revenda a contribuinte" },
         antecipadoHubPercent: { type: "number", description: "Opcional: alíquota antecipada do hub em % (ex: 1 ou 2.6 para TTD 409)" },
+        freteRodoviarioBrl: { type: "number", description: "Frete rodoviário interno hub→destino em R$ (custo extra da rota via hub)" },
       },
       required: ["estadoHub", "estadoDestino", "baseImportacaoBrl"],
     },
@@ -57,15 +58,20 @@ export const compararRotasImportacaoTool: AgentTool = {
       hubAntecipadoBpOverride: typeof args.antecipadoHubPercent === "number"
         ? Math.round(args.antecipadoHubPercent * 100)
         : undefined,
+      freteRodoviarioCents: typeof args.freteRodoviarioBrl === "number"
+        ? Math.round(args.freteRodoviarioBrl * 100)
+        : undefined,
     });
 
     const econ = result.economiaImportacaoCents;
     const sinal = econ > 0 ? "economia" : "custo adicional";
+    const liq = result.vantagemLiquidaCents;
     const summary =
       `ICMS importação — direta (${result.direta.estado}): ${brl(result.direta.icmsImportacaoCents)} · ` +
       `via ${result.viaHub.estado}: ${brl(result.viaHub.icmsImportacaoCents)}. ` +
-      `${econ !== 0 ? `Diferença na importação: ${brl(Math.abs(econ))} de ${sinal} pela rota via hub.` : "Sem diferença na importação."} ` +
-      `Eventos a jusante e ressalvas no detalhamento. Estimativa — validar com contador.`;
+      `${econ !== 0 ? `Diferença na importação: ${brl(Math.abs(econ))} de ${sinal} pela rota via hub. ` : "Sem diferença na importação. "}` +
+      `Frete rodoviário ${hub}→${dest}: ${brl(result.freteRodoviarioCents)}. ` +
+      `Vantagem líquida da rota via hub (economia ICMS − frete): ${brl(liq)}.`;
 
     return { ok: true, summary, data: result };
   },

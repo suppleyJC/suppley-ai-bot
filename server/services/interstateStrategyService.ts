@@ -5,11 +5,10 @@
  * com benefício (ex.: SC/TTD 409, ICMS antecipado) e depois levar a mercadoria
  * ao destino (transferência/revenda interestadual + DIFAL quando consumidor final).
  *
- * ⚠️ ESTIMATIVA ESTRATÉGICA. O efeito líquido do ICMS depende do regime do
- * destinatário e da cadeia (créditos). A diferença DEFENSÁVEL e direta é o ICMS
- * DE IMPORTAÇÃO (antecipado do hub vs. cheio do destino) — é o destaque. Os
- * eventos a jusante (interestadual 4%, DIFAL) vêm rotulados para leitura, não
- * como número líquido fechado. Valide com o contador antes de decidir.
+ * A diferença direta e defensável é o ICMS DE IMPORTAÇÃO (antecipado do hub vs.
+ * cheio do destino) — é o destaque. Os eventos a jusante (interestadual 4%,
+ * DIFAL) e o frete rodoviário interno (hub→destino) entram rotulados, e a
+ * vantagem líquida = economia no ICMS − frete rodoviário.
  *
  * Tudo em centavos / basis points.
  */
@@ -39,6 +38,8 @@ export interface RouteComparisonInput {
   etapaFinal: EtapaFinal;
   /** Override do antecipado do hub em bp (ex.: 100 = 1%, 260 = 2,6% TTD 409). */
   hubAntecipadoBpOverride?: number;
+  /** Frete rodoviário interno hub→destino (centavos) — custo extra da rota via hub. */
+  freteRodoviarioCents?: number;
 }
 
 export interface RouteLeg {
@@ -66,6 +67,10 @@ export interface RouteComparison {
   viaHub: RouteResult;
   /** Economia no ICMS de IMPORTAÇÃO ao usar o hub (direta − viaHub). Pode ser negativa. */
   economiaImportacaoCents: number;
+  /** Frete rodoviário interno (hub→destino) considerado na rota via hub. */
+  freteRodoviarioCents: number;
+  /** Vantagem líquida da rota via hub = economia no ICMS − frete rodoviário. */
+  vantagemLiquidaCents: number;
   alertas: string[];
 }
 
@@ -155,6 +160,16 @@ export async function compareImportRoutes(input: RouteComparisonInput): Promise<
     });
   }
 
+  // Frete rodoviário interno (hub→destino) — custo logístico extra da rota via hub.
+  const freteRodoviarioCents = Math.max(0, Math.round(input.freteRodoviarioCents ?? 0));
+  viaHubLegs.push({
+    label: `Frete rodoviário interno ${hub}→${dest}`,
+    valueCents: freteRodoviarioCents,
+    obs: freteRodoviarioCents > 0
+      ? "Custo logístico extra de mover a mercadoria do hub ao destino."
+      : "Informe o frete rodoviário para a comparação líquida ficar completa.",
+  });
+
   /* ---------- comparativo + alertas ---------- */
   if (input.valorSaidaCents == null) {
     alertas.push("Valor de saída não informado — usei a base do ICMS como proxy; informe o valor da operação de saída para precisão dos eventos a jusante.");
@@ -162,7 +177,9 @@ export async function compareImportRoutes(input: RouteComparisonInput): Promise<
   if (input.etapaFinal === "revenda_contribuinte" && input.destinatarioCreditaIcms) {
     alertas.push("Como há revenda a contribuinte que credita ICMS, o tributo é recuperável na cadeia: a diferença entre rotas é de fluxo de caixa/competitividade, não de custo final.");
   }
-  alertas.push("Estimativa estratégica de ICMS — valide com o contador antes de decidir a rota. Tributos federais (II/IPI/PIS/COFINS) não mudam entre as rotas.");
+  alertas.push("Tributos federais (II/IPI/PIS/COFINS) não mudam entre as rotas — a diferença está no ICMS e no frete interno.");
+
+  const economiaImportacaoCents = icmsImportDireta - icmsImportHub;
 
   return {
     premissas: {
@@ -184,7 +201,9 @@ export async function compareImportRoutes(input: RouteComparisonInput): Promise<
       icmsImportacaoCents: icmsImportHub,
       legs: [{ label: "ICMS na importação (hub)", valueCents: icmsImportHub, obs: importHubObs }, ...viaHubLegs],
     },
-    economiaImportacaoCents: icmsImportDireta - icmsImportHub,
+    economiaImportacaoCents,
+    freteRodoviarioCents,
+    vantagemLiquidaCents: economiaImportacaoCents - freteRodoviarioCents,
     alertas,
   };
 }
