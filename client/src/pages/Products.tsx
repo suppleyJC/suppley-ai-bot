@@ -45,7 +45,7 @@ import {
   SlidersHorizontal,
   ChevronRight,
   Boxes,
-   Scale,
+  Scale,
   Box,
   Barcode,
 } from "lucide-react";

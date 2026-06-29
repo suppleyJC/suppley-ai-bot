@@ -14,7 +14,7 @@ import { and, desc, eq, like, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   operacoes, operacaoEventos, operacaoEstagios, operacaoAnexos, operacaoFinanceiro, operacaoMarcos, demandas,
-  quotations, importCalculations, suppliers, conversas,
+  quotations, conversas,
   type InsertOperacao, type Operacao,
 } from "../../drizzle/schema";
 

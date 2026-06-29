@@ -35,11 +35,6 @@ const STATUS_LABEL: Record<string, { txt: string; cls: string }> = {
   pausada:   { txt: "Pausada",   cls: "bg-amber-50 text-amber-700" },
 };
 
-function fmtPrazo(d?: string | Date | null) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
-}
-
 export default function OperacaoDetail() {
   const [, params] = useRoute("/operacao/:id");
   const [, navigate] = useLocation();
