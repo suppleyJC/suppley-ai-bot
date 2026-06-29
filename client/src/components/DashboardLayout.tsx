@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 
 import { useIsMobile } from "@/hooks/useMobile";
-import { LogOut, PanelLeft, Building2, Package, Settings, FileText, ChevronRight, Workflow, TrendingUp, SlidersHorizontal, Brain } from "lucide-react";
+import { LogOut, PanelLeft, Building2, Package, Settings, FileText, ChevronRight, Workflow, TrendingUp, SlidersHorizontal } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -39,7 +39,6 @@ const menuItems = [
   // INTELIGÊNCIA
   { icon: OrbitalIcon, label: "Excambia", path: "/excambia", section: "inteligencia" },
   { icon: TrendingUp, label: "Inteligência de mercado", path: "/excambia/market", section: "inteligencia" },
-  { icon: Brain, label: "Memória da Excambia", path: "/memoria", section: "inteligencia" },
 
   // OPERAÇÕES
   { icon: Workflow, label: "Painel de operações", path: "/operacoes", section: "operacoes" },

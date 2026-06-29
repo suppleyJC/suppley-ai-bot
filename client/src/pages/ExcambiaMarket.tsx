@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import CambioDoDia from "@/components/CambioDoDia";
+import { MemoriaExcambiaPanel } from "@/pages/MemoriaExcambia";
 import {
   TrendingUp, TrendingDown, Minus, RefreshCw, Globe, Gauge,
   Lightbulb, AlertCircle, CheckCircle, BarChart3,
@@ -145,6 +146,7 @@ export default function ExcambiaMarket() {
         <TabsList>
           <TabsTrigger value="geral">Visão Geral</TabsTrigger>
           <TabsTrigger value="comex">Comex Stat</TabsTrigger>
+          <TabsTrigger value="memoria">Memória da Excambia</TabsTrigger>
         </TabsList>
 
         {/* VISÃO GERAL — timing + sinais + recomendações */}
@@ -320,6 +322,11 @@ export default function ExcambiaMarket() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* MEMÓRIA DA EXCAMBIA — aprendizados persistentes */}
+        <TabsContent value="memoria" className="mt-4">
+          <MemoriaExcambiaPanel />
         </TabsContent>
       </Tabs>
     </div>

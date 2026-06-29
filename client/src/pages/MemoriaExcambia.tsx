@@ -54,6 +54,18 @@ type Memoria = {
 };
 
 export default function MemoriaExcambia() {
+  return (
+    <div className="mx-auto max-w-4xl p-6">
+      <div className="mb-5 flex items-center gap-2.5">
+        <Brain className="h-6 w-6 text-violet-600" />
+        <h1 className="text-xl font-bold text-slate-900">Memória da Excambia</h1>
+      </div>
+      <MemoriaExcambiaPanel />
+    </div>
+  );
+}
+
+export function MemoriaExcambiaPanel() {
   const utils = trpc.useUtils();
   const { data: rows = [], isLoading } = trpc.excambia.getLearningContext.useQuery();
   const [editing, setEditing] = useState<Memoria | null | "new">(null);
@@ -74,21 +86,15 @@ export default function MemoriaExcambia() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
-      <header className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <Brain className="h-6 w-6 text-violet-600" />
-            <h1 className="text-xl font-bold text-slate-900">Memória da Excambia</h1>
-          </div>
-          <p className="mt-1 text-sm text-slate-500">
-            Aprendizados persistentes que a Excambia usa no contexto das conversas
-            (preferências, regras, padrões). A IA grava aqui sozinha — e você pode
-            ajustar ou remover a qualquer momento.
-          </p>
-        </div>
+    <div>
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <p className="max-w-2xl text-sm text-slate-500">
+          Aprendizados persistentes que a Excambia usa no contexto das conversas
+          (preferências, regras, padrões). A IA grava aqui sozinha — e você pode
+          ajustar ou remover a qualquer momento.
+        </p>
         <Button onClick={() => setEditing("new")}><Plus className="mr-1.5 h-4 w-4" /> Adicionar</Button>
-      </header>
+      </div>
 
       {isLoading ? (
         <Placeholder text="Carregando memória…" />

@@ -110,9 +110,11 @@
   Excambia **escreve** via a ferramenta `registrar_memoria` (preferências, regras,
   padrões). Camada barata de aprendizado (contexto persistido + reinjetado, sem
   fine-tuning).
-- ✅ **UI de memória** (`/memoria`): o usuário vê, adiciona, edita e remove os
+- ✅ **UI de memória**: aba **"Memória da Excambia"** dentro de *Inteligência de
+  mercado* (ao lado de Comex Stat); o usuário vê, adiciona, edita e remove os
   aprendizados (agrupados por tipo, com importância); itens gravados pela IA são
-  sinalizados. Backend ganhou editar/excluir escopados por usuário.
+  sinalizados. Backend ganhou editar/excluir escopados por usuário. (Rota direta
+  `/memoria` mantida como atalho.)
 
 ### ⏳ Domínio tributário/fiscal — gaps mapeados (auditoria de 2026-06-29)
 > O núcleo do motor está **sólido e correto** (II, IPI, PIS/COFINS, ICMS, AFRMM,
