@@ -29,6 +29,7 @@ import { analiseMercadoTool } from "./analiseMercado";
 import { estatisticasComexTool } from "./estatisticasComex";
 import { precificarReferenciaTool } from "./precificarReferencia";
 import { registrarMemoriaTool } from "./registrarMemoria";
+import { compararRotasImportacaoTool } from "./compararRotasImportacao";
 
 /** Tools de capacidade direta — o "chão de fábrica" que os especialistas acionam. */
 export const BASE_TOOLS: AgentTool[] = [
@@ -53,6 +54,8 @@ export const BASE_TOOLS: AgentTool[] = [
   precificarReferenciaTool,
   // Memória persistente — a Excambia grava aprendizados duráveis do usuário/empresa
   registrarMemoriaTool,
+  // Estratégia interestadual — compara importar direto vs. via estado-hub com benefício
+  compararRotasImportacaoTool,
   // Fase 5 — buscas (lado leitura do ciclo de inteligência)
   buscarAtivoTool,
   compararOrigemTool,
