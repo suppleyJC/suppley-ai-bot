@@ -1521,6 +1521,20 @@ export const operacoes = mysqlTable(
       ["ativa", "pausada", "go", "no_go", "concluida", "perdida"])
       .default("ativa").notNull(),
 
+    // Ramificação da jornada:
+    //  - cotacao: usuário já trouxe uma proposta formal (proforma) → nasce em Viabilidade
+    //  - desenvolvimento: item pesquisado do zero → nasce em Estudo do item
+    // Nulo em operações antigas (antes do campo existir).
+    modo: mysqlEnum("modo", ["cotacao", "desenvolvimento"]),
+
+    // Tracking de embarque (preenchimento manual; integração com API fica pendente).
+    trackingContainer: varchar("trackingContainer", { length: 60 }),
+    trackingBl: varchar("trackingBl", { length: 60 }),
+    trackingArmador: varchar("trackingArmador", { length: 120 }),
+    trackingNavio: varchar("trackingNavio", { length: 120 }),
+    trackingEta: timestamp("trackingEta"),
+    trackingStatus: varchar("trackingStatus", { length: 120 }),
+
     regimeTributario: mysqlEnum("regimeTributario",
       ["lucro_real", "lucro_presumido", "simples_nacional"]),
     origemPais: varchar("origemPais", { length: 60 }),
@@ -1561,6 +1575,8 @@ export const operacaoEventos = mysqlTable(
       "financeiro_lancado", "financeiro_removido",
       "pedido_confirmado", "producao_iniciada", "produto_embarcado",
       "nacionalizado", "entregue",
+      // Marcos da jornada (estudo / sourcing) sem evento equivalente prévio
+      "item_pesquisado", "fornecedores_identificados", "fornecedor_selecionado",
     ]).notNull(),
     estagio: mysqlEnum("estagio",
       ["demand", "source", "analyze", "execute", "finance", "closed", "lost"]).notNull(),
@@ -1678,7 +1694,15 @@ export const operacaoMarcos = mysqlTable(
     userId: int("userId").notNull(),
 
     tipo: mysqlEnum("tipo", [
+      // Estudo do item
+      "item_pesquisado", "fornecedores_identificados",
+      // Cotação e RFQ
+      "rfq_enviada", "cotacao_recebida", "fornecedor_selecionado",
+      // Viabilidade
+      "calculo_feito", "go_aprovado",
+      // Produção e Embarque
       "pedido_confirmado", "producao_iniciada", "produto_embarcado",
+      // Nacionalização e Entrega
       "di_registrada", "nacionalizado", "entregue",
     ]).notNull(),
 

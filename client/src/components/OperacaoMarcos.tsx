@@ -1,19 +1,24 @@
 /**
- * OperacaoMarcos — marcos da operação na esteira de execução.
+ * OperacaoMarcos — marcos da JORNADA da operação (visão unificada).
  *
- * Timeline visual dos marcos principais: pedido confirmado → produção iniciada →
- * produto embarcado → DI registrada → nacionalizado → entregue.
+ * Cobre os dois fluxos numa só linha do tempo, agrupada por estágio:
+ *   Estudo do item → Cotação e RFQ → Viabilidade → Produção e Embarque → Nacionalização e Entrega
  * Cada marco registrado gera um evento na timeline (coesão Painel ↔ Excambia).
  */
 import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
-  CheckCircle2, Circle, Plus, Loader2, PackageCheck, Truck,
-  FileCheck, Zap, ShoppingCart, Factory,
+  CheckCircle2, Plus, Loader2, PackageCheck, Ship,
+  FileCheck, Zap, ShoppingCart, Factory, Search, Users, Send,
+  FileText, Handshake, Calculator, ThumbsUp,
 } from "lucide-react";
+import { STAGE_LABELS, type Estagio } from "@/lib/stageLabels";
 
 type TipoMarco =
+  | "item_pesquisado" | "fornecedores_identificados"
+  | "rfq_enviada" | "cotacao_recebida" | "fornecedor_selecionado"
+  | "calculo_feito" | "go_aprovado"
   | "pedido_confirmado" | "producao_iniciada" | "produto_embarcado"
   | "di_registrada" | "nacionalizado" | "entregue";
 type StatusMarco = "planejado" | "realizado" | "cancelado";
@@ -26,19 +31,31 @@ interface Marco {
   dataReferencia: string | Date;
 }
 
-const TIPOS_MARCO: TipoMarco[] = [
-  "pedido_confirmado", "producao_iniciada", "produto_embarcado",
-  "di_registrada", "nacionalizado", "entregue",
-];
-
 const TIPO_META: Record<TipoMarco, { label: string; Icon: any }> = {
-  pedido_confirmado:  { label: "Pedido Confirmado",  Icon: ShoppingCart },
-  producao_iniciada:  { label: "Produção Iniciada",  Icon: Factory },
-  produto_embarcado:  { label: "Produto Embarcado",  Icon: Truck },
-  di_registrada:      { label: "DI Registrada",      Icon: FileCheck },
-  nacionalizado:      { label: "Nacionalizado",      Icon: Zap },
-  entregue:           { label: "Entregue",           Icon: PackageCheck },
+  item_pesquisado:           { label: "Item pesquisado",          Icon: Search },
+  fornecedores_identificados:{ label: "Fornecedores identificados", Icon: Users },
+  rfq_enviada:               { label: "RFQ enviada",              Icon: Send },
+  cotacao_recebida:          { label: "Cotação recebida",         Icon: FileText },
+  fornecedor_selecionado:    { label: "Fornecedor selecionado",   Icon: Handshake },
+  calculo_feito:             { label: "Cálculo feito",            Icon: Calculator },
+  go_aprovado:               { label: "GO aprovado",              Icon: ThumbsUp },
+  pedido_confirmado:         { label: "Pedido confirmado",        Icon: ShoppingCart },
+  producao_iniciada:         { label: "Produção iniciada",        Icon: Factory },
+  produto_embarcado:         { label: "Produto embarcado",        Icon: Ship },
+  di_registrada:             { label: "DI registrada",            Icon: FileCheck },
+  nacionalizado:             { label: "Nacionalizado",            Icon: Zap },
+  entregue:                  { label: "Entregue",                 Icon: PackageCheck },
 };
+
+/** Marcos agrupados por estágio da jornada (na ordem do funil). */
+const JORNADA: { estagio: Estagio; tipos: TipoMarco[] }[] = [
+  { estagio: "demand",  tipos: ["item_pesquisado", "fornecedores_identificados"] },
+  { estagio: "source",  tipos: ["rfq_enviada", "cotacao_recebida", "fornecedor_selecionado"] },
+  { estagio: "analyze", tipos: ["calculo_feito", "go_aprovado"] },
+  { estagio: "execute", tipos: ["pedido_confirmado", "producao_iniciada", "produto_embarcado"] },
+  { estagio: "finance", tipos: ["di_registrada", "nacionalizado", "entregue"] },
+];
+const TODOS_TIPOS = JORNADA.flatMap((g) => g.tipos);
 
 const STATUS_META: Record<StatusMarco, { txt: string; cls: string }> = {
   planejado:  { txt: "Planejado",  cls: "bg-amber-50 text-amber-700" },
@@ -59,7 +76,7 @@ export default function OperacaoMarcos({
   onChange: () => void;
 }) {
   const [showForm, setShowForm] = useState(false);
-  const [tipo, setTipo] = useState<TipoMarco>("pedido_confirmado");
+  const [tipo, setTipo] = useState<TipoMarco>("item_pesquisado");
   const [status, setStatus] = useState<StatusMarco>("realizado");
   const [descricao, setDescricao] = useState("");
   const [data, setData] = useState("");
@@ -71,7 +88,7 @@ export default function OperacaoMarcos({
 
   function resetForm() {
     setShowForm(false);
-    setTipo("pedido_confirmado");
+    setTipo("item_pesquisado");
     setStatus("realizado");
     setDescricao("");
     setData("");
@@ -92,14 +109,14 @@ export default function OperacaoMarcos({
     });
   }
 
-  // Mapa: which marcos are marked as "realizado"
   const realizados = new Set(marcos.filter((m) => m.status === "realizado").map((m) => m.tipo));
+  const totalRealizados = TODOS_TIPOS.filter((t) => realizados.has(t)).length;
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-          <Truck className="h-3.5 w-3.5" /> Marcos ({marcos.length})
+          <PackageCheck className="h-3.5 w-3.5" /> Jornada · marcos ({totalRealizados}/{TODOS_TIPOS.length})
         </h3>
         <button
           onClick={() => setShowForm((v) => !v)}
@@ -109,56 +126,59 @@ export default function OperacaoMarcos({
         </button>
       </div>
 
-      {/* Timeline visual */}
-      <div className="mb-4 space-y-2">
-        {TIPOS_MARCO.map((t, idx) => {
-          const meta = TIPO_META[t];
-          const Icon = meta.Icon;
-          const marcado = marcos.find((m) => m.tipo === t);
-          const realizado = realizados.has(t);
-
-          return (
-            <div key={t} className="flex items-start gap-3">
-              <div className="flex flex-col items-center pt-1">
-                <span
-                  className={`flex h-7 w-7 items-center justify-center rounded-full border-2 ${
-                    realizado
-                      ? "border-teal-500 bg-teal-500 text-white"
-                      : "border-slate-300 bg-white text-slate-400"
-                  }`}
-                >
-                  {realizado ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-3.5 w-3.5" />}
-                </span>
-                {idx < TIPOS_MARCO.length - 1 && (
-                  <div className="my-1 h-6 w-0.5 bg-slate-200" />
-                )}
-              </div>
-              <div className="flex-1 pt-0.5">
-                <p className={`text-sm font-semibold ${realizado ? "text-slate-800" : "text-slate-400"}`}>
-                  {meta.label}
-                </p>
-                {marcado && (
-                  <>
-                    <p className="text-[11px] text-slate-500">
-                      {fmtData(marcado.dataReferencia)}
-                      {marcado.descricao ? ` · ${marcado.descricao}` : ""}
-                    </p>
-                    {marcado.status !== "realizado" && (
-                      <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold ${STATUS_META[marcado.status as StatusMarco]?.cls || ""}`}>
-                        {STATUS_META[marcado.status as StatusMarco]?.txt || marcado.status}
-                      </span>
-                    )}
-                  </>
-                )}
-              </div>
+      {/* Linha do tempo agrupada por estágio */}
+      <div className="space-y-4">
+        {JORNADA.map((grupo) => (
+          <div key={grupo.estagio}>
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-violet-500">
+              {STAGE_LABELS[grupo.estagio]}
+            </p>
+            <div className="space-y-2 border-l border-slate-100 pl-3">
+              {grupo.tipos.map((t) => {
+                const meta = TIPO_META[t];
+                const Icon = meta.Icon;
+                const marcado = marcos.find((m) => m.tipo === t);
+                const realizado = realizados.has(t);
+                return (
+                  <div key={t} className="flex items-start gap-3">
+                    <span
+                      className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                        realizado
+                          ? "border-teal-500 bg-teal-500 text-white"
+                          : "border-slate-200 bg-white text-slate-400"
+                      }`}
+                    >
+                      {realizado ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-3.5 w-3.5" />}
+                    </span>
+                    <div className="min-w-0 flex-1 pt-0.5">
+                      <p className={`text-sm font-semibold ${realizado ? "text-slate-800" : "text-slate-400"}`}>
+                        {meta.label}
+                      </p>
+                      {marcado && (
+                        <>
+                          <p className="text-[11px] text-slate-500">
+                            {fmtData(marcado.dataReferencia)}
+                            {marcado.descricao ? ` · ${marcado.descricao}` : ""}
+                          </p>
+                          {marcado.status !== "realizado" && (
+                            <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold ${STATUS_META[marcado.status as StatusMarco]?.cls || ""}`}>
+                              {STATUS_META[marcado.status as StatusMarco]?.txt || marcado.status}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
 
       {/* formulário */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+        <form onSubmit={handleSubmit} className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1">
               <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Marco</span>
@@ -166,8 +186,12 @@ export default function OperacaoMarcos({
                 value={tipo} onChange={(e) => setTipo(e.target.value as TipoMarco)}
                 className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
               >
-                {TIPOS_MARCO.map((t) => (
-                  <option key={t} value={t}>{TIPO_META[t].label}</option>
+                {JORNADA.map((g) => (
+                  <optgroup key={g.estagio} label={STAGE_LABELS[g.estagio]}>
+                    {g.tipos.map((t) => (
+                      <option key={t} value={t}>{TIPO_META[t].label}</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </label>

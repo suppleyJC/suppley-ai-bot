@@ -27,6 +27,8 @@ export const operationsRouter = router({
       clienteNome: z.string().optional(),
       origemPais: z.string().optional(),
       regimeTributario: z.enum(["lucro_real", "lucro_presumido", "simples_nacional"]).optional(),
+      modo: z.enum(["cotacao", "desenvolvimento"]).optional(),
+      estagioInicial: z.enum(["demand", "source", "analyze", "execute", "finance"]).optional(),
     }))
     .mutation(({ ctx, input }) => svc.createOperacao({ userId: ctx.user.id, ...input })),
 
@@ -89,6 +91,8 @@ export const operationsRouter = router({
         clienteNome: input.clienteNome,
         origemPais: input.origemPais,
         regimeTributario: input.regimeTributario,
+        // Veio de uma proforma/cálculo: nasce em Viabilidade (modo cotação).
+        modo: "cotacao",
       });
       const operacaoId = (op as { id: number }).id;
 
@@ -165,6 +169,13 @@ export const operationsRouter = router({
       prioridade: z.enum(["baixa", "media", "alta", "critica"]).optional(),
       prazoDesejado: z.date().nullable().optional(),
       responsavelId: z.number().nullable().optional(),
+      modo: z.enum(["cotacao", "desenvolvimento"]).optional(),
+      trackingContainer: z.string().nullable().optional(),
+      trackingBl: z.string().nullable().optional(),
+      trackingArmador: z.string().nullable().optional(),
+      trackingNavio: z.string().nullable().optional(),
+      trackingEta: z.date().nullable().optional(),
+      trackingStatus: z.string().nullable().optional(),
     }))
     .mutation(({ ctx, input }) => svc.updateOperacao({ userId: ctx.user.id, ...input })),
 
@@ -221,7 +232,13 @@ export const operationsRouter = router({
   registrarMarco: protectedProcedure
     .input(z.object({
       operacaoId: z.number(),
-      tipo: z.enum(["pedido_confirmado", "producao_iniciada", "produto_embarcado", "di_registrada", "nacionalizado", "entregue"]),
+      tipo: z.enum([
+        "item_pesquisado", "fornecedores_identificados",
+        "rfq_enviada", "cotacao_recebida", "fornecedor_selecionado",
+        "calculo_feito", "go_aprovado",
+        "pedido_confirmado", "producao_iniciada", "produto_embarcado",
+        "di_registrada", "nacionalizado", "entregue",
+      ]),
       status: z.enum(["planejado", "realizado", "cancelado"]).optional(),
       descricao: z.string().optional(),
       dataReferencia: z.date().optional(),

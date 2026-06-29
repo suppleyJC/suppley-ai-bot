@@ -15,9 +15,15 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import OperacaoTimeline from "@/components/OperacaoTimeline";
 import OperacaoMarcos from "@/components/OperacaoMarcos";
+import OperacaoTracking from "@/components/OperacaoTracking";
 import OperacaoAnexos from "@/components/OperacaoAnexos";
 import OperacaoFinanceiro from "@/components/OperacaoFinanceiro";
 import { ArrowLeft, CalendarClock, Globe2 } from "lucide-react";
+
+const MODO_LABEL: Record<string, { txt: string; cls: string }> = {
+  cotacao:        { txt: "Cotação pronta",  cls: "bg-blue-50 text-blue-700" },
+  desenvolvimento:{ txt: "Desenvolvimento", cls: "bg-amber-50 text-amber-700" },
+};
 import { PRIORITY_ORDER, getPriorityMeta } from "@/lib/priorityLabels";
 
 const STATUS_LABEL: Record<string, { txt: string; cls: string }> = {
@@ -80,8 +86,18 @@ export default function OperacaoDetail() {
     prioridade?: "baixa" | "media" | "alta" | "critica" | null;
     prazoDesejado?: string | Date | null;
     origemDesejada?: string | null;
+    modo?: "cotacao" | "desenvolvimento" | null;
+    trackingContainer?: string | null;
+    trackingBl?: string | null;
+    trackingArmador?: string | null;
+    trackingNavio?: string | null;
+    trackingEta?: string | Date | null;
+    trackingStatus?: string | null;
   };
   const prio = getPriorityMeta(op.prioridade);
+  const modoMeta = op.modo ? MODO_LABEL[op.modo] : null;
+  // Rastreio é relevante a partir da produção/embarque.
+  const mostraTracking = ["execute", "finance", "closed"].includes(operacao.estagioAtual);
 
   function handleAddNote() {
     const titulo = window.prompt("Nota para a operação:");
@@ -125,9 +141,16 @@ export default function OperacaoDetail() {
                 .join(" · ") || "—"}
             </p>
           </div>
-          <span className={`ml-auto rounded-lg px-3 py-1 text-xs font-bold ${st.cls}`}>
-            {st.txt}
-          </span>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {modoMeta && (
+              <span className={`rounded-lg px-3 py-1 text-xs font-bold ${modoMeta.cls}`}>
+                {modoMeta.txt}
+              </span>
+            )}
+            <span className={`rounded-lg px-3 py-1 text-xs font-bold ${st.cls}`}>
+              {st.txt}
+            </span>
+          </div>
         </div>
 
         {/* metadados editáveis: prioridade, prazo, origem desejada */}
@@ -181,6 +204,12 @@ export default function OperacaoDetail() {
       <div className="mb-6">
         <OperacaoMarcos operacaoId={operacao.id} marcos={marcos} onChange={invalidate} />
       </div>
+
+      {mostraTracking && (
+        <div className="mb-6">
+          <OperacaoTracking operacao={op as any} onChange={invalidate} />
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <OperacaoAnexos operacaoId={operacao.id} anexos={anexos} onChange={invalidate} />

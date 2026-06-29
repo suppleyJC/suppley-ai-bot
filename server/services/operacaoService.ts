@@ -27,9 +27,13 @@ export type TipoFinanceiro =
 export type DirecaoFinanceiro = "entrada" | "saida";
 export type StatusFinanceiro = "previsto" | "realizado" | "cancelado";
 export type TipoMarco =
+  | "item_pesquisado" | "fornecedores_identificados"
+  | "rfq_enviada" | "cotacao_recebida" | "fornecedor_selecionado"
+  | "calculo_feito" | "go_aprovado"
   | "pedido_confirmado" | "producao_iniciada" | "produto_embarcado"
   | "di_registrada" | "nacionalizado" | "entregue";
 export type StatusMarco = "planejado" | "realizado" | "cancelado";
+export type ModoOperacao = "cotacao" | "desenvolvimento";
 const ORDER: Estagio[] = ["demand", "source", "analyze", "execute", "finance", "closed"];
 
 // ---------------------------------------------------------------------------
@@ -89,6 +93,9 @@ export async function createOperacao(input: {
   prazoDesejado?: Date;
   responsavelId?: number;
   origemDesejada?: string;
+  modo?: ModoOperacao;
+  /** Estágio em que a operação nasce (default "demand"). Modo "cotacao" → "analyze". */
+  estagioInicial?: Estagio;
 }): Promise<Operacao | null> {
   const db = await getDb();
   if (!db) return null;
@@ -96,6 +103,10 @@ export async function createOperacao(input: {
   if (input.prazoDesejado && input.prazoDesejado.getTime() < Date.now()) {
     throw new Error("Prazo desejado não pode ser no passado");
   }
+
+  // Estágio inicial: explícito > derivado do modo > "demand".
+  const estagioInicial: Estagio =
+    input.estagioInicial ?? (input.modo === "cotacao" ? "analyze" : "demand");
 
   const codigo = await nextCodigo(db, input.userId);
   const values: InsertOperacao = {
@@ -110,15 +121,16 @@ export async function createOperacao(input: {
     prazoDesejado: input.prazoDesejado ?? null,
     responsavelId: input.responsavelId ?? null,
     origemDesejada: input.origemDesejada ?? null,
-    estagioAtual: "demand",
+    modo: input.modo ?? null,
+    estagioAtual: estagioInicial,
     status: "ativa",
   };
   const [res] = await db.insert(operacoes).values(values);
   const id = (res as any).insertId as number;
 
-  await db.insert(operacaoEstagios).values({ operacaoId: id, estagio: "demand" });
+  await db.insert(operacaoEstagios).values({ operacaoId: id, estagio: estagioInicial as any });
   await addEvento({
-    operacaoId: id, tipo: "operacao_criada", estagio: "demand", autor: "sistema",
+    operacaoId: id, tipo: "operacao_criada", estagio: estagioInicial, autor: "sistema",
     titulo: `Operação ${codigo} criada`,
   });
   if (input.demandaId) {
@@ -142,6 +154,13 @@ export async function updateOperacao(input: {
   prazoDesejado?: Date | null;
   responsavelId?: number | null;
   origemDesejada?: string;
+  modo?: ModoOperacao;
+  trackingContainer?: string | null;
+  trackingBl?: string | null;
+  trackingArmador?: string | null;
+  trackingNavio?: string | null;
+  trackingEta?: Date | null;
+  trackingStatus?: string | null;
 }): Promise<Operacao | null> {
   const db = await getDb();
   if (!db) return null;
@@ -164,6 +183,13 @@ export async function updateOperacao(input: {
   if (input.prazoDesejado !== undefined) patch.prazoDesejado = input.prazoDesejado;
   if (input.responsavelId !== undefined) patch.responsavelId = input.responsavelId;
   if (input.origemDesejada !== undefined) patch.origemDesejada = input.origemDesejada;
+  if (input.modo !== undefined) patch.modo = input.modo;
+  if (input.trackingContainer !== undefined) patch.trackingContainer = input.trackingContainer;
+  if (input.trackingBl !== undefined) patch.trackingBl = input.trackingBl;
+  if (input.trackingArmador !== undefined) patch.trackingArmador = input.trackingArmador;
+  if (input.trackingNavio !== undefined) patch.trackingNavio = input.trackingNavio;
+  if (input.trackingEta !== undefined) patch.trackingEta = input.trackingEta;
+  if (input.trackingStatus !== undefined) patch.trackingStatus = input.trackingStatus;
 
   if (Object.keys(patch).length === 0) return op;
 
@@ -557,14 +583,38 @@ export async function registrarMarco(input: {
     .limit(1);
   if (!op) throw new Error("operação não encontrada");
 
-  // Mapeia tipo de marco → estagio esperado
+  // Mapeia tipo de marco → estagio esperado (jornada unificada)
   const estagioEsperado: Record<TipoMarco, Estagio | null> = {
-    pedido_confirmado: "source",
+    item_pesquisado: "demand",
+    fornecedores_identificados: "demand",
+    rfq_enviada: "source",
+    cotacao_recebida: "source",
+    fornecedor_selecionado: "source",
+    calculo_feito: "analyze",
+    go_aprovado: "analyze",
+    pedido_confirmado: "execute",
     producao_iniciada: "execute",
     produto_embarcado: "execute",
     di_registrada: "finance",
     nacionalizado: "finance",
     entregue: "finance",
+  };
+
+  // Mapeia tipo de marco → tipo de evento (alguns marcos reusam eventos já existentes).
+  const eventoDoMarco: Record<TipoMarco, string> = {
+    item_pesquisado: "item_pesquisado",
+    fornecedores_identificados: "fornecedores_identificados",
+    rfq_enviada: "rfq_enviada",
+    cotacao_recebida: "cotacao_recebida",
+    fornecedor_selecionado: "fornecedor_selecionado",
+    calculo_feito: "calculo_executado",
+    go_aprovado: "go_decidido",
+    pedido_confirmado: "pedido_confirmado",
+    producao_iniciada: "producao_iniciada",
+    produto_embarcado: "produto_embarcado",
+    di_registrada: "di_registrada",
+    nacionalizado: "nacionalizado",
+    entregue: "entregue",
   };
 
   const [res] = await db.insert(operacaoMarcos).values({
@@ -582,7 +632,7 @@ export async function registrarMarco(input: {
 
   await addEvento({
     operacaoId: input.operacaoId,
-    tipo: input.tipo as any,
+    tipo: (eventoDoMarco[input.tipo] ?? "alerta_ia") as any,
     estagio: estagioEsperado[input.tipo] ?? op.estagioAtual as Estagio,
     refTipo: "operacao_marcos",
     refId: id,
@@ -675,6 +725,7 @@ export async function listOperacoes(userId: number) {
     valorEstimadoBrl: o.valorEstimadoBrlCents, margemEstimada: o.margemEstimadaBp,
     prioridade: o.prioridade, prazoDesejado: o.prazoDesejado,
     responsavelId: o.responsavelId, origemDesejada: o.origemDesejada,
+    modo: o.modo,
   }));
 }
 

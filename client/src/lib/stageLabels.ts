@@ -10,7 +10,7 @@
  * para manter coesão entre o Painel e a Excambia.
  */
 import {
-  ClipboardList, Send, FileBarChart, Factory, PackageCheck,
+  Search, Send, FileBarChart, Factory, PackageCheck,
   CheckCircle2, XCircle, type LucideIcon,
 } from "lucide-react";
 
@@ -19,11 +19,11 @@ export type Estagio =
 
 /** Rótulo curto por código de estágio (para chips, badges, textos). */
 export const STAGE_LABELS: Record<Estagio, string> = {
-  demand:  "Demanda",
-  source:  "Sourcing / RFQ",
+  demand:  "Estudo do item",
+  source:  "Cotação e RFQ",
   analyze: "Viabilidade",
-  execute: "Produção / Embarque",
-  finance: "Nacionalização / Entrega",
+  execute: "Produção e Embarque",
+  finance: "Nacionalização e Entrega",
   closed:  "Encerrada",
   lost:    "Perdida",
 };
@@ -40,16 +40,16 @@ export const STAGE_META: Record<
   (typeof STAGE_ORDER)[number],
   { label: string; Icon: LucideIcon; descricao: string }
 > = {
-  demand:  { label: STAGE_LABELS.demand,  Icon: ClipboardList,  descricao: "Necessidade do cliente estruturada" },
-  source:  { label: STAGE_LABELS.source,  Icon: Send,           descricao: "Fornecedores selecionados e RFQ enviada" },
-  analyze: { label: STAGE_LABELS.analyze, Icon: FileBarChart,   descricao: "Cotações consolidadas e cálculo de viabilidade" },
-  execute: { label: STAGE_LABELS.execute, Icon: Factory,        descricao: "Pedido, produção e embarque" },
+  demand:  { label: STAGE_LABELS.demand,  Icon: Search,         descricao: "Pesquisa do item: preço médio, fornecedores, países e concorrentes" },
+  source:  { label: STAGE_LABELS.source,  Icon: Send,           descricao: "Fornecedores selecionados, RFQ enviada e cotações recebidas" },
+  analyze: { label: STAGE_LABELS.analyze, Icon: FileBarChart,   descricao: "Cotações consolidadas, cálculo de viabilidade e decisão" },
+  execute: { label: STAGE_LABELS.execute, Icon: Factory,        descricao: "Pedido, produção e embarque (com tracking)" },
   finance: { label: STAGE_LABELS.finance, Icon: PackageCheck,   descricao: "Trânsito, desembaraço e entrega" },
 };
 
 /** Ícone por código de estágio (inclui estados finais). */
 export const STAGE_ICONS: Record<Estagio, LucideIcon> = {
-  demand:  ClipboardList,
+  demand:  Search,
   source:  Send,
   analyze: FileBarChart,
   execute: Factory,
