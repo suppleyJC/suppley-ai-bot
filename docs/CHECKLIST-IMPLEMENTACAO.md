@@ -71,6 +71,11 @@
 ---
 
 ## ⏳ Pendências registradas (aguardando decisão/insumo do usuário)
+- ⏳ **"Parâmetros de Cálculo" — sofisticação + layout**: refinar a página de
+  parâmetros do motor (alíquotas, taxas fixas, regimes, despesas) com camadas
+  mais claras, edição assistida e visual à altura do resto do sistema. Hoje
+  vários parâmetros vivem como constantes no código (ver gaps fiscais abaixo);
+  o objetivo é torná-los visíveis, versionáveis e editáveis com segurança.
 - ⏳ **APIs de tracking de embarque** (inclusive pagas) — SeaRates/ShipsGo
   (contêiner/BL) ou AISStream (posição do navio). Falta: provedor escolhido +
   chave no `.env`. Estrutura (colunas/serviço) já pronta.
@@ -80,6 +85,34 @@
   já entende os dois idiomas; faltaria o backfill de exibição).
 - ⏳ Afinar pesos/tamanhos de título página a página (estética fina).
 - ⏳ Integrar mais fontes externas de preço (World Bank Pink Sheet, TradeMap).
+
+### ⏳ Domínio tributário/fiscal — gaps mapeados (auditoria de 2026-06-29)
+> O núcleo do motor está **sólido e correto** (II, IPI, PIS/COFINS, ICMS, AFRMM,
+> Siscomex, TTD 409/SC em 2 fases, 3 regimes, NCM com 10.521 códigos do TIPI,
+> ICMS dos 27 estados). Os itens abaixo são lacunas de **dados/governança**, não
+> de motor. Boa parte se resolve junto com a página "Parâmetros de Cálculo".
+- ⏳ **`fiscal_benefits` vazia (0 linhas)**: tabela existe (TTD, drawback, RECOF,
+  SUDENE/SUDAM, suspensões setoriais) mas não há seed. Hoje só o TTD 409/SC é
+  tratado, via flag em `icms_rates`. Falta popular o registro de benefícios.
+- ⏳ **Ex-Tarifário (`ncm_exceptions`) inexistente**: não há tabela nem
+  rastreio de reduções/suspensões temporárias de alíquota por NCM.
+- ⏳ **Alíquotas fixas no código** (PIS 2,1% / COFINS 10,25% / AFRMM 25% /
+  Siscomex) **sem versionamento por data de vigência**. Migrar para tabela com
+  `effective_date` para auditoria e backtest — base da página de Parâmetros.
+- ⏳ **Custos portuários e taxas aduaneiras hardcoded** (`shared/ports.ts`, 24
+  terminais) — sem tabela/atualização versionada.
+- ⏳ **Inconsistência de Siscomex**: `ports.ts` usa R$ 214,50 + R$ 107/adição e o
+  motor usa R$ 185,00 + R$ 29,50/adição. O motor é a fonte vigente; alinhar.
+- ⏳ **Frete internacional 100% manual** — sem estimativa/benchmark por rota.
+- ⏳ **DIFAL / ICMS-ST**: campos existem no schema, mas não estão integrados ao
+  motor (todos os estados tratados de forma uniforme na importação).
+- ⏳ **Reforma 2027+**: timeline CBS/IBS/Imposto Seletivo implementada, porém as
+  alíquotas de 2027 em diante são estimativas (aguardando detalhes da LC 214/2025).
+- 📁 **Repositório de legislação (arquivos)**: hoje a Excambia **não** consome
+  PDFs de leis — não há RAG/embeddings. Ela consulta dados estruturados (base +
+  Comex Stat + Comtrade + BCB/FRED) e faz **web search nativo** para textos
+  legais. Anexar a legislação como base documental seria um projeto novo (ver
+  análise no overview); decisão pendente.
 
 ---
 
