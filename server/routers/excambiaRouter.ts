@@ -299,4 +299,25 @@ saveLearningContext: protectedProcedure
       source: input.source || null,
     });
   }),
+
+updateLearningContext: protectedProcedure
+  .input(z.object({
+    id: z.number(),
+    contextType: z.enum(["preference", "business_rule", "supplier_info", "product_insight", "market_trend", "calculation_pattern", "feedback"]).optional(),
+    key: z.string().optional(),
+    value: z.string().optional(),
+    importance: z.number().min(0).max(100).optional(),
+  }))
+  .mutation(async ({ ctx, input }) => {
+    const { id, ...patch } = input;
+    await db.updateLearningContext(id, ctx.user.id, patch);
+    return { ok: true };
+  }),
+
+deleteLearningContext: protectedProcedure
+  .input(z.object({ id: z.number() }))
+  .mutation(async ({ ctx, input }) => {
+    await db.deleteLearningContext(input.id, ctx.user.id);
+    return { ok: true };
+  }),
 });

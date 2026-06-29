@@ -109,7 +109,10 @@
   morta — agora o orquestrador **lê** a memória (injeta no system prompt) e a
   Excambia **escreve** via a ferramenta `registrar_memoria` (preferências, regras,
   padrões). Camada barata de aprendizado (contexto persistido + reinjetado, sem
-  fine-tuning). Falta opcional: UI para o usuário ver/editar a memória.
+  fine-tuning).
+- ✅ **UI de memória** (`/memoria`): o usuário vê, adiciona, edita e remove os
+  aprendizados (agrupados por tipo, com importância); itens gravados pela IA são
+  sinalizados. Backend ganhou editar/excluir escopados por usuário.
 
 ### ⏳ Domínio tributário/fiscal — gaps mapeados (auditoria de 2026-06-29)
 > O núcleo do motor está **sólido e correto** (II, IPI, PIS/COFINS, ICMS, AFRMM,

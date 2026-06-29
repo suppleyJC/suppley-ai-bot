@@ -100,10 +100,23 @@ export async function getLearningContext(userId: number): Promise<SofiaLearningC
 export async function updateLearningContextUsage(id: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  
+
   await db.update(sofiaLearningContext)
     .set({ lastUsedAt: new Date() })
     .where(eq(sofiaLearningContext.id, id));
+}
+
+/** Edita uma memória (escopo pelo userId — evita editar memória de outro usuário). */
+export async function updateLearningContext(
+  id: number,
+  userId: number,
+  patch: Partial<Pick<SofiaLearningContext, "key" | "value" | "importance" | "contextType">>,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(sofiaLearningContext)
+    .set(patch)
+    .where(and(eq(sofiaLearningContext.id, id), eq(sofiaLearningContext.userId, userId)));
 }
 
 export async function deleteLearningContext(id: number, userId: number): Promise<boolean> {

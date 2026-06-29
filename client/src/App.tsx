@@ -37,6 +37,7 @@ const Operacoes = lazy(() => import("./pages/Operacoes"));
 const OperacaoDetail = lazy(() => import("./pages/OperacaoDetail"));
 const Proformas = lazy(() => import("./pages/Proformas"));
 const Parametros = lazy(() => import("./pages/Parametros"));
+const MemoriaExcambia = lazy(() => import("./pages/MemoriaExcambia"));
 const Diagnostics = lazy(() => import("./pages/Diagnostics"));
 
 /** Fallback discreto enquanto o chunk da página carrega. */
@@ -76,6 +77,7 @@ function AuthenticatedRoutes() {
         <Route path="/operacao/:id" component={OperacaoDetail} />
         <Route path="/proformas" component={Proformas} />
         <Route path="/parametros" component={Parametros} />
+        <Route path="/memoria" component={MemoriaExcambia} />
         <Route path="/reform" component={ReformDashboard} />
         <Route path="/diagnostics" component={Diagnostics} />
         <Route path="/404" component={NotFound} />
