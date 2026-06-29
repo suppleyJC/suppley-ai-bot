@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, json, decimal, index } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, json, decimal, index, unique } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -1975,3 +1975,88 @@ export const proformaItems = mysqlTable("proforma_items", {
 }));
 export type ProformaItem = typeof proformaItems.$inferSelect;
 export type InsertProformaItem = typeof proformaItems.$inferInsert;
+
+/* ============================================================
+ * PARÂMETROS DE CÁLCULO — fundação de dados versionada
+ * Migração: 0032_parametros_de_calculo.sql (cria tabelas + seed)
+ * ============================================================ */
+
+/**
+ * Tax Parameters — parâmetros globais do motor com vigência por data.
+ * Substitui as constantes hardcoded (PIS, COFINS, AFRMM, Siscomex, despesas).
+ * O valor vigente de uma chave = última linha com effectiveDate <= hoje,
+ * isActive=true e (endDate nula ou > hoje).
+ */
+export const taxParameters = mysqlTable("tax_parameters", {
+  id: int("id").autoincrement().primaryKey(),
+  paramKey: varchar("paramKey", { length: 60 }).notNull(), // PIS_IMPORT, COFINS_IMPORT, AFRMM_RATE, SISCOMEX_BASE, SISCOMEX_ADICAO, BL_LIBERATION, CUSTOMS_BROKER
+  label: varchar("label", { length: 180 }).notNull(),
+  category: varchar("category", { length: 40 }).notNull(), // tributo_federal | taxa_fixa | despesa
+  unit: varchar("unit", { length: 12 }).notNull(), // bp | cents
+  valueBp: int("valueBp"), // alíquota em basis points (2,1% = 210)
+  valueCents: bigint("valueCents", { mode: "number" }), // taxa fixa em centavos
+  effectiveDate: timestamp("effectiveDate").notNull(),
+  endDate: timestamp("endDate"), // null = vigente
+  legalBasis: varchar("legalBasis", { length: 255 }),
+  notes: text("notes"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  byKey: index("idx_tax_parameters_key").on(t.paramKey),
+  uqKeyDate: unique("uq_tax_parameters").on(t.paramKey, t.effectiveDate),
+}));
+export type TaxParameter = typeof taxParameters.$inferSelect;
+export type InsertTaxParameter = typeof taxParameters.$inferInsert;
+
+/**
+ * Port Costs — custos portuários por terminal, lançáveis na planilha de cálculo.
+ * THC e liberação em centavos; armazenagem em basis points do CIF.
+ */
+export const portCosts = mysqlTable("port_costs", {
+  id: int("id").autoincrement().primaryKey(),
+  portCode: varchar("portCode", { length: 10 }).notNull(),
+  portName: varchar("portName", { length: 180 }).notNull(),
+  stateCode: varchar("stateCode", { length: 2 }).notNull(),
+  modal: varchar("modal", { length: 20 }).default("maritimo").notNull(), // maritimo | aereo | rodoviario
+  thcCents: bigint("thcCents", { mode: "number" }).default(0).notNull(),
+  storageBp: int("storageBp").default(0).notNull(), // % do CIF em bp (1,5% = 150)
+  liberationCents: bigint("liberationCents", { mode: "number" }).default(0).notNull(),
+  otherCents: bigint("otherCents", { mode: "number" }).default(0).notNull(), // capatazia/extras
+  effectiveDate: timestamp("effectiveDate").notNull(),
+  legalBasis: varchar("legalBasis", { length: 255 }),
+  notes: text("notes"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  byPort: index("idx_port_costs_port").on(t.portCode),
+  byState: index("idx_port_costs_state").on(t.stateCode),
+  uqPortModalDate: unique("uq_port_costs").on(t.portCode, t.modal, t.effectiveDate),
+}));
+export type PortCost = typeof portCosts.$inferSelect;
+export type InsertPortCost = typeof portCosts.$inferInsert;
+
+/**
+ * NCM Exceptions (Ex-Tarifário) — reduções/suspensões temporárias de II/IPI
+ * por NCM, conforme Resolução GECEX / Portaria SECEX.
+ */
+export const ncmExceptions = mysqlTable("ncm_exceptions", {
+  id: int("id").autoincrement().primaryKey(),
+  ncmCode: varchar("ncmCode", { length: 10 }).notNull(),
+  exCode: varchar("exCode", { length: 20 }), // número do Ex-tarifário
+  description: text("description"),
+  reducedIiRate: int("reducedIiRate"), // II reduzido em bp (0 = isento)
+  reducedIpiRate: int("reducedIpiRate"), // IPI reduzido em bp
+  legalBasis: varchar("legalBasis", { length: 255 }), // Resolução GECEX nº ...
+  startDate: timestamp("startDate"),
+  endDate: timestamp("endDate"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  byNcm: index("idx_ncm_exceptions_ncm").on(t.ncmCode),
+  uqNcmEx: unique("uq_ncm_exceptions").on(t.ncmCode, t.exCode),
+}));
+export type NcmException = typeof ncmExceptions.$inferSelect;
+export type InsertNcmException = typeof ncmExceptions.$inferInsert;

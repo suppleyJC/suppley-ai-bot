@@ -30,6 +30,7 @@ import { marketRouter } from "./routers/marketRouter";
 import { conversasRouter } from "./routers/conversasRouter";
 import { fase5Router } from "./routers/fase5Router";
 import { proformaRouter } from "./routers/proformaRouter";
+import { parametrosRouter } from "./routers/parametrosRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -62,6 +63,8 @@ export const appRouter = router({
   fase5: fase5Router,
   // Proformas & Invoices — porta de entrada estruturada da Excambia
   proforma: proformaRouter,
+  // Parâmetros de Cálculo — tributos/taxas/portos/ex-tarifário/benefícios versionados
+  parametros: parametrosRouter,
   // Motor V2 endpoints (paralelos ao sistema existente)
   estimativa: estimativaRouter,
   operations: operationsRouter,

@@ -14,3 +14,4 @@ export * from "./conversaDb";
 export * from "./industriesDb";
 export * from "./messagingDb";
 export * from "./proformaDb";
+export * from "./parametrosDb";
