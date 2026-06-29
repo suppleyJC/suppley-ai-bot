@@ -86,6 +86,26 @@
 - ⏳ Afinar pesos/tamanhos de título página a página (estética fina).
 - ⏳ Integrar mais fontes externas de preço (World Bank Pink Sheet, TradeMap).
 
+### ✅ Parâmetros de Cálculo — Fases 1–2 entregues (2026-06-29)
+- ✅ **Fundação versionada** (`tax_parameters`, `port_costs`, `ncm_exceptions`) +
+  migração `0032` (tabelas + seed idempotente). Benefícios nacionais semeados,
+  incluindo **Mercosul** (livre comércio intrazona) e **ALADI/ACE**.
+- ✅ **Motor lê do banco**: PIS/COFINS/AFRMM/Siscomex de `tax_parameters` (fallback
+  p/ constantes); **ex-tarifário** aplicado por NCM; **Mercosul** por país de
+  origem (II preferencial com Certificado de Origem) no motor certificado.
+- ✅ **Custos portuários DB-first** (`port_costs`) no `portsRouter`; planilha
+  corrigida (Siscomex R$214,50 → R$185).
+
+### ⏳ Parâmetros de Cálculo — Fases seguintes
+- ⏳ **Fase 3 — DIFAL/ST + estratégia interestadual**: DIFAL, ICMS-ST e
+  precificação multi-estado **já existem** (`statePricingService`). Falta o
+  **comparador de rotas de importação** (genérico por estado): importar via
+  estado-hub com benefício → transferência interestadual (4%) → DIFAL no destino,
+  comparado com importação direta. ⚠️ Premissas fiscais a validar com contador.
+- ⏳ **Fase 4 — Página "Parâmetros de Cálculo"**: UI em camadas (tributos · taxas
+  · portos · ex-tarifário · benefícios) com edição versionada.
+- ⏳ **Fase 5 — Memória/preferências da Excambia** (camada barata de aprendizado).
+
 ### ⏳ Domínio tributário/fiscal — gaps mapeados (auditoria de 2026-06-29)
 > O núcleo do motor está **sólido e correto** (II, IPI, PIS/COFINS, ICMS, AFRMM,
 > Siscomex, TTD 409/SC em 2 fases, 3 regimes, NCM com 10.521 códigos do TIPI,
