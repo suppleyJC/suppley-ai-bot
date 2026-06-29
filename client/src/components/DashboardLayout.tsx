@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 
 import { useIsMobile } from "@/hooks/useMobile";
-import { LogOut, PanelLeft, Building2, Package, Settings, FileText, ChevronRight, Workflow, TrendingUp } from "lucide-react";
+import { LogOut, PanelLeft, Building2, Package, Settings, FileText, ChevronRight, Workflow, TrendingUp, SlidersHorizontal } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -47,6 +47,7 @@ const menuItems = [
   // BASE OPERACIONAL (Cadastros) — ambiente unificado: fornecedores + compradores
   { icon: Building2, label: "Fornecedores", path: "/suppliers", section: "base" },
   { icon: Package, label: "Ativos", path: "/products", section: "base" },
+  { icon: SlidersHorizontal, label: "Parâmetros de cálculo", path: "/parametros", section: "base" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

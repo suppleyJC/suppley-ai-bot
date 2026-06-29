@@ -97,11 +97,11 @@
   corrigida (Siscomex R$214,50 → R$185).
 
 ### ⏳ Parâmetros de Cálculo — Fases seguintes
-- ⏳ **Fase 3 — DIFAL/ST + estratégia interestadual**: DIFAL, ICMS-ST e
+- ⏳ **Fase 3 — Comparador de rotas de importação (PENDÊNCIA)**: DIFAL, ICMS-ST e
   precificação multi-estado **já existem** (`statePricingService`). Falta o
-  **comparador de rotas de importação** (genérico por estado): importar via
-  estado-hub com benefício → transferência interestadual (4%) → DIFAL no destino,
-  comparado com importação direta. ⚠️ Premissas fiscais a validar com contador.
+  **comparador de rotas** (genérico por estado): importar via estado-hub com
+  benefício → transferência interestadual (4%) → DIFAL no destino, vs. importação
+  direta. ⚠️ Premissas fiscais a validar com contador antes de codar.
 - ⏳ **Fase 4 — Página "Parâmetros de Cálculo"**: UI em camadas (tributos · taxas
   · portos · ex-tarifário · benefícios) com edição versionada.
 - ⏳ **Fase 5 — Memória/preferências da Excambia** (camada barata de aprendizado).

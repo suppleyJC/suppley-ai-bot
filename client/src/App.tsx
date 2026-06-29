@@ -36,6 +36,7 @@ const Messaging = lazy(() => import("./pages/Messaging"));
 const Operacoes = lazy(() => import("./pages/Operacoes"));
 const OperacaoDetail = lazy(() => import("./pages/OperacaoDetail"));
 const Proformas = lazy(() => import("./pages/Proformas"));
+const Parametros = lazy(() => import("./pages/Parametros"));
 const Diagnostics = lazy(() => import("./pages/Diagnostics"));
 
 /** Fallback discreto enquanto o chunk da página carrega. */
@@ -74,6 +75,7 @@ function AuthenticatedRoutes() {
         <Route path="/operacoes" component={Operacoes} />
         <Route path="/operacao/:id" component={OperacaoDetail} />
         <Route path="/proformas" component={Proformas} />
+        <Route path="/parametros" component={Parametros} />
         <Route path="/reform" component={ReformDashboard} />
         <Route path="/diagnostics" component={Diagnostics} />
         <Route path="/404" component={NotFound} />
