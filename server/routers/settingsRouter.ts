@@ -1,4 +1,4 @@
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import * as db from "../db";
 
@@ -7,7 +7,8 @@ get: protectedProcedure.query(async ({ ctx }) => {
   return db.getCompanySettings(ctx.user.id);
 }),
 
-update: protectedProcedure
+// Parâmetros da empresa afetam o cálculo de todos — edição é restrita ao admin.
+update: adminProcedure
   .input(z.object({
     companyName: z.string().optional(),
     cnpj: z.string().optional(),

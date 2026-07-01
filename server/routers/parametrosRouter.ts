@@ -4,9 +4,11 @@
  *
  * Escrita de tax_parameters cria uma NOVA versão (nova effectiveDate),
  * preservando o histórico — base para auditoria e backtest.
+ *
+ * Leitura é pública (alimenta o motor); ESCRITA exige administrador.
  */
 import { z } from "zod";
-import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
+import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import * as db from "../db";
 
 export const parametrosRouter = router({
@@ -17,7 +19,7 @@ export const parametrosRouter = router({
     history: publicProcedure
       .input(z.object({ paramKey: z.string() }))
       .query(({ input }) => db.listTaxParameterHistory(input.paramKey)),
-    saveVersion: protectedProcedure
+    saveVersion: adminProcedure
       .input(
         z.object({
           paramKey: z.string().min(1).max(60),
@@ -42,7 +44,7 @@ export const parametrosRouter = router({
   /* ---- port_costs ---- */
   ports: router({
     list: publicProcedure.query(() => db.listPortCosts()),
-    save: protectedProcedure
+    save: adminProcedure
       .input(
         z.object({
           portCode: z.string().min(1).max(10),
@@ -69,7 +71,7 @@ export const parametrosRouter = router({
   /* ---- ncm_exceptions (Ex-Tarifário) ---- */
   exTarifario: router({
     list: publicProcedure.query(() => db.listNcmExceptions()),
-    save: protectedProcedure
+    save: adminProcedure
       .input(
         z.object({
           ncmCode: z.string().min(1).max(10),
@@ -92,7 +94,7 @@ export const parametrosRouter = router({
   /* ---- fiscal_benefits ---- */
   benefits: router({
     list: publicProcedure.query(() => db.listFiscalBenefits()),
-    save: protectedProcedure
+    save: adminProcedure
       .input(
         z.object({
           id: z.number().int().optional(),

@@ -114,11 +114,8 @@ export default function Login() {
                 </>
               )}
             </Button>
-            <p className="text-sm text-muted-foreground text-center">
-              Não tem uma conta?{" "}
-              <Link href="/register" className="text-primary hover:underline font-medium">
-                Criar conta
-              </Link>
+            <p className="text-xs text-muted-foreground text-center">
+              O acesso é criado pelo administrador. Solicite suas credenciais ao administrador do sistema.
             </p>
           </CardFooter>
         </form>

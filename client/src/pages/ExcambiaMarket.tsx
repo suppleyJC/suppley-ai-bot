@@ -6,8 +6,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import CambioDoDia from "@/components/CambioDoDia";
 import { MemoriaExcambiaPanel } from "@/pages/MemoriaExcambia";
-import { ParametrosPanel } from "@/pages/Parametros";
-import { UsoIaPanel } from "@/pages/UsoIa";
 import {
   TrendingUp, TrendingDown, Minus, RefreshCw, Globe, Gauge,
   Lightbulb, AlertCircle, CheckCircle, BarChart3,
@@ -149,8 +147,6 @@ export default function ExcambiaMarket() {
           <TabsTrigger value="geral">Visão Geral</TabsTrigger>
           <TabsTrigger value="comex">Comex Stat</TabsTrigger>
           <TabsTrigger value="memoria">Memória da Excambia</TabsTrigger>
-          <TabsTrigger value="parametros">Parâmetros de cálculo</TabsTrigger>
-          <TabsTrigger value="uso">Uso da IA</TabsTrigger>
         </TabsList>
 
         {/* VISÃO GERAL — timing + sinais + recomendações */}
@@ -331,16 +327,6 @@ export default function ExcambiaMarket() {
         {/* MEMÓRIA DA EXCAMBIA — aprendizados persistentes */}
         <TabsContent value="memoria" className="mt-4">
           <MemoriaExcambiaPanel />
-        </TabsContent>
-
-        {/* PARÂMETROS DE CÁLCULO — tributos/taxas/portos/ex-tarifário/benefícios/rota */}
-        <TabsContent value="parametros" className="mt-4">
-          <ParametrosPanel />
-        </TabsContent>
-
-        {/* USO DA IA — tokens e custo estimado por modelo */}
-        <TabsContent value="uso" className="mt-4">
-          <UsoIaPanel />
         </TabsContent>
       </Tabs>
     </div>

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "../_core/cookies";
-import { registerUser, loginUser, getUserById, generateResetToken, resetPassword, changePassword } from "../services/authService";
+import { registerUser, loginUser, getUserById, generateResetToken, resetPassword, changePassword, countUsers } from "../services/authService";
 import { SignJWT, jwtVerify } from "jose";
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "excambia-calc-secret-key-2024");
@@ -62,6 +62,17 @@ register: publicProcedure
     password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
   }))
   .mutation(async ({ input, ctx }) => {
+    // Auto-cadastro público desabilitado: novos usuários são criados pelo
+    // administrador em Configurações → Usuários. Exceção: bootstrap do 1º
+    // usuário quando o banco ainda está vazio (vira admin automaticamente).
+    const existingCount = await countUsers();
+    if (existingCount > 0) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Cadastro disponível apenas pelo administrador. Solicite acesso ao administrador do sistema.",
+      });
+    }
+
     const result = await registerUser(input);
     if (!result.success || !result.user) {
       throw new TRPCError({ code: "BAD_REQUEST", message: result.error || "Erro ao registrar" });

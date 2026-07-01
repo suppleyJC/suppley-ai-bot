@@ -32,6 +32,7 @@ import { fase5Router } from "./routers/fase5Router";
 import { proformaRouter } from "./routers/proformaRouter";
 import { parametrosRouter } from "./routers/parametrosRouter";
 import { usageRouter } from "./routers/usageRouter";
+import { usersRouter } from "./routers/usersRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -68,6 +69,8 @@ export const appRouter = router({
   parametros: parametrosRouter,
   // Medição de uso/custo de IA (tokens por modelo)
   usage: usageRouter,
+  // Gestão de usuários (admin) — cadastro, papéis, remoção
+  users: usersRouter,
   // Motor V2 endpoints (paralelos ao sistema existente)
   estimativa: estimativaRouter,
   operations: operationsRouter,

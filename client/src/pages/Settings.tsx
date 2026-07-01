@@ -1,12 +1,17 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ParametrosPanel } from "@/pages/Parametros";
+import { UsoIaPanel } from "@/pages/UsoIa";
 import { toast } from "sonner";
 import { 
   Settings as SettingsIcon, 
@@ -32,7 +37,14 @@ import {
   TrendingUp,
   Zap,
   Wifi,
-  WifiOff
+  WifiOff,
+  Users,
+  UserPlus,
+  Activity,
+  SlidersHorizontal,
+  Lock,
+  Crown,
+  Trash2 as TrashIcon,
 } from "lucide-react";
 import {
   Tooltip,
@@ -503,8 +515,206 @@ function NotificationPreferencesSection() {
   );
 }
 
+/* ============================================================
+ * USUÁRIOS — cadastro e gestão (apenas administrador)
+ * ============================================================ */
+function UsuariosTab() {
+  const utils = trpc.useUtils();
+  const { user: me } = useAuth();
+  const { data: users = [], isLoading } = trpc.users.list.useQuery();
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "user" as "user" | "admin" });
+
+  const createMut = trpc.users.create.useMutation({
+    onSuccess: () => {
+      toast.success("Usuário criado com sucesso!");
+      utils.users.list.invalidate();
+      setForm({ name: "", email: "", password: "", role: "user" });
+      setShowForm(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const removeMut = trpc.users.remove.useMutation({
+    onSuccess: () => { toast.success("Usuário removido"); utils.users.list.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const roleMut = trpc.users.updateRole.useMutation({
+    onSuccess: () => { toast.success("Papel atualizado"); utils.users.list.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const submit = () => {
+    if (form.name.trim().length < 2) return toast.error("Informe o nome");
+    if (!/^[^@]+@[^@]+\.[^@]+$/.test(form.email)) return toast.error("Email inválido");
+    if (form.password.length < 8) return toast.error("A senha deve ter pelo menos 8 caracteres");
+    createMut.mutate({ name: form.name.trim(), email: form.email.trim().toLowerCase(), password: form.password, role: form.role });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <div>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            Usuários
+          </CardTitle>
+          <CardDescription>
+            Somente o administrador cadastra e gerencia usuários. Novos usuários acessam todos
+            os ambientes, mas não editam parâmetros de cálculo nem cadastram outros usuários.
+          </CardDescription>
+        </div>
+        <Button onClick={() => setShowForm((v) => !v)} className="btn-turquesa gap-2 shrink-0">
+          <UserPlus className="h-4 w-4" /> Novo usuário
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {showForm && (
+          <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-sm">Nome</Label>
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nome completo" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Email</Label>
+              <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="usuario@empresa.com" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Senha provisória</Label>
+              <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="mín. 8 caracteres" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Papel</Label>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as "user" | "admin" })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">Usuário — acesso operacional</SelectItem>
+                  <SelectItem value="admin">Administrador — acesso total</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="sm:col-span-2 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
+              <Button onClick={submit} disabled={createMut.isPending} className="gap-2">
+                {createMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                Criar usuário
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {isLoading ? (
+          <Skeleton className="h-32 w-full" />
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-border/60">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-left text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2.5">Usuário</th>
+                  <th className="px-4 py-2.5">Papel</th>
+                  <th className="px-4 py-2.5 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => {
+                  const isSelf = u.id === me?.id;
+                  const isOwner = (u.email ?? "").toLowerCase() === "jean@suppley.com.br";
+                  return (
+                    <tr key={u.id} className="border-t border-border/50">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-foreground">{u.name || "—"}</p>
+                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        {u.role === "admin" ? (
+                          <Badge className="gap-1 bg-purple-100 text-purple-700 hover:bg-purple-100"><Crown className="h-3 w-3" /> Administrador</Badge>
+                        ) : (
+                          <Badge variant="secondary">Usuário</Badge>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          {!isSelf && !isOwner && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={roleMut.isPending}
+                                onClick={() => roleMut.mutate({ id: u.id, role: u.role === "admin" ? "user" : "admin" })}
+                              >
+                                {u.role === "admin" ? "Tornar usuário" : "Tornar admin"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
+                                disabled={removeMut.isPending}
+                                onClick={() => { if (confirm(`Remover ${u.email}?`)) removeMut.mutate({ id: u.id }); }}
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                          {(isSelf || isOwner) && <span className="text-xs text-muted-foreground">—</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ============================================================
+ * TROCAR SENHA — disponível a todos os usuários
+ * ============================================================ */
+function ChangePasswordSection() {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const mut = trpc.auth.changePassword.useMutation({
+    onSuccess: () => { toast.success("Senha alterada com sucesso!"); setCurrent(""); setNext(""); },
+    onError: (e) => toast.error(e.message),
+  });
+  return (
+    <Card className="card-modern">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Lock className="h-5 w-5 text-primary" /> Segurança</CardTitle>
+        <CardDescription>Altere sua senha de acesso</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-3 sm:grid-cols-2 sm:max-w-xl">
+          <div className="space-y-1.5">
+            <Label className="text-sm">Senha atual</Label>
+            <Input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">Nova senha</Label>
+            <Input type="password" value={next} onChange={(e) => setNext(e.target.value)} placeholder="mín. 8 caracteres" />
+          </div>
+          <div className="sm:col-span-2">
+            <Button
+              onClick={() => { if (next.length < 8) return toast.error("A nova senha deve ter pelo menos 8 caracteres"); mut.mutate({ currentPassword: current, newPassword: next }); }}
+              disabled={mut.isPending || !current || !next}
+              className="gap-2"
+            >
+              {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Alterar senha
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Settings() {
   const { data: settings, isLoading } = trpc.settings.get.useQuery();
+  const { user: me } = useAuth();
+  const isAdmin = me?.role === "admin";
   const utils = trpc.useUtils();
 
   const [formData, setFormData] = useState({
@@ -520,7 +730,15 @@ export default function Settings() {
   });
   
   const [hideWatermark, setHideWatermark] = useState(false);
-  
+  const ADMIN_TABS = ["empresa", "parametros", "usuarios", "uso"];
+  const [tab, setTab] = useState("empresa");
+
+  // Usuário não-admin nunca deve pousar numa aba restrita.
+  useEffect(() => {
+    if (me && !isAdmin && ADMIN_TABS.includes(tab)) setTab("notificacoes");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me, isAdmin]);
+
   // Load watermark preference from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('hideWatermark');
@@ -635,30 +853,30 @@ export default function Settings() {
 
   return (
     <TooltipProvider>
-      <div className="space-y-8 max-w-5xl mx-auto">
+      <div className="space-y-6 max-w-5xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">Configurações</h1>
-            <p className="text-muted-foreground mt-1">
-              Configure os parâmetros padrão para seus cálculos de importação
-            </p>
-          </div>
-          <Button 
-            onClick={handleSubmit} 
-            size="lg" 
-            disabled={updateMutation.isPending}
-            className="btn-turquesa gap-2"
-          >
-            {updateMutation.isPending ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Save className="h-5 w-5" />
-            )}
-            Salvar Configurações
-          </Button>
+        <div>
+          <h1 className="text-3xl font-bold">Configurações</h1>
+          <p className="text-muted-foreground mt-1">
+            {isAdmin
+              ? "Parâmetros da empresa, cálculo, uso da IA, usuários e preferências"
+              : "Suas preferências de notificação e conta"}
+          </p>
         </div>
 
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList className="flex-wrap h-auto">
+            {isAdmin && <TabsTrigger value="empresa"><Building2 className="mr-1.5 h-4 w-4" /> Empresa & Fiscal</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="parametros"><SlidersHorizontal className="mr-1.5 h-4 w-4" /> Parâmetros de cálculo</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="usuarios"><Users className="mr-1.5 h-4 w-4" /> Usuários</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="uso"><Activity className="mr-1.5 h-4 w-4" /> Uso da IA</TabsTrigger>}
+            <TabsTrigger value="notificacoes"><Bell className="mr-1.5 h-4 w-4" /> Notificações & Integrações</TabsTrigger>
+            <TabsTrigger value="preferencias"><SettingsIcon className="mr-1.5 h-4 w-4" /> Preferências</TabsTrigger>
+          </TabsList>
+
+          {/* ===== EMPRESA & FISCAL (admin) ===== */}
+          {isAdmin && (
+          <TabsContent value="empresa" className="mt-6 space-y-6">
         <form onSubmit={handleSubmit}>
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Company Info */}
@@ -945,46 +1163,18 @@ export default function Settings() {
           </div>
         </form>
 
-        {/* Excambia API Key Section */}
-        <ExcambiaApiKeySection />
-
-        {/* Watermark Section */}
-        <Card className="card-modern">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
-              Personalização Visual
-            </CardTitle>
-            <CardDescription>
-              Configure a aparência do sistema
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <EyeOff className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <Label htmlFor="watermark-toggle" className="font-medium cursor-pointer">
-                    Remover marca d'água
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Oculta badges e marcas d'água do sistema
-                  </p>
-                </div>
-              </div>
-              <Switch
-                id="watermark-toggle"
-                checked={hideWatermark}
-                onCheckedChange={handleWatermarkToggle}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Notification Preferences & Integration Status */}
-        <NotificationPreferencesSection />
+        {/* Salvar (parâmetros da empresa) */}
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSubmit}
+            size="lg"
+            disabled={updateMutation.isPending}
+            className="btn-turquesa gap-2"
+          >
+            {updateMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+            Salvar Configurações
+          </Button>
+        </div>
 
         {/* Info Cards */}
         <div className="grid gap-6 md:grid-cols-2">
@@ -996,8 +1186,8 @@ export default function Settings() {
               <div>
                 <h3 className="font-semibold text-lg mb-2">Sobre o ICMS</h3>
                 <p className="text-sm text-muted-foreground">
-                  O ICMS é um imposto estadual que incide sobre a importação de produtos. 
-                  A alíquota varia de acordo com o estado de destino. Santa Catarina oferece 
+                  O ICMS é um imposto estadual que incide sobre a importação de produtos.
+                  A alíquota varia de acordo com o estado de destino. Santa Catarina oferece
                   benefícios fiscais através do TTD (Tratamento Tributário Diferenciado).
                 </p>
               </div>
@@ -1012,14 +1202,83 @@ export default function Settings() {
               <div>
                 <h3 className="font-semibold text-lg mb-2">Sobre o Mercosul</h3>
                 <p className="text-sm text-muted-foreground">
-                  Produtos originários de países do Mercosul (Argentina, Paraguai, Uruguai) 
-                  podem ter isenção do Imposto de Importação (II). É necessário apresentar 
+                  Produtos originários de países do Mercosul (Argentina, Paraguai, Uruguai)
+                  podem ter isenção do Imposto de Importação (II). É necessário apresentar
                   o Certificado de Origem junto à documentação.
                 </p>
               </div>
             </div>
           </div>
         </div>
+          </TabsContent>
+          )}
+
+          {/* ===== PARÂMETROS DE CÁLCULO (admin) ===== */}
+          {isAdmin && (
+            <TabsContent value="parametros" className="mt-6">
+              <ParametrosPanel />
+            </TabsContent>
+          )}
+
+          {/* ===== USUÁRIOS (admin) ===== */}
+          {isAdmin && (
+            <TabsContent value="usuarios" className="mt-6">
+              <UsuariosTab />
+            </TabsContent>
+          )}
+
+          {/* ===== USO DA IA (admin) — medição de custo + configuração do provedor ===== */}
+          {isAdmin && (
+            <TabsContent value="uso" className="mt-6 space-y-6">
+              <UsoIaPanel />
+              <ExcambiaApiKeySection />
+            </TabsContent>
+          )}
+
+          {/* ===== NOTIFICAÇÕES & INTEGRAÇÕES (todos) ===== */}
+          <TabsContent value="notificacoes" className="mt-6">
+            <NotificationPreferencesSection />
+          </TabsContent>
+
+          {/* ===== PREFERÊNCIAS (todos) — aparência + senha ===== */}
+          <TabsContent value="preferencias" className="mt-6 space-y-6">
+            <Card className="card-modern">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  Personalização Visual
+                </CardTitle>
+                <CardDescription>
+                  Configure a aparência do sistema
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <EyeOff className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <Label htmlFor="watermark-toggle" className="font-medium cursor-pointer">
+                        Remover marca d'água
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Oculta badges e marcas d'água do sistema
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="watermark-toggle"
+                    checked={hideWatermark}
+                    onCheckedChange={handleWatermarkToggle}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <ChangePasswordSection />
+          </TabsContent>
+        </Tabs>
       </div>
     </TooltipProvider>
   );

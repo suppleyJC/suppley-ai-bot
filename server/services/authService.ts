@@ -126,6 +126,107 @@ export async function loginUser(input: LoginInput): Promise<AuthResult> {
 }
 
 /**
+ * Total de usuários cadastrados (usado no bootstrap do 1º usuário).
+ */
+export async function countUsers(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db.select({ id: users.id }).from(users);
+  return rows.length;
+}
+
+export type AdminUserRow = Pick<User, "id" | "name" | "email" | "role" | "createdAt" | "lastSignedIn">;
+
+/**
+ * Lista de usuários para a área administrativa (sem hashes/segredos).
+ */
+export async function listUsers(): Promise<AdminUserRow[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select().from(users);
+  return rows
+    .map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, createdAt: u.createdAt, lastSignedIn: u.lastSignedIn }))
+    .sort((a, b) => a.id - b.id);
+}
+
+export interface AdminCreateUserInput {
+  name: string;
+  email: string;
+  password: string;
+  role?: "user" | "admin";
+}
+
+/**
+ * Criação de usuário pelo ADMINISTRADOR (não abre sessão, define papel).
+ * O email do dono (ADMIN_EMAIL) é sempre admin, independentemente do input.
+ */
+export async function adminCreateUser(input: AdminCreateUserInput): Promise<AuthResult> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "Banco de dados indisponível" };
+
+  try {
+    const existing = await db.select().from(users).where(eq(users.email, input.email.toLowerCase())).limit(1);
+    if (existing.length > 0) return { success: false, error: "Este email já está cadastrado" };
+    if (input.password.length < 8) return { success: false, error: "A senha deve ter pelo menos 8 caracteres" };
+
+    const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
+    const isOwner = input.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    const role: "user" | "admin" = isOwner ? "admin" : (input.role ?? "user");
+
+    const result = await db.insert(users).values({
+      name: input.name,
+      email: input.email.toLowerCase(),
+      passwordHash,
+      loginMethod: "email",
+      role,
+      isEmailVerified: true,
+      lastSignedIn: new Date(),
+    });
+
+    const newUser = await db.select().from(users).where(eq(users.id, Number(result[0].insertId))).limit(1);
+    if (newUser.length === 0) return { success: false, error: "Erro ao criar usuário" };
+    return { success: true, user: newUser[0] };
+  } catch (error) {
+    console.error("[AuthService] adminCreateUser error:", error);
+    return { success: false, error: "Erro ao criar usuário" };
+  }
+}
+
+/**
+ * Atualiza o papel de um usuário. O administrador principal não pode ser rebaixado.
+ */
+export async function updateUserRole(id: number, role: "user" | "admin"): Promise<AuthResult> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "Banco de dados indisponível" };
+
+  const target = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  if (target.length === 0) return { success: false, error: "Usuário não encontrado" };
+  if (target[0].email?.toLowerCase() === ADMIN_EMAIL.toLowerCase() && role !== "admin") {
+    return { success: false, error: "O administrador principal não pode ser rebaixado" };
+  }
+
+  await db.update(users).set({ role }).where(eq(users.id, id));
+  return { success: true };
+}
+
+/**
+ * Remove um usuário. O administrador principal não pode ser removido.
+ */
+export async function deleteUser(id: number): Promise<AuthResult> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "Banco de dados indisponível" };
+
+  const target = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  if (target.length === 0) return { success: false, error: "Usuário não encontrado" };
+  if (target[0].email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    return { success: false, error: "O administrador principal não pode ser removido" };
+  }
+
+  await db.delete(users).where(eq(users.id, id));
+  return { success: true };
+}
+
+/**
  * Get user by ID
  */
 export async function getUserById(id: number): Promise<User | null> {
