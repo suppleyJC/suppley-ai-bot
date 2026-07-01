@@ -88,8 +88,8 @@ describe('Tax Calculation Service - 2026', () => {
       // COFINS: 10.25% × R$ 10.000 (CIF) = R$ 1.025
       expect(result.values.cofinsValueCents).toBe(102500);
       
-      // AFRMM: 25% × R$ 2.000 = R$ 500
-      expect(result.values.afrmmValueCents).toBe(50000);
+      // AFRMM: 8% × R$ 2.000 = R$ 160 (longo curso, Lei 14.301/2022)
+      expect(result.values.afrmmValueCents).toBe(16000);
       
       // Siscomex: R$ 185 + 2 × R$ 29,50 = R$ 244
       expect(result.values.siscomexValueCents).toBe(18500 + 2 * 2950);
@@ -155,9 +155,9 @@ describe('Tax Calculation Service - 2026', () => {
   });
 
   describe('calculateAFRMM', () => {
-    it('deve calcular 25% do frete marítimo', () => {
-      expect(calculateAFRMM(100000)).toBe(25000);
-      expect(calculateAFRMM(200000)).toBe(50000);
+    it('deve calcular 8% do frete marítimo (longo curso, Lei 14.301/2022)', () => {
+      expect(calculateAFRMM(100000)).toBe(8000);
+      expect(calculateAFRMM(200000)).toBe(16000);
     });
   });
 

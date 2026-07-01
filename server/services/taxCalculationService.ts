@@ -42,8 +42,9 @@ const ICMS_ANTECIPADO_SC_APOS_36M = 100;
 /** ICMS Antecipado SC - TTD 409 primeiros 36 meses (2,6%) */
 const ICMS_ANTECIPADO_SC_PRIMEIROS_36M = 260;
 
-/** AFRMM - Adicional ao Frete para Renovação da Marinha Mercante (25%) */
-const AFRMM_RATE = 2500;
+/** AFRMM - Adicional ao Frete para Renovação da Marinha Mercante.
+ *  Longo curso = 8% (Lei 14.301/2022 — BR do Mar; reduziu de 25% p/ 8%). */
+const AFRMM_RATE = 800;
 
 /** Taxa Siscomex base (R$ 185,00 = 18500 centavos) */
 const SISCOMEX_BASE_CENTS = 18500;
