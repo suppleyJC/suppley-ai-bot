@@ -156,6 +156,17 @@
 ---
 
 ## 🔜 Falta implementar (backlog priorizado)
+0. **Planilha fiel ao "modelo 2" (importação própria + revenda) — Fase A (EM ANDAMENTO)**:
+   espelhar estrutura/layout/fórmulas do modelo do contador; **royalties oculto**;
+   "Demais Despesas" itemizadas puxando do **porto selecionado**; despachante fixo.
+   - **Fase B (pendência):** dados oficiais por porto — carregar tabela real do
+     terminal (ex.: **Portonave/Navegantes v02/2026** — armazenagem 0,68% CIF nos
+     1ºs 5 dias, mín. R$ 1.523/contêiner, escalonando por dias). `port_costs`
+     precisa de campos de mínimo/por-contêiner e faixas por dia.
+   - **Fase C (PENDÊNCIA — ramificações):** cenários por **modalidade**
+     (própria · conta e ordem · encomenda) × **finalidade** (consumo · revenda),
+     com a Excambia perguntando no chat e montando a planilha certa. Gabaritos:
+     modelo 1 (conta e ordem) e modelo 2 (própria + revenda); "encomenda" a validar.
 1. **Automação do ramo Cotação e RFQ** (fluxo do "desenvolvimento do zero"):
    selecionar fornecedores → disparar RFQ a partir do histórico do chat →
    consolidar retornos → cálculo → decisão. O subsistema de RFQ já existe

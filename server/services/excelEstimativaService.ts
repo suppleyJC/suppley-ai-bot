@@ -135,6 +135,9 @@ export async function generateEstimativaExcel(
   invTot.font = { bold: true };
   invTot.getCell(6).numFmt = MONEY;
   [34, 14, 9, 10, 14, 14, 14, 14, 12, 12, 13].forEach((w, i) => (inv.getColumn(i + 1).width = w));
+  // Colunas de royalties ocultas (I=Royalties Un., J=Royalties Total).
+  inv.getColumn(9).hidden = true;
+  inv.getColumn(10).hidden = true;
 
   // ============================================================
   // ABA 2 — CUSTO MERCADORIA (params + grade por item)
@@ -192,6 +195,9 @@ export async function generateEstimativaExcel(
     cell.numFmt = fmt;
     fillCell(cell, COLORS.param);
   });
+  // Royalties ocultos (declarado = real; sem subfaturamento). A célula permanece
+  // para as fórmulas que a referenciam (assessoria/comprador), mas a linha some.
+  if (PARAMS["ROYALTIES"]) ws.getRow(PARAMS["ROYALTIES"]).hidden = true;
   const P = (k: string) => `$C$${PARAMS[k]}`;
 
   // ---- Definição das colunas da grade ----
