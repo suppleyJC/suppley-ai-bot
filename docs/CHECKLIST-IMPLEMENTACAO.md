@@ -168,3 +168,9 @@
 4. **Anexar cotação no chat → cálculo → operação** de forma 100% guiada
    (parcialmente pronto via `createFromCalculation`).
 5. **Relatórios/painel executivo** de operações (custos, prazos, margem agregada).
+6. **Piloto Managed Agents (Anthropic) — Excambia proativa** (estudo/POC): agente
+   AGENDADO isolado (não toca a Excambia de produção) para um caso autônomo de
+   alto valor — ex.: "vigia de janela de compra" diário usando os dados atuais via
+   MCP/custom tool + notificação. Prova a superfície (versionamento, deployments
+   agendados, contêiner/sandbox, memory stores, multi-agente) antes de avaliar
+   mover o "cérebro" da Excambia. Motor/dados permanecem no servidor próprio.
