@@ -76,6 +76,13 @@ export const CALC_SCHEMA_PROPERTIES = {
       "Modal logístico da importação. Afeta o AFRMM (incide só no marítimo). " +
       "Pergunte se não souber.",
   },
+  portoCode: {
+    type: "string",
+    description:
+      "Código do terminal/porto de desembaraço (ex.: BRNAV = Navegantes/Portonave, " +
+      "BRSSZ = Santos, BRIOA = Itajaí). Se informado, as despesas portuárias " +
+      "(armazenagem, liberação, expediente) vêm da tabela oficial do porto.",
+  },
   ttdFase: {
     type: "string",
     description: "Fase do TTD/benefício estadual de SC: 'primeiros_36m' (2,6%) ou 'apos_36m' (1,0%)",
@@ -151,6 +158,7 @@ export function mapArgsToEstimativaInput(
     taxRegime: args.regimeTributario as estimativaService.EstimativaInput["taxRegime"],
     estadoDestino: typeof args.estadoDestino === "string" ? args.estadoDestino : undefined,
     paisOrigem: typeof args.paisOrigem === "string" ? args.paisOrigem : undefined,
+    portoCode: typeof args.portoCode === "string" ? args.portoCode : undefined,
     modal: mapModal(args.modal),
     ttdPhase: mapTtdPhase(args.ttdFase),
     incluirComprador: args.incluirComprador === true,

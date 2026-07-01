@@ -33,6 +33,7 @@ const estimativaSchema = z.object({
   freight: z.number().min(0).default(0),
   insurance: z.number().min(0).default(0),
 
+  portoCode: z.string().optional(),
   afrmmBrl: z.number().min(0).optional(),
   siscomexBrl: z.number().min(0).optional(),
   liberacaoBlBrl: z.number().min(0).optional(),

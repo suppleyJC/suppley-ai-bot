@@ -474,7 +474,20 @@ function buildEstSheet(
   r++;
 
   section("CUSTOS ADUANEIROS");
-  put("Demais despesas (BL, armazenagem, frete interno, despacho)", s.demaisDespesasTotal, { formula: refTot("demais") });
+  // Itemiza as "Demais Despesas" quando há quebra (porto/despachante); senão, linha única.
+  const bd = (result as unknown as { despesasBreakdown?: {
+    liberacaoBl: number; armazenagem: number; freteInterno: number;
+    despacho: number; expediente: number; portoCode: string | null;
+  } }).despesasBreakdown;
+  if (bd) {
+    put(`Armazenagem${bd.portoCode ? ` (${bd.portoCode})` : ""}`, bd.armazenagem);
+    put("Liberação de BL", bd.liberacaoBl);
+    put("Frete interno", bd.freteInterno);
+    put("Comissão Despacho Aduaneiro", bd.despacho);
+    put("Taxa de Expediente", bd.expediente);
+  } else {
+    put("Demais despesas (BL, armazenagem, frete interno, despacho)", s.demaisDespesasTotal, { formula: refTot("demais") });
+  }
   put("AFRMM", s.afrmmTotal, { formula: refTot("afrmm") });
   put("Total", s.customsCostsTotal, { bold: true });
   r++;

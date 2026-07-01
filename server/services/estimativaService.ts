@@ -7,7 +7,8 @@
  *  - Aplicar defaults da legislação (TTD 409, Res. 13/2012, LC 224/2025)
  *    permitindo override de qualquer parâmetro
  */
-import { getNcmTaxRate, getActiveNcmException } from "../db";
+import { getNcmTaxRate, getActiveNcmException, getActiveTaxParameters } from "../db";
+import { resolvePortCosts } from "./portCostService";
 import {
   calculateImportCost,
   type EngineGlobalInput,
@@ -65,8 +66,12 @@ export interface EstimativaInput {
    */
   modal?: ModalLogistico;
 
+  /** Terminal/porto de desembaraço (ex.: BRNAV). Se informado, as despesas
+   *  portuárias (armazenagem/liberação/expediente) vêm da tabela do porto. */
+  portoCode?: string;
+
   // Custos em BRL (todos opcionais)
-  afrmmBrl?: number;            // default: 25% do frete em BRL
+  afrmmBrl?: number;            // default: 8% do frete em BRL (longo curso)
   siscomexBrl?: number;         // default: R$ 154,23
   liberacaoBlBrl?: number;
   armazenagemBrl?: number;
@@ -120,8 +125,17 @@ export interface EstimativaInput {
   };
 }
 
+export interface DespesasBreakdown {
+  liberacaoBl: number;
+  armazenagem: number;
+  freteInterno: number;
+  despacho: number;
+  expediente: number;
+  portoCode: string | null;
+}
 export interface EstimativaResult extends EngineResult {
   ncmWarnings: string[];
+  despesasBreakdown?: DespesasBreakdown;
 }
 
 /** Defaults de PIS/COFINS de venda por regime */
@@ -215,14 +229,41 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
     });
   }
 
+  // ---- Demais Despesas (itemizadas; puxam do porto quando informado) ----
+  // CIF em BRL p/ a armazenagem (% do CIF com piso). FOB dos itens × câmbio + frete/seguro.
+  const fobBrlTotal = items.reduce((a, it) => a + it.unitPriceFob * it.quantity, 0) * input.exchangeRate;
+  const cifBrl = fobBrlTotal + (input.freight ?? 0) * input.exchangeRate + (input.insurance ?? 0) * input.exchangeRate;
+
+  let armazenagemBrl = input.armazenagemBrl ?? 0;
+  let liberacaoBlBrl = input.liberacaoBlBrl ?? 0;
+  let taxaExpedienteBrl = input.taxaExpedienteBrl ?? 0;
+  if (input.portoCode) {
+    const pc = await resolvePortCosts(input.portoCode, Math.round(cifBrl * 100));
+    armazenagemBrl = input.armazenagemBrl ?? pc.storageCents / 100;
+    liberacaoBlBrl = input.liberacaoBlBrl ?? pc.liberationCents / 100;
+    taxaExpedienteBrl = input.taxaExpedienteBrl ?? pc.otherCents / 100;
+  }
+  // Despachante: valor fixo (parâmetro CUSTOMS_BROKER) quando não informado.
+  let despachoAduaneiroBrl = input.despachoAduaneiroBrl ?? 0;
+  if (input.despachoAduaneiroBrl == null) {
+    const params = await getActiveTaxParameters();
+    if (params["CUSTOMS_BROKER"]?.valueCents != null) despachoAduaneiroBrl = params["CUSTOMS_BROKER"]!.valueCents! / 100;
+  }
+  const freteInternoBrl = input.freteInternoBrl ?? 0;
+
+  const despesasBreakdown = {
+    liberacaoBl: liberacaoBlBrl,
+    armazenagem: armazenagemBrl,
+    freteInterno: freteInternoBrl,
+    despacho: despachoAduaneiroBrl,
+    expediente: taxaExpedienteBrl,
+    portoCode: input.portoCode ?? null,
+  };
+
   // ---- Montar globais ----
   const saleDefaults = SALE_TAX_DEFAULTS[input.taxRegime];
   const demaisDespesas =
-    (input.liberacaoBlBrl ?? 0) +
-    (input.armazenagemBrl ?? 0) +
-    (input.freteInternoBrl ?? 0) +
-    (input.despachoAduaneiroBrl ?? 0) +
-    (input.taxaExpedienteBrl ?? 0);
+    liberacaoBlBrl + armazenagemBrl + freteInternoBrl + despachoAduaneiroBrl + taxaExpedienteBrl;
 
   const icmsAntecipado =
     input.icmsAntecipadoRateOverride ??
@@ -315,5 +356,5 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
   };
 
   const result = calculateImportCost(globals, items);
-  return { ...result, ncmWarnings };
+  return { ...result, ncmWarnings, despesasBreakdown };
 }
