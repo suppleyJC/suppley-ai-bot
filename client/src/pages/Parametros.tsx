@@ -35,6 +35,14 @@ const CATEGORY_LABEL: Record<string, string> = {
 export default function Parametros() {
   return (
     <div className="mx-auto max-w-6xl p-6">
+      <ParametrosPanel />
+    </div>
+  );
+}
+
+export function ParametrosPanel() {
+  return (
+    <>
       <header className="mb-6">
         <div className="flex items-center gap-2.5">
           <SlidersHorizontal className="h-6 w-6 text-violet-600" />
@@ -62,7 +70,7 @@ export default function Parametros() {
         <TabsContent value="beneficios"><BeneficiosTab /></TabsContent>
         <TabsContent value="rota"><RotaImportacaoTab /></TabsContent>
       </Tabs>
-    </div>
+    </>
   );
 }
 
