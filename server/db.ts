@@ -22,3 +22,4 @@ export * from "./db/industriesDb";
 export * from "./db/messagingDb";
 export * from "./db/proformaDb";
 export * from "./db/parametrosDb";
+export * from "./db/usageDb";

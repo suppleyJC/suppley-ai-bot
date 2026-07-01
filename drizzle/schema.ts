@@ -2061,3 +2061,22 @@ export const ncmExceptions = mysqlTable("ncm_exceptions", {
 }));
 export type NcmException = typeof ncmExceptions.$inferSelect;
 export type InsertNcmException = typeof ncmExceptions.$inferInsert;
+
+/**
+ * LLM Usage — medição de tokens/custo por chamada (para escalar com visibilidade).
+ * input_tokens do Anthropic é o input NÃO cacheado; cache_* vêm separados.
+ */
+export const llmUsage = mysqlTable("llm_usage", {
+  id: int("id").autoincrement().primaryKey(),
+  model: varchar("model", { length: 60 }).notNull(),
+  source: varchar("source", { length: 40 }), // excambia | especialista | relatorio | ...
+  promptTokens: int("promptTokens").default(0).notNull(),        // input não cacheado
+  completionTokens: int("completionTokens").default(0).notNull(),
+  cacheCreationTokens: int("cacheCreationTokens").default(0).notNull(), // escrita de cache (~1,25x)
+  cacheReadTokens: int("cacheReadTokens").default(0).notNull(),         // leitura de cache (~0,1x)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+  byCreated: index("idx_llm_usage_created").on(t.createdAt),
+}));
+export type LlmUsage = typeof llmUsage.$inferSelect;
+export type InsertLlmUsage = typeof llmUsage.$inferInsert;

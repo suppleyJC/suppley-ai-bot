@@ -1,4 +1,5 @@
 import { ENV } from "./env";
+import { recordLlmUsage } from "../db/usageDb";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
@@ -367,7 +368,12 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   };
 
   if (systemPrompt) {
-    payload.system = systemPrompt;
+    // Prompt caching: um breakpoint no bloco de system cacheia TOOLS + SYSTEM
+    // (render: tools → system → messages). O prefixo estável (prompt + ~22 schemas
+    // + memória) para de ser cobrado cheio a cada turno/mensagem (~0,1x na releitura).
+    payload.system = [
+      { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
+    ];
   }
 
   // Nome da tool sintética usada para saída estruturada (se aplicável).
@@ -439,6 +445,17 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   }
 
   const result = await response.json() as any;
+
+  // Medição de tokens/custo (fire-and-forget; inclui cache read/write).
+  if (result.usage) {
+    void recordLlmUsage({
+      model: result.model ?? (model || MODELS.smart),
+      promptTokens: result.usage.input_tokens ?? 0,
+      completionTokens: result.usage.output_tokens ?? 0,
+      cacheCreationTokens: result.usage.cache_creation_input_tokens ?? 0,
+      cacheReadTokens: result.usage.cache_read_input_tokens ?? 0,
+    }).catch(() => {});
+  }
 
   // Converter resposta Anthropic para formato genérico InvokeResult
   const toolCalls = result.content

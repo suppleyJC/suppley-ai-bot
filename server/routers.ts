@@ -31,6 +31,7 @@ import { conversasRouter } from "./routers/conversasRouter";
 import { fase5Router } from "./routers/fase5Router";
 import { proformaRouter } from "./routers/proformaRouter";
 import { parametrosRouter } from "./routers/parametrosRouter";
+import { usageRouter } from "./routers/usageRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -65,6 +66,8 @@ export const appRouter = router({
   proforma: proformaRouter,
   // Parâmetros de Cálculo — tributos/taxas/portos/ex-tarifário/benefícios versionados
   parametros: parametrosRouter,
+  // Medição de uso/custo de IA (tokens por modelo)
+  usage: usageRouter,
   // Motor V2 endpoints (paralelos ao sistema existente)
   estimativa: estimativaRouter,
   operations: operationsRouter,
