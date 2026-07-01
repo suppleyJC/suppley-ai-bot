@@ -2020,7 +2020,8 @@ export const portCosts = mysqlTable("port_costs", {
   stateCode: varchar("stateCode", { length: 2 }).notNull(),
   modal: varchar("modal", { length: 20 }).default("maritimo").notNull(), // maritimo | aereo | rodoviario
   thcCents: bigint("thcCents", { mode: "number" }).default(0).notNull(),
-  storageBp: int("storageBp").default(0).notNull(), // % do CIF em bp (1,5% = 150)
+  storageBp: int("storageBp").default(0).notNull(), // % do CIF em bp (0,68% = 68) — 1º período
+  storageMinCents: bigint("storageMinCents", { mode: "number" }).default(0).notNull(), // mínimo de armazenagem por contêiner (centavos)
   liberationCents: bigint("liberationCents", { mode: "number" }).default(0).notNull(),
   otherCents: bigint("otherCents", { mode: "number" }).default(0).notNull(), // capatazia/extras
   effectiveDate: timestamp("effectiveDate").notNull(),

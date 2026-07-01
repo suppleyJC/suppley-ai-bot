@@ -114,6 +114,7 @@ export async function upsertPortCost(data: InsertPortCost): Promise<void> {
       stateCode: data.stateCode,
       thcCents: data.thcCents,
       storageBp: data.storageBp,
+      storageMinCents: data.storageMinCents,
       liberationCents: data.liberationCents,
       otherCents: data.otherCents,
       legalBasis: data.legalBasis,

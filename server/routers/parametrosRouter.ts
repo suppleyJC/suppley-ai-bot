@@ -51,6 +51,7 @@ export const parametrosRouter = router({
           modal: z.enum(["maritimo", "aereo", "rodoviario"]).default("maritimo"),
           thcCents: z.number().int().nonnegative(),
           storageBp: z.number().int().nonnegative(),
+          storageMinCents: z.number().int().nonnegative().default(0),
           liberationCents: z.number().int().nonnegative(),
           otherCents: z.number().int().nonnegative().default(0),
           effectiveDate: z.coerce.date(),

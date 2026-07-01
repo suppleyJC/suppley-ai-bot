@@ -216,6 +216,7 @@ function PortosTab() {
 function PortoDialog({ row, onClose, onSaved }: { row: any; onClose: () => void; onSaved: () => void }) {
   const [thc, setThc] = useState((row.thcCents / 100).toString());
   const [storage, setStorage] = useState((row.storageBp / 100).toString());
+  const [storageMin, setStorageMin] = useState(((row.storageMinCents ?? 0) / 100).toString());
   const [liberation, setLiberation] = useState((row.liberationCents / 100).toString());
   const save = trpc.parametros.ports.save.useMutation({
     onSuccess: () => { toast.success("Porto atualizado"); onSaved(); },
@@ -226,6 +227,7 @@ function PortoDialog({ row, onClose, onSaved }: { row: any; onClose: () => void;
       portCode: row.portCode, portName: row.portName, stateCode: row.stateCode, modal: row.modal,
       thcCents: Math.round(Number(thc.replace(",", ".")) * 100),
       storageBp: Math.round(Number(storage.replace(",", ".")) * 100),
+      storageMinCents: Math.round(Number(storageMin.replace(",", ".")) * 100),
       liberationCents: Math.round(Number(liberation.replace(",", ".")) * 100),
       otherCents: row.otherCents ?? 0,
       effectiveDate: new Date(),
@@ -238,7 +240,8 @@ function PortoDialog({ row, onClose, onSaved }: { row: any; onClose: () => void;
         <DialogHeader><DialogTitle>{row.portName}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <Field label="THC (R$)"><Input value={thc} onChange={(e) => setThc(e.target.value)} /></Field>
-          <Field label="Armazenagem (% do CIF)"><Input value={storage} onChange={(e) => setStorage(e.target.value)} /></Field>
+          <Field label="Armazenagem (% do CIF — 1º período)"><Input value={storage} onChange={(e) => setStorage(e.target.value)} /></Field>
+          <Field label="Armazenagem mín. (R$/contêiner)"><Input value={storageMin} onChange={(e) => setStorageMin(e.target.value)} placeholder="ex: 1523" /></Field>
           <Field label="Liberação (R$)"><Input value={liberation} onChange={(e) => setLiberation(e.target.value)} /></Field>
         </div>
         <DialogFooter>

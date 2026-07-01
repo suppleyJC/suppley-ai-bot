@@ -19,11 +19,15 @@ export interface ResolvedPortCosts {
 export async function resolvePortCosts(
   portCode: string,
   cifValueCents: number,
+  numContainers = 1,
 ): Promise<ResolvedPortCosts> {
   const row = await getActivePortCost(portCode);
   if (row) {
     const thcCents = row.thcCents;
-    const storageCents = Math.round((cifValueCents * row.storageBp) / 10000);
+    // Armazenagem 1º período: % do CIF, com piso (mínimo por contêiner).
+    const storagePct = Math.round((cifValueCents * row.storageBp) / 10000);
+    const storageFloor = (row.storageMinCents ?? 0) * Math.max(1, numContainers);
+    const storageCents = Math.max(storagePct, storageFloor);
     const liberationCents = row.liberationCents;
     const otherCents = row.otherCents;
     return {
