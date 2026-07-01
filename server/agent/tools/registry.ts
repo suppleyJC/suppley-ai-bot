@@ -31,6 +31,7 @@ import { precificarReferenciaTool } from "./precificarReferencia";
 import { registrarMemoriaTool } from "./registrarMemoria";
 import { compararRotasImportacaoTool } from "./compararRotasImportacao";
 import { calcularCubagemTool } from "./calcularCubagem";
+import { precificacaoNacionalTool, depreciacaoAtivoTool } from "./precificacaoNacional";
 
 /** Tools de capacidade direta — o "chão de fábrica" que os especialistas acionam. */
 export const BASE_TOOLS: AgentTool[] = [
@@ -59,6 +60,9 @@ export const BASE_TOOLS: AgentTool[] = [
   compararRotasImportacaoTool,
   // Cubagem — quantas unidades cabem em 20'/40'/40HC (volume + peso)
   calcularCubagemTool,
+  // Apoio a cenários nacionais (fora do foco): precificação/CMV e depreciação de ativo
+  precificacaoNacionalTool,
+  depreciacaoAtivoTool,
   // Fase 5 — buscas (lado leitura do ciclo de inteligência)
   buscarAtivoTool,
   compararOrigemTool,
