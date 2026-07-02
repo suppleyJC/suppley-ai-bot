@@ -1,16 +1,23 @@
 /**
- * Excel Estimativa Service — gera a pasta de trabalho no LAYOUT DO MODELO de
- * referência ("Escoras · Trade · Lucro Real x Lucro Real"), com FÓRMULAS VIVAS:
- * o destinatário pode alterar câmbio, FOB, alíquotas ou despesas e tudo
+ * Excel Estimativa Service — réplica 1:1 do modelo de referência
+ * "Custo_Importacao_..." (última base ajustada com o usuário), com FÓRMULAS
+ * VIVAS: o destinatário altera câmbio, frete, alíquotas ou despesas e tudo
  * recalcula no próprio Excel.
  *
- * Abas (espelham o modelo):
- *  1. INVOICE                          — fatura/packing list (com colunas de
- *     royalties, zeradas por padrão — sem subfaturamento: declarado = real)
- *  2. CUSTO MERCADORIA - IMP. PRÓPRIA  — grade por item: nacionalização +
- *     venda do IMPORTADOR + venda do COMPRADOR (Lucro Real)
- *  3. EST. DE CUSTO - IMP. PRÓPRIA     — consolidação, NF-e, ESTIMATIVA DE VENDA
- *     DO IMPORTADOR, GANHO DA OPERAÇÃO e ESTIMATIVA DO COMPRADOR (Lucro Real)
+ * FIDELIDADE: o layout replica o modelo célula a célula — posições fixas:
+ *  1. INVOICE                          — banner B1:L1, cabeçalho 2:3,
+ *     itens nas linhas 4..29 (não usadas ficam ocultas), totais na linha 30.
+ *  2. CUSTO MERCADORIA - IMP. PRÓPRIA  — título B2, blocos de parâmetros
+ *     (B5:E9 / G5:H9 / Demais Despesas B12:E18 / Pacote+Royalties B21:E22),
+ *     banners na linha 24, cabeçalho na 25, itens 26..51 (ocultas as não
+ *     usadas), totais na 52. Colunas fixas B..AM (custo) e AO..AY (venda).
+ *  3. EST. DE CUSTO - IMP. PRÓPRIA     — consolidação (linhas 1..135 idênticas
+ *     ao modelo) + ACRÉSCIMOS acordados abaixo da área espelhada (GANHO DA
+ *     OPERAÇÃO, cenário do COMPRADOR — Lucro Real e AVISOS).
+ *
+ * Como as grades têm posição fixa, TODAS as referências cruzadas são
+ * estáticas e idênticas às do modelo (ex.: D6='=J52', E22='=INVOICE!K30*H7',
+ * AR26="='EST. DE CUSTO - IMP. PRÓPRIA'!H$97").
  *
  * Modos:
  *  - "internal": visão da trading (mostra o ganho do benefício/operação).
@@ -21,30 +28,36 @@
  * mas os números base vêm do motor — nunca do LLM.
  */
 import ExcelJS from "exceljs";
-import type { EngineResult, EngineItemResult } from "./importCostEngine";
+import type { EngineResult } from "./importCostEngine";
 
 const SHEET_INVOICE = "INVOICE";
 const SHEET_CUSTO = "CUSTO MERCADORIA - IMP. PRÓPRIA";
 const SHEET_EST = "EST. DE CUSTO - IMP. PRÓPRIA";
 
-const COLORS = {
-  header: "FF311260",   // roxo SUPPLEY
-  accent: "FF28E7C5",   // turquesa
-  buyer: "FF1AA885",    // verde (bloco comprador)
-  light: "FFF3F4F6",
-  param: "FFFFFF00",    // amarelo (células editáveis) — espelha o modelo
-  white: "FFFFFFFF",
-  section: "FFEDE7F6",
-  bandHeader: "FFD9D2E9", // lavanda (cabeçalhos de bloco)
-};
-const MONEY = "#,##0.00";
-const MONEY_BRL = '"R$"\\ #,##0.00';
-const MONEY_USD = '"$"\\ #,##0.00';
-const PCT = "0.00%";
+// Cores do modelo (tema Office: Azul Accent1 -50% = 1F3864).
+const DARK = "FF1F3864";   // cabeçalhos/faixas (texto branco)
+const WHITE = "FFFFFFFF";
+const YELLOW = "FFFFFF00"; // células editáveis (inputs)
+const ITEM_TEXT = "FF222A35"; // texto das linhas por item na aba EST
+
+// Formatos numéricos (idênticos aos do modelo)
+const BRL = '_-[$R$-416]\\ * #,##0.00_-;\\-[$R$-416]\\ * #,##0.00_-;_-[$R$-416]\\ * \\-??_-;_-@_-';
+const BRL2 = '_-"R$ "* #,##0.00_-;"-R$ "* #,##0.00_-;_-"R$ "* \\-??_-;_-@_-';
+const USD = '_-[$$-409]* #,##0.00_ ;_-[$$-409]* \\-#,##0.00\\ ;_-[$$-409]* \\-??_ ;_-@_ ';
+const FX4 = '_-"R$ "* #,##0.0000_-;"-R$ "* #,##0.0000_-;_-"R$ "* \\-??_-;_-@_-';
+const NUM2 = '_ * #,##0.00_ ;_ * \\-#,##0.00_ ;_ * \\-??_ ;_ @_ ';
+const NUM4 = '_ * #,##0.0000_ ;_ * \\-#,##0.0000_ ;_ * \\-??_ ;_ @_ ';
+const USD_P = '_(\\$* #,##0.00_);_(\\$* \\(#,##0.00\\);_(\\$* \\-??_);_(@_)';
+const USD_P4 = '_(\\$* #,##0.0000_);_(\\$* \\(#,##0.0000\\);_(\\$* \\-??_);_(@_)';
+const USD_CN = '_-[$$-4809]* #,##0.00_-;\\-[$$-4809]* #,##0.00_-;_-[$$-4809]* \\-??_-;_-@_-';
+const RS_PLAIN = '"R$ "#,##0.00';
+const PCT2 = "0.00%";
 const PCT3 = "0.000%";
-const THIN = { style: "thin" as const, color: { argb: "FFBBBBBB" } };
-const ALL_BORDERS = { top: THIN, bottom: THIN, left: THIN, right: THIN };
-const isMoney = (f?: string) => f === MONEY || f === MONEY_BRL || f === MONEY_USD;
+const INT = "0";
+const MKP4 = "0.0000";
+
+const THIN = { style: "thin" as const };
+const BOX = { top: THIN, bottom: THIN, left: THIN, right: THIN };
 
 export interface ExcelEstimativaOptions {
   quotationName: string;
@@ -56,36 +69,81 @@ export interface ExcelEstimativaOptions {
   currency?: string;
 }
 
-// ============================================================
-// Helpers de coluna/estilo
-// ============================================================
-function colLetter(n: number): string {
-  let s = "";
-  while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
-  return s;
-}
-function regimeLabel(r: string) {
-  return r === "lucro_real" ? "Lucro Real" : r === "lucro_presumido" ? "Lucro Presumido" : "Simples Nacional";
-}
-function styleTitle(row: ExcelJS.Row) {
-  row.font = { bold: true, size: 13, color: { argb: COLORS.header } };
-}
-function fillCell(cell: ExcelJS.Cell, argb: string) {
+// Capacidade das grades do modelo (INVOICE 4..29 / CUSTO 26..51 / EST 63..88).
+const MAX_ITEMS = 26;
+
+// Linhas-âncora fixas (idênticas ao modelo)
+const INV_ITEM0 = 4;   // primeiro item da INVOICE
+const INV_LAST = 29;   // última linha da grade INVOICE
+const INV_TOT = 30;    // totais INVOICE
+const CM_ITEM0 = 26;   // primeiro item do CUSTO MERCADORIA
+const CM_LAST = 51;    // última linha da grade
+const CM_TOT = 52;     // totais
+const EST_ITEM0 = 63;  // grade "custo líquido por item"
+const EST_LAST = 88;
+const EST_TOT = 89;
+const ESTV_ITEM0 = 109; // grade "estimativa de venda por item"
+const ESTV_LAST = 134;
+const ESTV_TOT = 135;
+
+type CellVal = ExcelJS.CellValue;
+
+function fill(cell: ExcelJS.Cell, argb: string) {
   cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb } };
 }
 
-// ============================================================
-// Definição da grade da aba CUSTO MERCADORIA (colunas fixas)
-// ============================================================
-interface GridCol {
-  key: string;
-  header: string;
+/** Pinta uma região de branco com a fonte-base da aba (fundo do modelo). */
+function paintWhite(ws: ExcelJS.Worksheet, rows: number, cols: number, size: number) {
+  for (let r = 1; r <= rows; r++) {
+    const row = ws.getRow(r);
+    for (let c = 1; c <= cols; c++) {
+      const cell = row.getCell(c);
+      fill(cell, WHITE);
+      cell.font = { size };
+    }
+  }
+}
+
+interface SetOpts {
   fmt?: string;
-  group: "id" | "nac" | "imp" | "buyer";
-  /** Valor do motor para a linha do item. */
-  value: (it: EngineItemResult, idx: number) => number | string | undefined;
-  /** Fórmula Excel viva. `C` resolve a letra de outra coluna; `P` resolve param. `inv` = linha na INVOICE. */
-  formula?: (r: number, C: (k: string) => string, P: (k: string) => string, inv: number) => string;
+  bold?: boolean;
+  size?: number;
+  color?: string;      // cor da fonte (argb)
+  bg?: string;         // fill (argb)
+  al?: "left" | "center" | "right";
+  wrap?: boolean;
+  border?: Partial<ExcelJS.Borders> | true;
+}
+
+function set(ws: ExcelJS.Worksheet, ref: string, value: CellVal, o: SetOpts = {}): ExcelJS.Cell {
+  const cell = ws.getCell(ref);
+  if (value !== undefined) cell.value = value;
+  const size = o.size ?? (cell.font?.size as number | undefined);
+  cell.font = { size, bold: o.bold, color: o.color ? { argb: o.color } : undefined };
+  if (o.bg) fill(cell, o.bg);
+  if (o.fmt) cell.numFmt = o.fmt;
+  if (o.al || o.wrap) cell.alignment = { horizontal: o.al, vertical: "middle", wrapText: o.wrap };
+  if (o.border) cell.border = o.border === true ? BOX : o.border;
+  return cell;
+}
+
+/** Célula de rótulo escuro (branco sobre azul-escuro), padrão do modelo. */
+function dark(ws: ExcelJS.Worksheet, ref: string, text: string, o: SetOpts = {}) {
+  return set(ws, ref, text, { bold: true, color: WHITE, bg: DARK, border: true, ...o });
+}
+
+function fx(formula: string, result?: number | string): ExcelJS.CellValue {
+  return { formula, result } as ExcelJS.CellValue;
+}
+
+function regimeLabel(r: string) {
+  return r === "lucro_real" ? "Lucro Real" : r === "lucro_presumido" ? "Lucro Presumido" : "Simples Nacional";
+}
+
+/** Formata fração como literal de porcentagem p/ fórmula (ex.: 0.025 → "2.5%"). */
+function pctLit(frac: number): string {
+  const v = Math.round(frac * 1e6) / 1e4; // até 4 casas na %
+  return `${v}%`;
 }
 
 export async function generateEstimativaExcel(
@@ -96,579 +154,687 @@ export async function generateEstimativaExcel(
   wb.creator = "SUPPLEY Calc";
   wb.created = new Date();
   const s = result.summary;
+  const items = result.items.slice(0, MAX_ITEMS);
   const internal = opts.mode === "internal";
   const hasBuyer = !!s.buyer;
   const cur = opts.currency ?? "USD";
+  const n = items.length;
+  const fxRate = s.exchangeRate || 1;
 
   // ============================================================
-  // ABA 1 — INVOICE / PACKING LIST (espelha o modelo)
-  //  Colunas: A Description · B Size · C G.W(kg) · D Espec. · E Q'ty/Unit ·
-  //  F Unit price · G Amount · H Unit price dec. · I Amount dec. ·
-  //  J Royalties Un. · K Royalties Total · L NCM
+  // ABA 1 — INVOICE / PACKING LIST
   // ============================================================
   const inv = wb.addWorksheet(SHEET_INVOICE);
-  // Título "PACKING LIST" mesclado sobre todas as colunas (linha 1).
-  const invTitle = inv.getRow(1).getCell(1);
-  invTitle.value = "PACKING LIST";
-  inv.mergeCells(1, 1, 1, 12);
-  invTitle.alignment = { horizontal: "center", vertical: "middle" };
-  invTitle.font = { bold: true, size: 14, color: { argb: COLORS.white } };
-  fillCell(invTitle, COLORS.header);
-  inv.getRow(1).height = 24;
+  [40.7, 29.7, 8.0, 18.0, 11.5, 16.7, 13.8, 12.8, 13.7, 11.2, 13.2, 11.2]
+    .forEach((w, i) => (inv.getColumn(i + 1).width = w));
+  paintWhite(inv, INV_TOT, 12, 10);
 
-  const INV_HDR = 2;
-  const INV_ITEM0 = 3; // primeira linha de item
-  const invCols = [
-    "Description", "Size", "G.W (kg)", "Espec.", `Q'ty/Unit`, `Unit price (${cur})`, "Amount",
-    "Unit price dec.", "Amount dec.", "Royalties Un.", "Royalties Total", "NCM",
+  // Banner "PACKING LIST" (B1:L1) — branco com bordas, como o modelo.
+  inv.mergeCells("B1:L1");
+  set(inv, "B1", "PACKING LIST", { bold: true, size: 11, al: "center", border: true });
+  inv.getRow(1).height = 15;
+
+  // Cabeçalho nas linhas 2:3 (mescla vertical por coluna).
+  const invHeaders = [
+    "Description", "Size", "G.W (kg)", "Espec.", "Q'ty/Unit", `Unit price (${cur})`,
+    "Amount", "Unit price dec.", "Amount dec.", "Royalties Un.", "Royalties Total", "NCM",
   ];
-  const invHdr = inv.getRow(INV_HDR);
-  invCols.forEach((h, i) => (invHdr.getCell(i + 1).value = h));
-  invHdr.eachCell((cell) => {
-    cell.font = { bold: true, size: 10, color: { argb: COLORS.header } };
-    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-    fillCell(cell, COLORS.bandHeader);
-    cell.border = ALL_BORDERS;
+  invHeaders.forEach((h, i) => {
+    const colL = inv.getColumn(i + 1).letter;
+    inv.mergeCells(`${colL}2:${colL}3`);
+    set(inv, `${colL}2`, h, { bold: true, size: 10, al: "center", wrap: true, border: true });
   });
-  invHdr.height = 28;
 
-  result.items.forEach((it, i) => {
+  // Grade de itens (4..29): linhas não usadas ficam com o estilo do template.
+  for (let r = INV_ITEM0; r <= INV_LAST; r++) {
+    const row = inv.getRow(r);
+    for (let c = 1; c <= 12; c++) {
+      const cell = row.getCell(c);
+      cell.border = BOX;
+      cell.alignment = { horizontal: "center", vertical: "middle", wrapText: c <= 2 };
+      cell.font = { size: 10, bold: c === 7 }; // coluna G (Amount) é negrito no modelo
+    }
+    row.getCell(5).numFmt = INT;
+    row.getCell(6).numFmt = USD_P4;
+    row.getCell(7).numFmt = USD_CN;
+    row.getCell(8).numFmt = USD_P;
+    row.getCell(9).numFmt = USD_P;
+    row.getCell(10).numFmt = USD_P4;
+    row.getCell(11).numFmt = USD_P;
+  }
+  items.forEach((it, i) => {
     const r = INV_ITEM0 + i;
     const row = inv.getRow(r);
-    row.getCell(1).value = it.description;                 // A Description
-    row.getCell(2).value = "";                             // B Size
-    row.getCell(3).value = it.weightKgTotal || 0;          // C G.W (kg)
-    row.getCell(4).value = "";                             // D Espec.
-    row.getCell(5).value = it.quantity;                    // E Q'ty/Unit
-    row.getCell(6).value = it.unitPriceFob;                // F Unit price (real)
-    row.getCell(7).value = { formula: `E${r}*F${r}`, result: it.totalFob };   // G Amount
-    row.getCell(8).value = { formula: `F${r}`, result: it.unitPriceFob };     // H Unit price dec. = real (sem subfaturamento)
-    row.getCell(9).value = { formula: `E${r}*H${r}`, result: it.totalFob };   // I Amount dec.
-    row.getCell(10).value = { formula: `IF(F${r}>H${r},F${r}-H${r},0)`, result: 0 }; // J Royalties Un. = 0
-    row.getCell(11).value = { formula: `E${r}*J${r}`, result: 0 };            // K Royalties Total = 0
-    row.getCell(12).value = it.ncm;                        // L NCM
-    [6, 7, 8, 9].forEach((c) => (row.getCell(c).numFmt = MONEY_USD));
-    row.eachCell((cell) => { cell.alignment = { horizontal: "center", vertical: "middle" }; cell.border = ALL_BORDERS; });
-    row.getCell(1).alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+    row.getCell(1).value = it.description;
+    row.getCell(3).value = it.weightKgTotal || 0;
+    row.getCell(5).value = it.quantity;
+    row.getCell(6).value = it.unitPriceFob;
+    row.getCell(7).value = fx(`F${r}*E${r}`, it.totalFob);
+    // Sem subfaturamento: declarado = real ⇒ royalties zeram.
+    row.getCell(8).value = fx(`F${r}`, it.unitPriceFob);
+    row.getCell(9).value = fx(`H${r}*E${r}`, it.totalFob);
+    row.getCell(10).value = fx(`IF(H${r}>0,F${r}-H${r},0)`, 0);
+    row.getCell(11).value = fx(`J${r}*E${r}`, 0);
+    row.getCell(12).value = it.ncm;
+    // Altura proporcional à descrição (o modelo usa linhas altas).
+    row.height = Math.max(30, Math.min(160, Math.ceil(it.description.length / 40) * 16 + 14));
   });
-  const invTotR = INV_ITEM0 + result.items.length;
-  const invTot = inv.getRow(invTotR);
-  invTot.getCell(1).value = "TOTAL";
-  invTot.getCell(5).value = { formula: `SUM(E${INV_ITEM0}:E${invTotR - 1})`, result: result.items.reduce((a, i) => a + i.quantity, 0) };
-  invTot.getCell(7).value = { formula: `SUM(G${INV_ITEM0}:G${invTotR - 1})`, result: s.fobTotalFob };
-  invTot.getCell(9).value = { formula: `SUM(I${INV_ITEM0}:I${invTotR - 1})`, result: s.fobTotalFob };
-  invTot.getCell(11).value = { formula: `SUM(K${INV_ITEM0}:K${invTotR - 1})`, result: 0 };
-  invTot.eachCell((cell) => { cell.font = { bold: true }; fillCell(cell, COLORS.light); cell.border = ALL_BORDERS; });
-  [7, 9].forEach((c) => (invTot.getCell(c).numFmt = MONEY_USD));
-  [40, 24, 9, 12, 11, 16, 14, 13, 14, 11, 13, 12].forEach((w, i) => (inv.getColumn(i + 1).width = w));
-  // Colunas de royalties ocultas (J=Royalties Un., K=Royalties Total).
-  inv.getColumn(10).hidden = true;
-  inv.getColumn(11).hidden = true;
+  // Linhas não usadas: mantém 1 sobrando visível; oculta o resto (como o modelo).
+  for (let r = INV_ITEM0 + n + 1; r <= INV_LAST - 1; r++) inv.getRow(r).hidden = true;
+  inv.getRow(INV_LAST).height = 12;
+
+  // Totais (linha 30) — SUM sobre toda a grade 4:29, como o modelo.
+  const totQty = items.reduce((a, i) => a + i.quantity, 0);
+  set(inv, `E${INV_TOT}`, fx(`SUM(E${INV_ITEM0}:E${INV_LAST})`, totQty), { bold: true, size: 10, fmt: INT, al: "center", border: true });
+  set(inv, `G${INV_TOT}`, fx(`SUM(G${INV_ITEM0}:G${INV_LAST})`, s.fobTotalFob), { bold: true, size: 10, fmt: USD_CN, al: "center", border: true });
+  set(inv, `I${INV_TOT}`, fx(`SUM(I${INV_ITEM0}:I${INV_LAST})`, s.fobTotalFob), { bold: true, size: 10, fmt: USD_P, al: "center", border: true });
+  set(inv, `K${INV_TOT}`, fx(`SUM(K${INV_ITEM0}:K${INV_LAST})`, 0), { bold: true, size: 10, fmt: USD_P, al: "center", border: true });
 
   // ============================================================
-  // ABA 2 — CUSTO MERCADORIA — espelha o modelo do contador:
-  //   • Título "ESTIMATIVA DE IMPORTAÇÃO"
-  //   • Bloco de parâmetros à esquerda (Valor Fob/Frete/Seguro/ADU) +
-  //     à direita (Peso/Taxa dólar/SISCOMEX/AFRMM) — células amarelas = input
-  //   • Bloco "Demais Despesas" itemizado + Pacote/Royalties
-  //   • Banner "CUSTO DE IMPORTAÇÃO" sobre a grade por item
-  // As fórmulas da grade referenciam essas células ($) — tudo recalcula no Excel.
+  // ABA 2 — CUSTO MERCADORIA - IMP. PRÓPRIA
   // ============================================================
-  const ws = wb.addWorksheet(SHEET_CUSTO);
+  const cm = wb.addWorksheet(SHEET_CUSTO);
+  const CM_WIDTHS: Record<string, number> = {
+    A: 3.3, B: 12.8, D: 18.2, E: 20.7, F: 14.7, G: 29.3, H: 14.7, J: 17.7, K: 14.7,
+    M: 18.5, N: 15.7, O: 17.0, P: 7.0, Q: 14.7, S: 20.3, T: 9.7, U: 19.3, V: 17.3,
+    W: 19.0, X: 7.0, Y: 22.2, Z: 10.7, AA: 17.2, AB: 11.5, AC: 17.0, AD: 13.2,
+    AE: 17.7, AF: 15.7, AG: 19.5, AH: 15.7, AI: 19.5, AJ: 19.7, AL: 23.7, AM: 18.2,
+    AN: 9.0, AO: 20.2, AP: 20.8, AQ: 16.2, AR: 9.2, AS: 19.8, AT: 10.0, AU: 18.3,
+    AV: 22.5, AW: 18.0, AX: 22.5, AY: 21.2,
+  };
+  Object.entries(CM_WIDTHS).forEach(([l, w]) => (cm.getColumn(l).width = w));
+  paintWhite(cm, CM_TOT + 2, 51 /* A..AY */, 12);
+  const RH: Record<number, number> = {
+    2: 30, 3: 18, 4: 15.75, 5: 15.75, 6: 15.75, 7: 15.75, 8: 15.75, 9: 15.75,
+    12: 15.75, 19: 15.75, 20: 15.75, 21: 15.75, 22: 15.75, 23: 27.75, 24: 39.75,
+    25: 49.5, 26: 51, 52: 15.75,
+  };
+  Object.entries(RH).forEach(([r, h]) => (cm.getRow(Number(r)).height = h));
 
-  // ---- taxas derivadas (base para as células de parâmetro) ----
-  const it0 = result.items[0];
+  // ---- Taxas derivadas do motor (parametrizam as fórmulas) ----
+  const it0 = items[0];
   const grossUp = it0 && it0.icmsBase > 0
     ? 1 - (it0.customsValueBrl + it0.afrmmBrl + it0.siscomexBrl + it0.iiValue + it0.ipiValue + it0.pisValue + it0.cofinsValue) / it0.icmsBase
     : 0.04;
-  const assessRate = it0 && it0.totalCostBeforeAssessoria > 0 ? it0.assessoriaValue / (s.royaltiesTotal * it0.shareOfValue + it0.totalCostBeforeAssessoria) : 0;
-  const icmsVendaRate = s.salePriceTotal > 0 ? s.icmsVendaTotal / s.salePriceTotal : 0.04;
-  const pisVendaRate = s.salePriceTotal > 0 ? s.pisVendaTotal / s.salePriceTotal : 0.0165;
-  const cofinsVendaRate = s.salePriceTotal > 0 ? s.cofinsVendaTotal / s.salePriceTotal : 0.076;
+  const grossDen = Math.round((1 - grossUp) * 1e4) / 1e4; // ex.: 0.96
+  const assessRate = it0 && it0.totalCostBeforeAssessoria > 0
+    ? it0.assessoriaValue / (s.royaltiesTotal * it0.shareOfValue + it0.totalCostBeforeAssessoria)
+    : 0;
 
-  // Referência de parâmetro por célula absoluta ($COL$LINHA). Preenchido abaixo.
-  const PARAMS: Record<string, string> = {};
-  const P = (k: string) => PARAMS[k] ?? "0";
+  // ---- Título ----
+  cm.mergeCells("B2:E2");
+  set(cm, "B2", "ESTIMATIVA DE IMPORTAÇÃO", { bold: true, size: 24, al: "center" });
 
-  // ---- Definição das colunas da grade ----
-  const cols: GridCol[] = [
-    { key: "item", header: "ITEM", group: "id", value: (_it, i) => i + 1 },
-    { key: "codigo", header: "CÓDIGO", group: "id", value: (it) => it.ncm },
-    { key: "qtd", header: "QUANTIDADE", group: "id", value: (it) => it.quantity, formula: (_r, _C, _P, inv) => `INVOICE!E${inv}` },
-    { key: "un", header: "UN.", group: "id", value: (it) => it.unit },
-    { key: "desc", header: "DESCRIÇÃO", group: "id", value: (it) => it.description, formula: (_r, _C, _P, inv) => `INVOICE!A${inv}` },
-    { key: "ncm", header: "NCM", group: "id", value: (it) => it.ncm, formula: (_r, _C, _P, inv) => `INVOICE!L${inv}` },
-    { key: "vunit", header: "VALOR UNITÁRIO", fmt: MONEY_USD, group: "nac", value: (it) => it.unitPriceFob, formula: (_r, _C, _P, inv) => `INVOICE!H${inv}` },
-    { key: "vtotal", header: "VALOR TOTAL", fmt: MONEY_USD, group: "nac", value: (it) => it.totalFob, formula: (r, C) => `${C("qtd")}${r}*${C("vunit")}${r}` },
-    { key: "peso", header: "PESO", fmt: "#,##0.00", group: "nac", value: (it) => it.weightKgTotal || 0 },
-    { key: "pvalor", header: "% VALOR", fmt: PCT3, group: "nac", value: (it) => it.shareOfValue, formula: (r, C, P) => `${C("vtotal")}${r}/${P("FOB_USD")}` },
-    { key: "fobbrl", header: "VALOR FOB R$", fmt: MONEY_BRL, group: "nac", value: (it) => it.fobBrl, formula: (r, C, P) => `${C("vtotal")}${r}*${P("FX")}` },
-    { key: "frete", header: "FRETE", fmt: MONEY_BRL, group: "nac", value: (it) => it.freightBrl, formula: (r, C, P) => `${P("FRETE_BRL")}*${C("pvalor")}${r}` },
-    { key: "adu", header: "VLR ADUANEIRO R$", fmt: MONEY_BRL, group: "nac", value: (it) => it.customsValueBrl, formula: (r, C) => `${C("fobbrl")}${r}+${C("frete")}${r}` },
-    { key: "afrmm", header: "AFRMM", fmt: MONEY_BRL, group: "nac", value: (it) => it.afrmmBrl, formula: (r, C, P) => `${P("AFRMM")}*${C("pvalor")}${r}` },
-    { key: "siscomex", header: "SISCOMEX", fmt: MONEY_BRL, group: "nac", value: (it) => it.siscomexBrl, formula: (r, C, P) => `${P("SISCOMEX")}*${C("pvalor")}${r}` },
-    { key: "demais", header: "DEMAIS DESPESAS", fmt: MONEY_BRL, group: "nac", value: (it) => it.demaisDespesasBrl, formula: (r, C, P) => `${P("DEMAIS")}*${C("pvalor")}${r}` },
-    { key: "iirate", header: "% II", fmt: PCT, group: "nac", value: (it) => it.iiRate },
-    { key: "ii", header: "VALOR II", fmt: MONEY_BRL, group: "nac", value: (it) => it.iiValue, formula: (r, C) => `${C("adu")}${r}*${C("iirate")}${r}` },
-    { key: "merc", header: "VALOR MERCADORIA", fmt: MONEY_BRL, group: "nac", value: (it) => it.merchandiseValue, formula: (r, C) => `${C("adu")}${r}+${C("ii")}${r}` },
-    { key: "ipirate", header: "% IPI", fmt: PCT, group: "nac", value: (it) => it.ipiRate },
-    { key: "ipi", header: "VALOR IPI", fmt: MONEY_BRL, group: "nac", value: (it) => it.ipiValue, formula: (r, C) => `${C("merc")}${r}*${C("ipirate")}${r}` },
-    { key: "pisrate", header: "% PIS", fmt: PCT, group: "nac", value: (it) => it.pisRate },
-    { key: "pis", header: "VALOR PIS-IMP", fmt: MONEY_BRL, group: "nac", value: (it) => it.pisValue, formula: (r, C) => `${C("adu")}${r}*${C("pisrate")}${r}` },
-    { key: "cofinsrate", header: "% COFINS", fmt: PCT, group: "nac", value: (it) => it.cofinsRate },
-    { key: "cofins", header: "VALOR COFINS-IMP", fmt: MONEY_BRL, group: "nac", value: (it) => it.cofinsValue, formula: (r, C) => `${C("adu")}${r}*${C("cofinsrate")}${r}` },
-    { key: "icmsbase", header: "BASE ICMS ANTEC.", fmt: MONEY_BRL, group: "nac", value: (it) => it.icmsBase, formula: (r, C, P) => `(${C("adu")}${r}+${C("afrmm")}${r}+${C("siscomex")}${r}+${C("ii")}${r}+${C("ipi")}${r}+${C("pis")}${r}+${C("cofins")}${r})/(1-${P("GROSSUP")})` },
-    { key: "icmsrate", header: "% ICMS", fmt: PCT, group: "nac", value: (it) => it.icmsClienteRate },
-    { key: "icms", header: "VALOR ICMS ANTEC.", fmt: MONEY_BRL, group: "nac", value: (it) => it.icmsClienteValue, formula: (r, C) => `${C("icmsbase")}${r}*${C("icmsrate")}${r}` },
-    { key: "custoantes", header: "CUSTO ANTES ASSESS.", fmt: MONEY_BRL, group: "nac", value: (it) => it.totalCostBeforeAssessoria, formula: (r, C) => `${C("adu")}${r}+${C("afrmm")}${r}+${C("siscomex")}${r}+${C("demais")}${r}+${C("ii")}${r}+${C("ipi")}${r}+${C("pis")}${r}+${C("cofins")}${r}+${C("icms")}${r}` },
-    { key: "assess", header: "ASSESSORIA", fmt: MONEY_BRL, group: "nac", value: (it) => it.assessoriaValue, formula: (r, C, P) => `((${P("ROYALTIES")}*${C("pvalor")}${r})+${C("custoantes")}${r})*${P("ASSESS")}` },
-    { key: "custototal", header: "CUSTO TOTAL", fmt: MONEY_BRL, group: "nac", value: (it) => it.totalCost, formula: (r, C) => `${C("custoantes")}${r}+${C("assess")}${r}` },
-    { key: "custounit", header: "CUSTO UNIT.", fmt: MONEY_BRL, group: "nac", value: (it) => it.unitCost, formula: (r, C) => `${C("custototal")}${r}/${C("qtd")}${r}` },
-    // ---- Importador: custo líquido + venda ----
-    { key: "netimp", header: "CUSTO LÍQ. IMPORT.", fmt: MONEY_BRL, group: "imp", value: (it) => it.netImportCost, formula: (r, C) => netLiquidoFormula(r, C, opts.regime) },
-    { key: "nettotal", header: "CUSTO LÍQUIDO TOTAL", fmt: MONEY_BRL, group: "imp", value: (it) => it.netTotalCost, formula: (r, C, P) => `${C("netimp")}${r}+(${P("PACOTE")}*${C("pvalor")}${r})` },
-    { key: "netunit", header: "CUSTO UNIT. LIQ.", fmt: MONEY_BRL, group: "imp", value: (it) => it.netUnitCost, formula: (r, C) => `${C("nettotal")}${r}/${C("qtd")}${r}` },
-    { key: "netkg", header: "CUSTO/KG LIQ.", fmt: MONEY_BRL, group: "imp", value: (it) => it.netCostPerKg },
-    { key: "mkp", header: "MKP", fmt: PCT, group: "imp", value: (it) => it.markupFactor, formula: (_r, _C, P) => `${P("V_MKP")}` },
-    { key: "produtos", header: "VALOR DOS PRODUTOS", fmt: MONEY_BRL, group: "imp", value: (it) => it.salePrice, formula: (r, C) => `${C("nettotal")}${r}/${C("mkp")}${r}` },
-    { key: "vicmsrate", header: "% ICMS VENDA", fmt: PCT, group: "imp", value: () => icmsVendaRate, formula: (_r, _C, P) => `${P("V_ICMS")}` },
-    { key: "vicms", header: "ICMS VENDA", fmt: MONEY_BRL, group: "imp", value: (it) => it.icmsVendaValue, formula: (r, C) => `${C("produtos")}${r}*${C("vicmsrate")}${r}` },
-    { key: "vipi", header: "IPI VENDA", fmt: MONEY_BRL, group: "imp", value: (it) => it.ipiVendaValue, formula: (r, C) => `${C("produtos")}${r}*${C("ipirate")}${r}` },
-    { key: "vst", header: "ICMS ST", fmt: MONEY_BRL, group: "imp", value: (it) => it.icmsStValue },
-    { key: "vnf", header: "TOTAL NF VENDA", fmt: MONEY_BRL, group: "imp", value: (it) => it.totalInvoiceValue, formula: (r, C) => `${C("produtos")}${r}+${C("vipi")}${r}+${C("vst")}${r}` },
-    { key: "vnfunit", header: "UNIT. C/ IPI+ST", fmt: MONEY_BRL, group: "imp", value: (it) => it.unitInvoiceValue, formula: (r, C) => `${C("vnf")}${r}/${C("qtd")}${r}` },
-  ];
-  // ---- Comprador (Lucro Real) ----
-  if (hasBuyer) {
-    cols.push(
-      { key: "bnet", header: "CUSTO LÍQ. COMPRADOR", fmt: MONEY_BRL, group: "buyer", value: (it) => it.buyerNetCost, formula: (r, C, P) => `${C("vnf")}${r}-${C("vipi")}${r}-${C("vicms")}${r}-(${C("produtos")}${r}*${P("B_PIS")})-(${C("produtos")}${r}*${P("B_COFINS")})+(${P("ROYALTIES")}*${C("pvalor")}${r})` },
-      { key: "bnetunit", header: "CUSTO UNIT. LIQ.", fmt: MONEY_BRL, group: "buyer", value: (it) => it.buyerNetUnitCost, formula: (r, C) => `${C("bnet")}${r}/${C("qtd")}${r}` },
-      { key: "bmkp", header: "MKP", fmt: PCT, group: "buyer", value: (it) => it.buyerMarkupFactor, formula: (_r, _C, P) => `${P("B_MKP")}` },
-      { key: "bprodutos", header: "VALOR DOS PRODUTOS", fmt: MONEY_BRL, group: "buyer", value: (it) => it.buyerSalePrice, formula: (r, C) => `${C("bnet")}${r}/${C("bmkp")}${r}` },
-      { key: "bicmsrate", header: "% ICMS", fmt: PCT, group: "buyer", value: () => (s.buyer ? s.buyer.icmsVendaTotal / (s.buyer.salePriceTotal || 1) : 0.12), formula: (_r, _C, P) => `${P("B_ICMS")}` },
-      { key: "bicms", header: "ICMS", fmt: MONEY_BRL, group: "buyer", value: (it) => it.buyerIcmsVendaValue, formula: (r, C) => `${C("bprodutos")}${r}*${C("bicmsrate")}${r}` },
-      { key: "bipi", header: "IPI", fmt: MONEY_BRL, group: "buyer", value: (it) => it.buyerIpiVendaValue, formula: (r, C) => `${C("bprodutos")}${r}*${C("ipirate")}${r}` },
-      { key: "bst", header: "ICMS ST", fmt: MONEY_BRL, group: "buyer", value: (it) => it.buyerIcmsStValue ?? 0 },
-      { key: "bnf", header: "TOTAL NF VENDA", fmt: MONEY_BRL, group: "buyer", value: (it) => it.buyerTotalInvoiceValue, formula: (r, C) => `${C("bprodutos")}${r}+${C("bipi")}${r}+${C("bst")}${r}` },
-      { key: "bnfunit", header: "UNIT. C/ IPI+ST", fmt: MONEY_BRL, group: "buyer", value: (it) => it.buyerUnitInvoiceValue, formula: (r, C) => `${C("bnf")}${r}/${C("qtd")}${r}` },
-    );
-  }
+  // ---- Bloco esquerdo (B5:E9) ----
+  dark(cm, "B5", "Descrição", { size: 12, al: "center" });
+  dark(cm, "C5", "Moeda EX", { size: 12, al: "center" });
+  dark(cm, "D5", "Valor", { size: 12, al: "center" });
+  dark(cm, "E5", "Moeda R$", { size: 12, al: "center" });
+  set(cm, "B6", "Valor Fob", { size: 12, al: "center", border: true });
+  set(cm, "C6", cur, { size: 12, al: "center", border: true });
+  set(cm, "D6", fx(`J${CM_TOT}`, s.fobTotalFob), { size: 12, fmt: USD, al: "center", border: true });
+  set(cm, "E6", fx("D6*H7", s.fobTotalBrl), { size: 12, fmt: BRL, al: "center", border: true });
+  set(cm, "B7", "Valor Frete ", { size: 12, al: "center", border: true });
+  set(cm, "C7", cur, { size: 12, al: "center", border: true });
+  set(cm, "D7", s.freightTotalBrl / fxRate, { size: 12, fmt: USD, al: "center", bg: YELLOW, border: true });
+  set(cm, "E7", fx("D7*H7", s.freightTotalBrl), { size: 12, fmt: BRL, al: "center", border: true });
+  set(cm, "B8", "Seguro", { size: 12, al: "center", border: true });
+  set(cm, "C8", cur, { size: 12, al: "center", border: true });
+  set(cm, "D8", s.insuranceTotalBrl / fxRate, { size: 12, fmt: USD, al: "center", border: true });
+  set(cm, "E8", fx("D8*H7", s.insuranceTotalBrl), { size: 12, fmt: BRL2, al: "center", border: true });
+  set(cm, "B9", "Valor ADU", { size: 12, al: "center", border: true });
+  set(cm, "C9", cur, { size: 12, al: "center", border: true });
+  set(cm, "D9", fx("SUM(D6:D8)", s.fobTotalFob + (s.freightTotalBrl + s.insuranceTotalBrl) / fxRate), { size: 12, fmt: USD, al: "center", border: true });
+  set(cm, "E9", fx("SUM(E6:E8)", s.cifTotalBrl), { size: 12, fmt: BRL, al: "center", border: true });
 
-  // Mapa key→letra
-  const colIndex: Record<string, number> = {};
-  cols.forEach((c, i) => (colIndex[c.key] = i + 1));
-  const C = (k: string) => colLetter(colIndex[k]);
+  // ---- Bloco direito (G5:H9) ----
+  const pesoTot = items.reduce((a, it) => a + (it.weightKgTotal || 0), 0);
+  set(cm, "G5", "Peso Bruto", { size: 12, al: "left", border: true });
+  dark(cm, "H5", "", { size: 12, al: "left" }); cm.getCell("H5").value = pesoTot; cm.getCell("H5").numFmt = NUM2;
+  set(cm, "G6", "Peso Liquido", { size: 12, al: "left", border: true });
+  dark(cm, "H6", "", { size: 12, al: "left" }); cm.getCell("H6").value = fx(`K${CM_TOT}`, pesoTot); cm.getCell("H6").numFmt = NUM2;
+  set(cm, "G7", "Taxa dólar", { size: 12, al: "left", border: true });
+  set(cm, "H7", s.exchangeRate, { size: 12, bold: true, fmt: FX4, al: "left", bg: YELLOW, border: true });
+  set(cm, "G8", "SISCOMEX", { size: 12, al: "left", border: true });
+  dark(cm, "H8", "", { size: 12, al: "left" });
+  // Fórmula do modelo quando o valor é o padrão (115,67 + 38,56 = 154,23).
+  cm.getCell("H8").value = Math.abs(s.siscomexTotal - 154.23) < 0.005 ? fx("(115.67+38.56)", s.siscomexTotal) : s.siscomexTotal;
+  cm.getCell("H8").numFmt = BRL;
+  set(cm, "G9", "AFRMM", { size: 12, al: "left", border: true });
+  dark(cm, "H9", "", { size: 12, al: "left" });
+  // AFRMM vivo quando segue a regra 8% × frete; senão, valor do motor.
+  const afrmmFrom8 = Math.abs(s.afrmmTotal - 0.08 * s.freightTotalBrl) < 0.01;
+  cm.getCell("H9").value = afrmmFrom8 ? fx("E7*0.08", s.afrmmTotal) : s.afrmmTotal;
+  cm.getCell("H9").numFmt = BRL;
 
-  // Linhas fixas espelhando o modelo do contador.
-  const BANNER_ROW = 24;
-  const GRP_ROW = 25;
-  const HDR_ROW = 26;
-  const ITEM0 = 27;
-  const GRID_TOT = ITEM0 + result.items.length; // linha de totais da grade
-  const vtotalCol = C("vtotal"); // FOB total em USD (referência do bloco de params)
-  const pesoCol = C("peso");
-
-  // ---- helpers de escrita do bloco de parâmetros ----
-  const label = (ref: string, text: string, opt?: { bold?: boolean; band?: boolean }) => {
-    const cell = ws.getCell(ref);
-    cell.value = text;
-    cell.font = { size: 12, bold: opt?.bold, color: opt?.band ? { argb: COLORS.header } : undefined };
-    if (opt?.band) fillCell(cell, COLORS.bandHeader);
-  };
-  const input = (ref: string, value: number, fmt: string) => {
-    const cell = ws.getCell(ref);
-    cell.value = value;
-    cell.numFmt = fmt;
-    fillCell(cell, COLORS.param); // amarelo = editável
-    cell.border = ALL_BORDERS;
-    return ref;
-  };
-  const calc = (ref: string, formula: string, result: number, fmt: string) => {
-    const cell = ws.getCell(ref);
-    cell.value = { formula, result };
-    cell.numFmt = fmt;
-    cell.border = ALL_BORDERS;
-    return ref;
-  };
-
-  // Título do bloco
-  const title = ws.getCell("B2");
-  title.value = "ESTIMATIVA DE IMPORTAÇÃO";
-  ws.mergeCells("B2:E2");
-  title.alignment = { horizontal: "center", vertical: "middle" };
-  title.font = { bold: true, size: 24, color: { argb: COLORS.header } };
-  ws.getCell("B3").value = opts.quotationName;
-  ws.getCell("B3").font = { italic: true, size: 10, color: { argb: "FF888888" } };
-
-  // ---- Bloco esquerdo: Valor Fob / Frete / Seguro / Valor ADU ----
-  ["B5:Descrição", "C5:Moeda EX", "D5:Valor", "E5:Moeda R$"].forEach((s2) => {
-    const [ref, txt] = s2.split(":"); label(ref, txt, { bold: true, band: true });
-  });
-  const fxUsd = s.exchangeRate || 1;
-  label("B6", "Valor Fob"); ws.getCell("C6").value = cur;
-  const FOB_REF = calc("D6", `${vtotalCol}${GRID_TOT}`, s.fobTotalFob, MONEY_USD);
-  calc("E6", `D6*$H$7`, s.fobTotalBrl, MONEY_BRL);
-  label("B7", "Valor Frete"); ws.getCell("C7").value = cur;
-  const FRETE_USD_REF = input("D7", s.freightTotalBrl / fxUsd, MONEY_USD);
-  const FRETE_BRL_REF = calc("E7", `D7*$H$7`, s.freightTotalBrl, MONEY_BRL);
-  label("B8", "Seguro"); ws.getCell("C8").value = cur;
-  input("D8", s.insuranceTotalBrl / fxUsd, MONEY_USD);
-  calc("E8", `D8*$H$7`, s.insuranceTotalBrl, MONEY_BRL);
-  label("B9", "Valor ADU", { bold: true });
-  calc("D9", `SUM(D6:D8)`, s.fobTotalFob + s.freightTotalBrl / fxUsd, MONEY_USD);
-  calc("E9", `SUM(E6:E8)`, s.cifTotalBrl, MONEY_BRL);
-
-  // ---- Bloco direito: Peso / Taxa dólar / SISCOMEX / AFRMM ----
-  const pesoTot = result.items.reduce((a, it) => a + (it.weightKgTotal || 0), 0);
-  label("G5", "Peso Bruto"); calc("H5", `${pesoCol}${GRID_TOT}`, pesoTot, "#,##0.00");
-  label("G6", "Peso Líquido"); calc("H6", `${pesoCol}${GRID_TOT}`, pesoTot, "#,##0.00");
-  label("G7", "Taxa dólar"); const FX_REF = input("H7", s.exchangeRate, '"R$"\\ #,##0.0000');
-  label("G8", "SISCOMEX"); const SIS_REF = input("H8", s.siscomexTotal, MONEY_BRL);
-  label("G9", "AFRMM"); const AFRMM_REF = input("H9", s.afrmmTotal, MONEY_BRL);
-
-  // ---- Demais Despesas (itemizado) ----
-  const bd0 = (result as unknown as { despesasBreakdown?: {
+  // ---- Demais Despesas (B12:E18) ----
+  const bd = (result as unknown as { despesasBreakdown?: {
     liberacaoBl: number; armazenagem: number; freteInterno: number; despacho: number; expediente: number;
   } }).despesasBreakdown;
-  label("B12", "Demais Despesas", { bold: true, band: true });
-  label("B13", "Liberação de BL"); input("E13", bd0?.liberacaoBl ?? 0, MONEY_BRL);
-  label("B14", "Armazenagem"); input("E14", bd0?.armazenagem ?? 0, MONEY_BRL);
-  label("B15", "Frete interno"); input("E15", bd0?.freteInterno ?? 0, MONEY_BRL);
-  label("B16", "Comissão Despacho Aduaneiro"); input("E16", bd0?.despacho ?? 0, MONEY_BRL);
-  label("B17", "Taxa de Expediente"); input("E17", bd0?.expediente ?? 0, MONEY_BRL);
-  label("B18", "Total", { bold: true });
-  const DEMAIS_REF = calc("E18", `SUM(E13:E17)`, s.demaisDespesasTotal, MONEY_BRL);
-
-  // ---- Pacote / Royalties ----
-  label("B21", "Pacote Logístico"); const PACOTE_REF = input("E21", s.pacoteLogistico, MONEY_BRL);
-  label("B22", "Royalties"); const ROY_REF = input("E22", s.royaltiesTotal, MONEY_BRL);
-  ws.getRow(22).hidden = true; // royalties ocultos (declarado = real)
-
-  // ---- Parâmetros de venda/tributos (direita) ----
-  label("G12", "Gross-up ICMS"); const GROSS_REF = input("H12", grossUp, PCT);
-  label("G13", "Assessoria"); const ASSESS_REF = input("H13", assessRate, PCT);
-  label("G14", "ICMS venda"); const VICMS_REF = input("H14", icmsVendaRate, PCT);
-  label("G15", "PIS venda"); const VPIS_REF = input("H15", pisVendaRate, PCT);
-  label("G16", "COFINS venda"); const VCOF_REF = input("H16", cofinsVendaRate, PCT);
-  label("G17", "Margem bruta"); const VMARG_REF = input("H17", s.margemBruta, PCT);
-  label("G18", "Markup"); const VMKP_REF = input("H18", s.markupFactor, PCT);
-
-  Object.assign(PARAMS, {
-    FX: "$H$7", FOB_USD: "$D$6", FRETE_BRL: "$E$7", AFRMM: "$H$9", SISCOMEX: "$H$8",
-    DEMAIS: "$E$18", PACOTE: "$E$21", ROYALTIES: "$E$22", GROSSUP: "$H$12", ASSESS: "$H$13",
-    V_ICMS: "$H$14", V_PIS: "$H$15", V_COFINS: "$H$16", V_MARGEM: "$H$17", V_MKP: "$H$18",
+  cm.mergeCells("B12:E12");
+  dark(cm, "B12", "Demais Despesas", { size: 12, al: "center" });
+  const desp: [string, string, number, boolean][] = [
+    ["B13", "Liberação de BL", bd?.liberacaoBl ?? 0, true],
+    ["B14", "Armazenagem", bd?.armazenagem ?? 0, true],
+    ["B15", "Frete interno", bd?.freteInterno ?? 0, true],
+    ["B16", "Comissão Despacho Aduaneiro", bd?.despacho ?? 0, true],
+    ["B17", "Taxa de Expediente ", bd?.expediente ?? 0, false],
+  ];
+  // Sem quebra detalhada: joga o total em "Liberação de BL" p/ manter E18 = total.
+  if (!bd && s.demaisDespesasTotal > 0) desp[0][2] = s.demaisDespesasTotal;
+  cm.mergeCells("B16:D16");
+  desp.forEach(([ref, txt, val, yellow]) => {
+    set(cm, ref, txt, { size: 12, al: "left", border: true });
+    const eRef = `E${ref.slice(1)}`;
+    set(cm, eRef, val, { size: 12, fmt: BRL, al: "center", border: true, bg: yellow ? YELLOW : undefined });
   });
-  void [FOB_REF, FRETE_USD_REF, FRETE_BRL_REF, FX_REF, SIS_REF, AFRMM_REF, DEMAIS_REF, PACOTE_REF, ROY_REF,
-    GROSS_REF, ASSESS_REF, VICMS_REF, VPIS_REF, VCOF_REF, VMARG_REF, VMKP_REF];
+  cm.mergeCells("B18:D18");
+  set(cm, "B18", "Total", { size: 12, al: "left", border: true });
+  set(cm, "E18", fx("SUM(E13:E17)", s.demaisDespesasTotal), { size: 12, fmt: BRL, al: "center", border: true });
 
-  if (hasBuyer && s.buyer) {
-    label("G19", "ICMS venda compr."); input("H19", s.buyer.icmsVendaTotal / (s.buyer.salePriceTotal || 1), PCT);
-    label("G20", "PIS venda compr."); input("H20", s.buyer.pisVendaTotal / (s.buyer.salePriceTotal || 1), PCT);
-    label("G21", "COFINS venda compr."); input("H21", s.buyer.cofinsVendaTotal / (s.buyer.salePriceTotal || 1), PCT);
-    label("G22", "Margem bruta compr."); input("H22", s.buyer.margemBruta, PCT);
-    label("G23", "Markup compr."); input("H23", s.buyer.markupFactor, PCT);
-    Object.assign(PARAMS, { B_ICMS: "$H$19", B_PIS: "$H$20", B_COFINS: "$H$21", B_MARGEM: "$H$22", B_MKP: "$H$23" });
+  // ---- Pacote Logístico / Royalties (B21:E22) ----
+  cm.mergeCells("B21:D21");
+  set(cm, "B21", "Pacote Logístico", { size: 12, al: "left", border: true });
+  set(cm, "E21", s.pacoteLogistico, { size: 12, fmt: BRL, al: "center", border: true });
+  cm.mergeCells("B22:D22");
+  set(cm, "B22", "Royalties", { size: 12, al: "left", border: true });
+  set(cm, "E22", fx(`INVOICE!K${INV_TOT}*H7`, s.royaltiesTotal), { size: 12, fmt: BRL, al: "center", border: true });
+
+  // ---- Banners (linha 24) ----
+  cm.mergeCells("B24:AM24");
+  dark(cm, "B24", "CUSTO DE IMPORTAÇÃO", { size: 12, al: "center" });
+  cm.mergeCells("AO24:AY24");
+  dark(cm, "AO24", "CUSTO LÍQUIDO E VENDA ", { size: 12, al: "center" });
+
+  // ---- Cabeçalho da grade (linha 25) ----
+  // [coluna, título, escuro?] — colunas de % têm fundo branco no modelo.
+  const CM_HEADERS: [string, string, boolean][] = [
+    ["B", "ADIÇÃO", true], ["C", "ITEM", true], ["D", "CÓDIGO", true],
+    ["E", "QUANTIDADE", true], ["F", "UN.", true], ["G", "DESCRIÇÃO", true],
+    ["H", "NCM", true], ["I", "VALOR UNITÁRIO", true], ["J", "VALOR TOTAL", true],
+    ["K", "PESO", true], ["L", "% VALOR", true], ["M", "Valor FOB R$", true],
+    ["N", "FRETE ", true], ["O", "VLR ADUANEIRO R$", true], ["P", "", true],
+    ["Q", "AFRMM", true], ["R", "SISCOMEX", true], ["S", "DEMAIS DESPESAS", true],
+    ["T", "% II", false], ["U", "VALOR II", true], ["V", "MERCADORIA UNIT", true],
+    ["W", "VALOR MERCADORIA", true], ["X", "", true], ["Y", "BASE IPI", true],
+    ["Z", "% IPI", false], ["AA", "VALOR IPI", true], ["AB", "% PIS", false],
+    ["AC", "VALOR PIS-IMP", true], ["AD", "% COFINS", false], ["AE", "VALOR COFINS- IMP", true],
+    ["AF", "CRÉDITO COFINS", true], ["AG", "BASE ICMS ANTECIPADO", true],
+    ["AH", "% ICMS", false], ["AI", "VALOR ICMS ANTECIPADO", true],
+    ["AJ", "CUSTO TOTAL ANTES DA ASSESSORIA", true], ["AK", "ASSESSORIA", true],
+    ["AL", "CUSTO TOTAL APÓS ASSESSORIA", true], ["AM", "CUSTO UNIT.", true],
+    ["AO", "CUSTO LÍQUIDO  IMPORTAÇÃO", true], ["AP", "CUSTO LÍQUIDO TOTAL", true],
+    ["AQ", "CUSTO UNIT. LIQ.", true], ["AR", "MKP", true], ["AS", "VALOR DOS PRODUTOS", true],
+    ["AT", "% ICMS", false], ["AU", "ICMS", true], ["AV", "IPI", true],
+    ["AW", "ICMS ST", true], ["AX", "TOTAL NF VENDA", true],
+    ["AY", "VALOR UNITÁRIO C/ IPI E ICMS ST", true],
+  ];
+  CM_HEADERS.forEach(([col, txt, isDark]) => {
+    if (isDark) dark(cm, `${col}25`, txt, { size: 12, al: "center", wrap: true });
+    else set(cm, `${col}25`, txt, { size: 12, bold: true, al: "center", wrap: true, border: true });
+  });
+
+  // ---- Fórmula do custo líquido (AO) conforme regime de créditos ----
+  const netFormula = (r: number) => {
+    switch (opts.regime) {
+      case "lucro_real":      return `AL${r}-AI${r}-AF${r}-AC${r}-AA${r}`; // ICMS+COFINS+PIS+IPI
+      case "lucro_presumido": return `AL${r}-AI${r}-AA${r}`;               // só ICMS+IPI
+      default:                return `AL${r}`;                              // simples: sem créditos
+    }
+  };
+
+  // ---- Template da grade (26..51): estilo em todas; fórmulas só nos itens ----
+  const CM_FMTS: Record<string, string> = {
+    E: INT, G: "@", I: USD, J: USD, K: NUM2, L: PCT3, M: BRL, N: BRL, O: BRL, P: BRL,
+    Q: BRL, R: BRL, S: BRL, T: PCT2, U: BRL, V: BRL, W: BRL, X: BRL, Y: BRL, Z: PCT2,
+    AA: BRL, AB: PCT2, AC: BRL, AD: PCT2, AE: BRL, AF: BRL, AG: BRL, AH: PCT2, AI: BRL,
+    AJ: BRL, AK: BRL, AL: BRL, AM: BRL, AO: BRL, AP: BRL, AQ: BRL, AR: NUM4, AS: BRL,
+    AT: PCT2, AU: BRL2, AV: BRL2, AW: BRL, AX: BRL, AY: BRL2,
+  };
+  const CM_COLS = CM_HEADERS.map(([c]) => c);
+  for (let r = CM_ITEM0; r <= CM_LAST; r++) {
+    CM_COLS.forEach((col) => {
+      const cell = cm.getCell(`${col}${r}`);
+      cell.border = BOX;
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.font = { size: 12 };
+      const f = CM_FMTS[col];
+      if (f) cell.numFmt = f;
+    });
   }
 
-  // ---- Banner "CUSTO DE IMPORTAÇÃO" sobre a grade ----
-  const bannerCell = ws.getRow(BANNER_ROW).getCell(1);
-  bannerCell.value = "CUSTO DE IMPORTAÇÃO";
-  ws.mergeCells(BANNER_ROW, 1, BANNER_ROW, cols.length);
-  bannerCell.alignment = { horizontal: "center", vertical: "middle" };
-  bannerCell.font = { bold: true, size: 13, color: { argb: COLORS.white } };
-  fillCell(bannerCell, COLORS.header);
-  ws.getRow(BANNER_ROW).height = 22;
+  items.forEach((it, i) => {
+    const r = CM_ITEM0 + i;
+    const invR = INV_ITEM0 + i;
+    const est = `'${SHEET_EST}'`;
+    const v = (col: string, val: CellVal) => (cm.getCell(`${col}${r}`).value = val);
+    v("C", i + 1);
+    v("E", fx(`INVOICE!E${invR}`, it.quantity));
+    v("F", it.unit || "UN");
+    v("G", fx(`INVOICE!A${invR}`, it.description));
+    v("H", fx(`INVOICE!L${invR}`, it.ncm));
+    v("I", fx(`INVOICE!H${invR}`, it.unitPriceFob));
+    v("J", fx(`E${r}*I${r}`, it.totalFob));
+    v("K", it.weightKgTotal || 0);
+    v("L", fx(`J${r}/$D$6`, it.shareOfValue));
+    v("M", fx(`J${r}*$H$7`, it.fobBrl));
+    v("N", fx(`$E$7*L${r}`, it.freightBrl));
+    v("O", fx(`M${r}+N${r}`, it.customsValueBrl));
+    v("Q", fx(`$H$9*L${r}`, it.afrmmBrl));
+    v("R", fx(`$H$8*L${r}`, it.siscomexBrl));
+    v("S", fx(`$E$18*L${r}`, it.demaisDespesasBrl));
+    set(cm, `T${r}`, it.iiRate, { size: 12, fmt: PCT2, al: "center", bg: YELLOW, border: true });
+    v("U", fx(`O${r}*T${r}`, it.iiValue));
+    v("V", fx(`W${r}/E${r}`, it.merchandiseUnitValue));
+    v("W", fx(`U${r}+O${r}`, it.merchandiseValue));
+    v("Y", fx(`O${r}+U${r}`, it.ipiBase));
+    set(cm, `Z${r}`, it.ipiRate, { size: 12, fmt: PCT2, al: "center", bg: YELLOW, border: true });
+    v("AA", fx(`Y${r}*Z${r}`, it.ipiValue));
+    v("AB", it.pisRate);
+    v("AC", fx(`(O${r}*AB${r})`, it.pisValue));
+    v("AD", it.cofinsRate);
+    v("AE", fx(`(O${r}*AD${r})`, it.cofinsValue));
+    v("AF", fx(`O${r}*AD${r}`, it.cofinsValue));
+    v("AG", fx(`(O${r}+Q${r}+R${r}+U${r}+AA${r}+AC${r}+AE${r})/${grossDen}`, it.icmsBase));
+    v("AH", it.icmsClienteRate);
+    v("AI", fx(`AG${r}*AH${r}`, it.icmsClienteValue));
+    v("AJ", fx(`O${r}+Q${r}+R${r}+S${r}+U${r}+AA${r}+AC${r}+AE${r}+AI${r}`, it.totalCostBeforeAssessoria));
+    v("AK", fx(`(($E$22*L${r})+AJ${r})*${pctLit(assessRate)}`, it.assessoriaValue));
+    v("AL", fx(`AJ${r}+AK${r}`, it.totalCost));
+    v("AM", fx(`AL${r}/E${r}`, it.unitCost));
+    v("AO", fx(netFormula(r), it.netImportCost));
+    v("AP", fx(`AO${r}+(E$21*L${r})`, it.netTotalCost));
+    v("AQ", fx(`AP${r}/E${r}`, it.netUnitCost));
+    v("AR", fx(`${est}!H$97`, it.markupFactor));
+    v("AS", fx(`AP${r}/AR${r}`, it.salePrice));
+    v("AT", fx(`${est}!$F$93`, s.salePriceTotal > 0 ? s.icmsVendaTotal / s.salePriceTotal : 0));
+    v("AU", fx(`AS${r}*AT${r}`, it.icmsVendaValue));
+    v("AV", fx(`AS${r}*Z${r}`, it.ipiVendaValue));
+    v("AW", it.icmsStValue);
+    v("AX", fx(`AS${r}+AV${r}+AW${r}`, it.totalInvoiceValue));
+    v("AY", fx(`AX${r}/E${r}`, it.unitInvoiceValue));
+  });
+  // Mantém 1 linha vazia visível; oculta as demais (como o modelo).
+  for (let r = CM_ITEM0 + n + 1; r <= CM_LAST; r++) cm.getRow(r).hidden = true;
 
-  // ---- Cabeçalho de grupos + colunas ----
-  writeGroupHeader(ws, cols, GRP_ROW, internal, hasBuyer);
-  const hdr = ws.getRow(HDR_ROW);
-  cols.forEach((c, i) => {
-    hdr.getCell(i + 1).value = c.header;
-    ws.getColumn(i + 1).width = Math.max(c.header.length * 0.72, isMoney(c.fmt) ? 14 : 9);
+  // ---- Totais (linha 52) ----
+  const CM_SUM_COLS = ["E", "J", "K", "L", "M", "N", "O", "Q", "R", "S", "U", "W", "Y",
+    "AA", "AC", "AE", "AF", "AI", "AJ", "AK", "AL", "AO", "AP", "AS", "AU", "AV", "AW", "AX"];
+  CM_COLS.forEach((col) => {
+    const cell = cm.getCell(`${col}${CM_TOT}`);
+    if (CM_SUM_COLS.includes(col)) cell.value = fx(`SUM(${col}${CM_ITEM0}:${col}${CM_LAST})`);
+    cell.font = { size: 12, bold: true };
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.border = BOX;
+    // Totais usam o formato contábil R$-416 mesmo onde a linha usa "R$ " (modelo).
+    const TOT_FMT: Record<string, string> = { AU: BRL, AV: BRL, AY: "0.00" };
+    cell.numFmt = TOT_FMT[col] ?? (CM_FMTS[col] === PCT2 || CM_FMTS[col] === PCT3 ? CM_FMTS[col] : (CM_FMTS[col] ?? BRL));
   });
-  styleHeaderRow(hdr);
-  cols.forEach((c, i) => {
-    if (c.group === "buyer") fillCell(hdr.getCell(i + 1), COLORS.buyer);
-  });
-
-  // Linhas de itens
-  result.items.forEach((it, idx) => {
-    const r = ITEM0 + idx;
-    const invRow = INV_ITEM0 + idx;
-    const row = ws.getRow(r);
-    cols.forEach((c, i) => {
-      const cell = row.getCell(i + 1);
-      const v = c.value(it, idx);
-      if (c.formula) cell.value = { formula: c.formula(r, C, P, invRow), result: (v as number) ?? 0 };
-      else cell.value = v as number | string;
-      if (c.fmt) cell.numFmt = c.fmt;
-    });
-  });
-
-  // Linha de totais
-  const TOT_ROW = ITEM0 + result.items.length;
-  const totRow = ws.getRow(TOT_ROW);
-  totRow.getCell(colIndex["desc"]).value = "TOTAIS";
-  totRow.font = { bold: true };
-  cols.forEach((c, i) => {
-    if (isMoney(c.fmt)) {
-      const L = colLetter(i + 1);
-      totRow.getCell(i + 1).value = {
-        formula: `SUM(${L}${ITEM0}:${L}${TOT_ROW - 1})`,
-        result: result.items.reduce((acc, it) => acc + (Number(c.value(it, 0)) || 0), 0),
-      };
-      totRow.getCell(i + 1).numFmt = c.fmt;
-      fillCell(totRow.getCell(i + 1), COLORS.light);
-    }
-  });
-  ws.views = [{ state: "frozen", xSplit: 6, ySplit: HDR_ROW }];
 
   // ============================================================
-  // ABA 3 — EST. DE CUSTO (consolidação + venda + ganho + comprador)
+  // ABA 3 — EST. DE CUSTO - IMP. PRÓPRIA (1:1 + acréscimos abaixo)
   // ============================================================
-  buildEstSheet(wb, result, opts, {
-    custoSheet: SHEET_CUSTO, totRow: TOT_ROW, C, internal, hasBuyer,
-  });
+  buildEstSheet(wb, result, opts, { internal, hasBuyer, n });
 
   const buf = await wb.xlsx.writeBuffer();
   return Buffer.from(buf as ArrayBuffer);
 }
 
 // ============================================================
-// Fórmula do custo líquido por regime (créditos recuperáveis)
-// ============================================================
-function netLiquidoFormula(r: number, C: (k: string) => string, regime: string): string {
-  const apos = `${C("custototal")}${r}`;
-  const icms = `${C("icms")}${r}`;
-  const cofins = `${C("cofins")}${r}`;
-  const pis = `${C("pis")}${r}`;
-  const ipi = `${C("ipi")}${r}`;
-  switch (regime) {
-    case "lucro_real":      // PIS, COFINS, IPI e ICMS recuperáveis
-      return `${apos}-${icms}-${cofins}-${pis}-${ipi}`;
-    case "lucro_presumido": // só IPI e ICMS
-      return `${apos}-${icms}-${ipi}`;
-    default:                // simples: sem créditos
-      return apos;
-  }
-}
-
-// ============================================================
-// Cabeçalho de grupos (faixas coloridas sobre a grade)
-// ============================================================
-function writeGroupHeader(ws: ExcelJS.Worksheet, cols: GridCol[], row: number, _internal: boolean, _hasBuyer: boolean) {
-  const labels: Record<string, string> = {
-    id: "IDENTIFICAÇÃO",
-    nac: "NACIONALIZAÇÃO",
-    imp: "CUSTO LÍQUIDO E VENDA DO IMPORTADOR",
-    buyer: "CUSTO LÍQUIDO E VENDA DO COMPRADOR — LUCRO REAL",
-  };
-  let i = 0;
-  while (i < cols.length) {
-    const g = cols[i].group;
-    let j = i;
-    while (j < cols.length && cols[j].group === g) j++;
-    const startCol = i + 1, endCol = j;
-    const cell = ws.getRow(row).getCell(startCol);
-    cell.value = labels[g];
-    if (endCol > startCol) ws.mergeCells(row, startCol, row, endCol);
-    cell.alignment = { horizontal: "center", vertical: "middle" };
-    cell.font = { bold: true, size: 9, color: { argb: COLORS.white } };
-    fillCell(cell, g === "buyer" ? COLORS.buyer : g === "imp" ? COLORS.accent : COLORS.header);
-    i = j;
-  }
-}
-
-function styleHeaderRow(row: ExcelJS.Row) {
-  row.eachCell((cell) => {
-    cell.font = { bold: true, color: { argb: COLORS.white }, size: 9 };
-    fillCell(cell, COLORS.header);
-    cell.alignment = { wrapText: true, vertical: "middle", horizontal: "center" };
-  });
-  row.height = 30;
-}
-
-// ============================================================
-// ABA 3 — consolidação (EST. DE CUSTO)
+// ABA 3 — réplica do modelo (linhas 1..135) + acréscimos
 // ============================================================
 function buildEstSheet(
   wb: ExcelJS.Workbook,
   result: EngineResult,
   opts: ExcelEstimativaOptions,
-  ctx: { custoSheet: string; totRow: number; C: (k: string) => string; internal: boolean; hasBuyer: boolean },
+  ctx: { internal: boolean; hasBuyer: boolean; n: number },
 ) {
   const s = result.summary;
+  const items = result.items.slice(0, MAX_ITEMS);
   const est = wb.addWorksheet(SHEET_EST);
-  est.getColumn(2).width = 46;
-  est.getColumn(6).width = 9;
-  est.getColumn(8).width = 18;
-  let r = 1;
-  // Referência a um total da grade CUSTO: 'SHEET'!<col><totRow>
-  const refTot = (k: string) => `'${ctx.custoSheet}'!${ctx.C(k)}${ctx.totRow}`;
+  const CM = `'${SHEET_CUSTO}'`;
 
-  const put = (label: string, value?: number, opt?: { fmt?: string; bold?: boolean; formula?: string }) => {
-    const row = est.getRow(r++);
-    row.getCell(2).value = label;
-    if (value !== undefined || opt?.formula) {
-      const cell = row.getCell(8);
-      cell.value = opt?.formula ? { formula: opt.formula, result: value ?? 0 } : (value as number);
-      cell.numFmt = opt?.fmt ?? MONEY;
-    }
-    if (opt?.bold) row.font = { bold: true };
-    return row;
+  const EST_WIDTHS: Record<string, number> = {
+    A: 4.2, B: 66.7, C: 24.2, D: 26.8, E: 24.2, F: 20.7, G: 27.7, H: 36.3,
+    I: 20.7, J: 27.2, K: 20.3, L: 29.8, M: 20.7, N: 9.0,
   };
-  const section = (title: string) => {
-    const row = est.getRow(r++);
-    row.getCell(2).value = title;
-    row.font = { bold: true, size: 11, color: { argb: COLORS.header } };
-    fillCell(row.getCell(2), COLORS.section);
-  };
+  Object.entries(EST_WIDTHS).forEach(([l, w]) => (est.getColumn(l).width = w));
+  paintWhite(est, ESTV_TOT + 30, 14, 16);
+  const RH: Record<number, number> = { 1: 21, 3: 55, 4: 58, 5: 49, 13: 20.25, 63: 42, 109: 42 };
+  Object.entries(RH).forEach(([r, h]) => (est.getRow(Number(r)).height = h));
 
-  put(`ESTIMATIVA DE CUSTO — IMPORTAÇÃO PRÓPRIA — ${opts.quotationName}`, undefined, { bold: true });
-  if (opts.clientName) put(`Cliente: ${opts.clientName}`);
-  if (opts.supplierName) put(`Fornecedor: ${opts.supplierName}${opts.originCountry ? ` (${opts.originCountry})` : ""}`);
-  put(`Câmbio: ${s.exchangeRate.toFixed(4)}  ·  Regime: ${regimeLabel(opts.regime)}`);
-  r++;
+  // ---- Banner ----
+  est.mergeCells("B2:H5");
+  dark(est, "B2", "                        ESTIMATIVA DE CUSTO - IMPORTAÇÃO PRÓPRIA", { size: 26, al: "center" });
 
-  // ---- PREÇO FINAL POR ITEM (segregado, em destaque no topo) ----
-  // Larguras das colunas usadas pela tabela por item.
-  [[3, 9], [4, 7], [5, 16], [6, 15], [7, 14]].forEach(([col, w]) => (est.getColumn(col).width = w));
-  section("PREÇO FINAL POR ITEM — custo nacionalizado líquido");
-  const itemHdr = est.getRow(r++);
-  ([[2, "Item"], [3, "Qtd"], [4, "Un."], [5, "Custo líq. total"], [6, "Custo / unid."], [7, "Custo / kg"]] as [number, string][])
-    .forEach(([col, label]) => {
-      const cell = itemHdr.getCell(col);
-      cell.value = label;
-      cell.font = { bold: true, size: 10, color: { argb: COLORS.header } };
-      fillCell(cell, COLORS.section);
-    });
-  result.items.forEach((it) => {
-    const row = est.getRow(r++);
-    row.getCell(2).value = it.description;
-    row.getCell(3).value = it.quantity;
-    row.getCell(4).value = it.unit;
-    const cTot = row.getCell(5); cTot.value = it.netTotalCost; cTot.numFmt = MONEY; cTot.font = { bold: true };
-    const cUn = row.getCell(6); cUn.value = it.netUnitCost; cUn.numFmt = MONEY; cUn.font = { bold: true };
-    if (it.netCostPerKg > 0) { const cKg = row.getCell(7); cKg.value = it.netCostPerKg; cKg.numFmt = MONEY; }
+  // ---- Dados Cliente ----
+  set(est, "B7", "Dados Cliente", { size: 16 });
+  dark(est, "B8", "Cliente", { size: 16, al: "left" });
+  est.mergeCells("C8:H8");
+  set(est, "C8", opts.clientName ?? "", { size: 16, al: "left", border: true });
+  dark(est, "B9", "CNPJ", { size: 16, al: "left" });
+  est.mergeCells("E9:F9"); est.mergeCells("G9:H9");
+  set(est, "C9", "", { size: 16, al: "left", border: true });
+  est.getCell("E9").numFmt = "000000000000\\-00";
+  dark(est, "B10", "Endereço", { size: 16, al: "left" });
+  est.mergeCells("C10:H10");
+  set(est, "C10", "", { size: 16, al: "left", border: true });
+
+  // ---- Mercadoria / Dados Complementares ----
+  set(est, "B12", "Mercadoria / Dados Complementares", { size: 16 });
+  dark(est, "B13", "Produto:", { size: 16, al: "left" });
+  est.mergeCells("C13:H13");
+  const prod0 = items[0];
+  set(est, "C13", prod0 ? `${prod0.description} - NCM ${prod0.ncm}` : opts.quotationName, { size: 16, al: "left", border: true });
+
+  set(est, "B15", "Data do Câmbio", { size: 16, al: "left", border: true });
+  set(est, "C15", "Câmbio / USD", { size: 16, al: "left", border: true });
+  est.mergeCells("E15:G15");
+  set(est, "E15", "Incoterms", { size: 16, al: "center", border: true });
+  set(est, "B16", fx("TODAY()"), { size: 16, fmt: "dd/mm/yy", al: "left", border: true });
+  set(est, "C16", fx(`${CM}!H7`, s.exchangeRate), { size: 16, fmt: FX4, al: "left", border: true });
+  est.mergeCells("E16:G16");
+  set(est, "E16", "FOB", { size: 16, al: "center", border: true });
+
+  // ---- Importação ----
+  set(est, "B18", "Importação", { size: 16 });
+  set(est, "G18", "Valor U$", { size: 16, al: "center" });
+  set(est, "H18", "Valor  R$", { size: 16, al: "center" });
+  dark(est, "B19", "Valor FOB", { size: 16, al: "left" });
+  set(est, "G19", fx(`${CM}!D6`, s.fobTotalFob), { size: 16, fmt: USD, border: true });
+  set(est, "H19", fx("G19*C16", s.fobTotalBrl), { size: 16, fmt: BRL, al: "center", border: true });
+  dark(est, "B20", "Frete Internacional", { size: 16, al: "left" });
+  set(est, "G20", fx(`${CM}!D7`, s.freightTotalBrl / (s.exchangeRate || 1)), { size: 16, fmt: USD, border: true });
+  set(est, "H20", fx("G20*C16", s.freightTotalBrl), { size: 16, fmt: BRL, al: "center", border: true });
+  dark(est, "B21", "Total - Valor CIF", { size: 16, al: "left" });
+  set(est, "G21", fx("SUM(G19:G20)"), { size: 16, fmt: USD, border: true });
+  dark(est, "H21", "", { size: 16, al: "left" });
+  est.getCell("H21").value = fx("SUM(H19:H20)", s.cifTotalBrl);
+  est.getCell("H21").numFmt = BRL;
+
+  // ---- Tributos ----
+  set(est, "B23", "Tributos", { size: 16, al: "left" });
+  set(est, "H23", "Valor  R$", { size: 16, al: "center" });
+  const trib: [string, string, string, number][] = [
+    ["B24", "I.I.", `${CM}!U${CM_TOT}`, s.iiTotal],
+    ["B25", "IPI-Imp.", `${CM}!AA${CM_TOT}`, s.ipiTotal],
+    ["B26", "PIS-Imp.", `${CM}!AC${CM_TOT}`, s.pisTotal],
+    ["B27", "COFINS-Imp.", `${CM}!AE${CM_TOT}`, s.cofinsTotal],
+    ["B28", "ICMS Antecipado", `${CM}!AI${CM_TOT}`, s.icmsClienteTotal],
+    ["B29", "TX Siscomex", `${CM}!H8`, s.siscomexTotal],
+  ];
+  trib.forEach(([ref, txt, formula, val]) => {
+    dark(est, ref, txt, { size: 16, al: "left" });
+    set(est, `H${ref.slice(1)}`, fx(formula, val), { size: 16, fmt: BRL2, al: "center", border: true });
   });
-  if (result.items.length > 1) {
-    const totRow = est.getRow(r++);
-    totRow.getCell(2).value = "TOTAL";
-    totRow.getCell(5).value = result.items.reduce((a, it) => a + it.netTotalCost, 0);
-    totRow.getCell(5).numFmt = MONEY;
-    totRow.font = { bold: true };
+  dark(est, "B30", "Total Tributos", { size: 16, al: "left" });
+  dark(est, "H30", "", { size: 16, al: "center" });
+  est.getCell("H30").value = fx("SUM(H24:H29)", s.taxesTotal);
+  est.getCell("H30").numFmt = BRL;
+
+  // ---- Lançamentos Custos Aduaneiros ----
+  set(est, "B32", "Lançamentos Custos Aduaneiros", { size: 16 });
+  set(est, "H32", "Valor  R$", { size: 16, al: "center" });
+  const adua: [string, string, string][] = [
+    ["B33", "Liberação de BL", `${CM}!E13`],
+    ["B34", "Armazenagem", `${CM}!E14`],
+    ["B35", "Frete interno", `${CM}!E15`],
+    ["B36", "Taxa de Expediente", `${CM}!E17`],
+    ["B37", "Despacho Aduaneiro", `${CM}!E16`],
+    ["B38", "AFRMM", `${CM}!H9`],
+  ];
+  adua.forEach(([ref, txt, formula]) => {
+    dark(est, ref, txt, { size: 16, al: "left" });
+    set(est, `H${ref.slice(1)}`, fx(formula), { size: 16, fmt: BRL2, al: "center", border: true });
+  });
+  dark(est, "B39", "Total Despesas Aduaneiras", { size: 16, al: "left" });
+  dark(est, "H39", "", { size: 16 });
+  est.getCell("H39").value = fx("SUM(H33:H38)", s.customsCostsTotal);
+  est.getCell("H39").numFmt = BRL;
+
+  // ---- NF-e de Importação ----
+  set(est, "B41", "NF-e de Importação", { size: 16 });
+  set(est, "H41", "Valor  R$", { size: 16, al: "center" });
+  dark(est, "B42", "Produto", { size: 16 });
+  set(est, "H42", fx("H21", s.nfeProduto), { size: 16, fmt: BRL, border: true });
+  dark(est, "B43", "I.I.", { size: 16 });
+  set(est, "H43", fx("H24", s.nfeIi), { size: 16, fmt: BRL, border: true });
+  dark(est, "B44", "IPI-Imp.", { size: 16 });
+  set(est, "H44", fx("H25", s.nfeIpi), { size: 16, fmt: BRL, border: true });
+  dark(est, "B45", "Outras Despesas ", { size: 16 });
+  set(est, "C45", "PIS+COFINS+ICMS ANTECIPADO+TAXA SISCOMEX+AFRMM", { size: 16, border: true });
+  set(est, "H45", fx("H26+H27+H29+H38+H28", s.nfeOutrasDespesas), { size: 16, fmt: BRL, border: true });
+  dark(est, "B46", "NF-e Nacionalização", { size: 16 });
+  dark(est, "H46", "", { size: 16 });
+  est.getCell("H46").value = fx("SUM(H42:H45)", s.nfeNacionalizacao);
+  est.getCell("H46").numFmt = BRL;
+
+  // ---- Outras Despesas Operacionais ----
+  ["H47", "H48"].forEach((ref) => set(est, ref, "", { size: 16, bg: "FFA6A6A6" })); // separador cinza (modelo)
+  set(est, "B48", "Outras Despesas Operacionais", { size: 16 });
+  dark(est, "B49", "Pacote Logístico", { size: 16 });
+  set(est, "H49", fx(`${CM}!E21`, s.pacoteLogistico), { size: 16, fmt: BRL, border: true });
+  dark(est, "B50", "Assessoria", { size: 16 });
+  set(est, "H50", fx(`${CM}!AK${CM_TOT}`, s.assessoriaTotal), { size: 16, fmt: BRL, border: true });
+  dark(est, "B51", "Total outras despesas operacionais", { size: 16 });
+  dark(est, "H51", "", { size: 16 });
+  est.getCell("H51").value = fx("SUM(H49:H50)", s.pacoteLogistico + s.assessoriaTotal);
+  est.getCell("H51").numFmt = BRL;
+
+  // ---- Custo Líquido do Importador (créditos conforme regime) ----
+  const real = opts.regime === "lucro_real";
+  const semCred = opts.regime === "simples_nacional";
+  set(est, "B53", "Custo Líquido do Importador", { size: 16 });
+  dark(est, "B54", "PIS-Imp.", { size: 16 });
+  set(est, "H54", real ? fx("H26") : 0, { size: 16, fmt: BRL2, al: "center", border: true });
+  dark(est, "B55", "COFINS-Imp.", { size: 16 });
+  set(est, "H55", real ? fx(`${CM}!AF${CM_TOT}`) : 0, { size: 16, fmt: BRL2, al: "center", border: true });
+  dark(est, "B56", "ICMS Antecipado", { size: 16, al: "left" });
+  set(est, "H56", semCred ? 0 : fx("H28"), { size: 16, fmt: BRL2, al: "center", border: true });
+  dark(est, "B57", "IPI-Imp.", { size: 16 });
+  set(est, "H57", semCred ? 0 : fx("H25"), { size: 16, fmt: BRL, border: true });
+  dark(est, "B58", "Tributos Recuperáveis", { size: 16 });
+  set(est, "H58", fx("SUM(H54:H57)", s.recoverableCreditsTotal), { size: 16, fmt: BRL, border: true });
+  dark(est, "B59", "Custo Líquido", { size: 16 });
+  dark(est, "H59", "", { size: 16 });
+  est.getCell("H59").value = fx("H46+H51+H39-H38-H58", s.netCostTotal);
+  est.getCell("H59").numFmt = BRL;
+
+  // ---- Estimativa de custo líquido por item (61..89) ----
+  est.mergeCells("B61:E61");
+  set(est, "B61", "ESTIMATIVA DE CUSTO LÍQUIDO DO IMPORTADOR - POR ITEM", { size: 16, bold: true, al: "center", border: true });
+  dark(est, "B62", "Descrição", { size: 16, al: "center" });
+  dark(est, "C62", "Quantidade", { size: 16, al: "center" });
+  dark(est, "D62", "Valor dos produtos", { size: 16, al: "center" });
+  dark(est, "E62", "Valor unit.", { size: 16, al: "center" });
+  for (let r = EST_ITEM0; r <= EST_LAST; r++) {
+    ["B", "C", "D", "E"].forEach((col) => {
+      const cell = est.getCell(`${col}${r}`);
+      cell.border = BOX;
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.font = { size: 16, color: { argb: ITEM_TEXT } };
+      cell.numFmt = col === "B" ? "@" : col === "C" ? INT : BRL;
+    });
   }
-  r++;
+  items.forEach((it, i) => {
+    const r = EST_ITEM0 + i;
+    const cmR = CM_ITEM0 + i;
+    est.getCell(`B${r}`).value = fx(`${CM}!G${cmR}`, it.description);
+    est.getCell(`C${r}`).value = fx(`${CM}!E${cmR}`, it.quantity);
+    est.getCell(`D${r}`).value = fx(`${CM}!AP${cmR}`, it.netTotalCost);
+    est.getCell(`E${r}`).value = fx(`D${r}/C${r}`, it.netUnitCost);
+  });
+  for (let r = EST_ITEM0 + ctx.n + 1; r <= EST_LAST; r++) est.getRow(r).hidden = true;
+  set(est, `C${EST_TOT}`, fx(`SUM(C${EST_ITEM0}:C${EST_LAST})`), { size: 16, bold: true, color: ITEM_TEXT, fmt: INT, al: "center" });
+  set(est, `D${EST_TOT}`, fx(`SUM(D${EST_ITEM0}:D${EST_LAST})`, s.netCostTotal), { size: 16, bold: true, color: ITEM_TEXT, fmt: BRL, al: "center" });
 
-  section("VALOR ADUANEIRO");
-  put("Valor FOB", s.fobTotalBrl, { formula: refTot("fobbrl") });
-  put("Frete Internacional", s.freightTotalBrl, { formula: refTot("frete") });
-  put("Seguro", s.insuranceTotalBrl);
-  put("Total — Valor CIF", s.cifTotalBrl, { bold: true });
-  r++;
+  // ---- Estimativa de venda (92..105) ----
+  const icmsVendaRate = s.salePriceTotal > 0 ? s.icmsVendaTotal / s.salePriceTotal : 0;
+  const pisVendaRate = s.salePriceTotal > 0 ? s.pisVendaTotal / s.salePriceTotal : 0;
+  const cofinsVendaRate = s.salePriceTotal > 0 ? s.cofinsVendaTotal / s.salePriceTotal : 0;
+  const lucroRate = s.salePriceTotal > 0 ? s.lucroDesejadoValor / s.salePriceTotal : 0;
+  const irpjRate = 0.25, csllRate = 0.09;
 
-  section("TRIBUTOS DE NACIONALIZAÇÃO");
-  put("I.I.", s.iiTotal, { formula: refTot("ii") });
-  put("IPI-Imp.", s.ipiTotal, { formula: refTot("ipi") });
-  put("PIS-Imp.", s.pisTotal, { formula: refTot("pis") });
-  put("COFINS-Imp.", s.cofinsTotal, { formula: refTot("cofins") });
-  put("ICMS Antecipado", s.icmsClienteTotal, { formula: refTot("icms") });
-  put("Taxa Siscomex", s.siscomexTotal);
-  put("Total Tributos", s.taxesTotal, { bold: true });
-  if (ctx.internal && Math.abs(s.ganhoBeneficioIcmsTotal) > 0.005) {
-    put("→ Ganho do benefício de ICMS (interno)", s.ganhoBeneficioIcmsTotal, { bold: true });
+  est.mergeCells("B92:H92");
+  set(est, "B92", "ESTIMATIVA DE VENDA", { size: 16, bold: true, al: "center", border: true });
+  est.mergeCells("J92:K92");
+  set(est, "J92", "LUCRO DESEJADO, IRPJ E CSLL", { size: 16, bold: true, al: "center", border: true });
+  set(est, "L92", "TOTAIS", { size: 16, bold: true, al: "center", border: true });
+
+  est.mergeCells("B93:D93");
+  set(est, "B93", "ICMS", { size: 16, al: "left", border: true });
+  set(est, "F93", icmsVendaRate, { size: 16, fmt: PCT2, border: true });
+  set(est, "H93", fx("H98*F93", s.icmsVendaTotal), { size: 16, fmt: BRL2, al: "center", border: true });
+  set(est, "J93", "LUCRO DESEJADO", { size: 16, border: true });
+  set(est, "K93", lucroRate, { size: 16, fmt: PCT2, bg: YELLOW, border: true });
+  set(est, "L93", fx("H98*K93", s.lucroDesejadoValor), { size: 16, fmt: BRL, border: true });
+
+  set(est, "B94", "PIS", { size: 16, al: "left", border: true });
+  set(est, "F94", pisVendaRate, { size: 16, fmt: PCT2, border: true });
+  set(est, "H94", fx("H98*F94", s.pisVendaTotal), { size: 16, fmt: BRL2, al: "center", border: true });
+  set(est, "J94", "IRPJ", { size: 16, border: true });
+  set(est, "K94", irpjRate, { size: 16, fmt: PCT2, border: true });
+  set(est, "L94", fx("H96*K94", s.irpjValor), { size: 16, fmt: BRL, border: true });
+
+  set(est, "B95", "COFINS", { size: 16, al: "left", border: true });
+  set(est, "F95", cofinsVendaRate, { size: 16, fmt: PCT2, border: true });
+  set(est, "H95", fx("H98*F95", s.cofinsVendaTotal), { size: 16, fmt: BRL2, al: "center", border: true });
+  set(est, "J95", "CSLL", { size: 16, border: true });
+  set(est, "K95", csllRate, { size: 16, fmt: PCT2, border: true });
+  set(est, "L95", fx("H96*K95", s.csllValor), { size: 16, fmt: BRL, border: true });
+
+  set(est, "B96", "MARGEM", { size: 16, al: "left", border: true });
+  set(est, "F96", fx("K93/(1-(K94+K95))", s.margemBruta), { size: 16, fmt: PCT2, border: true });
+  set(est, "H96", fx("H98*F96"), { size: 16, fmt: BRL2, al: "center", border: true });
+  set(est, "L96", fx("SUM(L93:L95)"), { size: 16, bold: true, fmt: BRL, border: true });
+
+  // Faixas escuras completas (B..H), como no modelo.
+  ["C97", "D97", "E97", "F97", "G97", "C98", "D98", "E98", "F98", "G98"].forEach((ref) => dark(est, ref, "", { size: 16 }));
+  dark(est, "B97", "MARKUP", { size: 16, al: "left" });
+  dark(est, "H97", "", { size: 16, al: "right" });
+  est.getCell("H97").value = fx("1-(F93+F94+F95+F96)", s.markupFactor);
+  est.getCell("H97").numFmt = MKP4;
+
+  dark(est, "B98", "VALOR DOS PRODUTOS ", { size: 16, al: "left" });
+  dark(est, "H98", "", { size: 16 });
+  est.getCell("H98").value = fx("H59/H97", s.salePriceTotal);
+  est.getCell("H98").numFmt = BRL;
+
+  set(est, "B99", "IPI", { size: 16, al: "left" });
+  set(est, "H99", fx(`${CM}!AV${CM_TOT}`, s.ipiVendaTotal), { size: 16, fmt: BRL2, al: "center", border: true });
+  set(est, "B100", "ICMS ST", { size: 16, al: "left" });
+  set(est, "H100", fx(`${CM}!AW${CM_TOT}`, s.icmsStTotal), { size: 16, fmt: BRL2, al: "center", border: true });
+  ["C101", "D101", "E101", "F101", "G101"].forEach((ref) => set(est, ref, "", { size: 16, bold: true, bg: YELLOW, border: true }));
+  set(est, "B101", "VALOR TOTAL DA VENDA", { size: 16, bold: true, bg: YELLOW, border: true });
+  set(est, "H101", fx("SUM(H98:H100)", s.totalSaleInvoice), { size: 16, bold: true, fmt: RS_PLAIN, bg: YELLOW, border: true });
+
+  set(est, "B102", "ROYALTIES", { size: 16, al: "left", border: true });
+  set(est, "H102", fx(`${CM}!E22`, s.royaltiesTotal), { size: 16, fmt: BRL2, al: "center", border: true });
+  set(est, "B103", "MARGEM LÍQUIDO ROYALTIES", { size: 16, al: "left", border: true });
+  set(est, "H103", fx("H102*K93"), { size: 16, fmt: BRL2, al: "center", border: true });
+  set(est, "B104", "VALOR TOTAL ROYALTIES", { size: 16, al: "left", border: true });
+  set(est, "H104", fx("SUM(H102:H103)", s.royaltiesComMargem), { size: 16, fmt: BRL2, al: "center", border: true });
+  ["C105", "D105", "E105", "F105", "G105"].forEach((ref) => set(est, ref, "", { size: 16, bold: true, bg: YELLOW, border: true }));
+  set(est, "B105", "VALOR TOTAL DA OPERAÇÃO COM ROYALTIES", { size: 16, bold: true, bg: YELLOW, border: true });
+  set(est, "H105", fx("SUM(H101,H104)", s.totalOperacaoComRoyalties), { size: 16, bold: true, fmt: RS_PLAIN, bg: YELLOW, border: true });
+
+  // ---- Estimativa de venda por item (107..135) ----
+  est.mergeCells("B107:K107");
+  set(est, "B107", "ESTIMATIVA DE VENDA - POR ITEM", { size: 16, bold: true, al: "center", border: true });
+  const vHdr: [string, string][] = [
+    ["B", "Descrição"], ["C", "Quantidade"], ["D", "Valor dos produtos"], ["E", "Valor IPI"],
+    ["F", "Valor ICMS ST"], ["G", "Valor Total"], ["H", "Valor unit. c/ IPI e ICMS ST"],
+    ["I", "Royalties"], ["J", "Valor Total IMP"], ["K", "Valor unit. IMP"],
+  ];
+  vHdr.forEach(([col, txt]) => dark(est, `${col}108`, txt, { size: 16, al: "center", wrap: true }));
+  for (let r = ESTV_ITEM0; r <= ESTV_LAST; r++) {
+    vHdr.forEach(([col]) => {
+      const cell = est.getCell(`${col}${r}`);
+      cell.border = BOX;
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.font = { size: 16, color: { argb: ITEM_TEXT } };
+      cell.numFmt = col === "B" ? "@" : col === "C" ? INT : BRL;
+    });
   }
-  r++;
+  items.forEach((it, i) => {
+    const r = ESTV_ITEM0 + i;
+    const cmR = CM_ITEM0 + i;
+    est.getCell(`B${r}`).value = fx(`${CM}!G${cmR}`, it.description);
+    est.getCell(`C${r}`).value = fx(`${CM}!E${cmR}`, it.quantity);
+    est.getCell(`D${r}`).value = fx(`${CM}!AS${cmR}`, it.salePrice);
+    est.getCell(`E${r}`).value = fx(`${CM}!AV${cmR}`, it.ipiVendaValue);
+    est.getCell(`F${r}`).value = fx(`${CM}!AW${cmR}`, it.icmsStValue);
+    est.getCell(`G${r}`).value = fx(`D${r}+E${r}+F${r}`, it.totalInvoiceValue);
+    est.getCell(`H${r}`).value = fx(`G${r}/C${r}`, it.unitInvoiceValue);
+    est.getCell(`I${r}`).value = fx(`$H$104*${CM}!L${cmR}`, it.royaltiesAllocated);
+    est.getCell(`J${r}`).value = fx(`G${r}+I${r}`, it.totalWithRoyalties);
+    est.getCell(`K${r}`).value = fx(`J${r}/C${r}`, it.unitWithRoyalties);
+  });
+  for (let r = ESTV_ITEM0 + ctx.n + 1; r <= ESTV_LAST; r++) est.getRow(r).hidden = true;
+  ["C", "D", "E", "F", "G", "I", "J"].forEach((col) => {
+    set(est, `${col}${ESTV_TOT}`, fx(`SUM(${col}${ESTV_ITEM0}:${col}${ESTV_LAST})`),
+      { size: 16, bold: true, color: ITEM_TEXT, fmt: col === "C" ? INT : BRL, al: "center" });
+  });
 
-  section("CUSTOS ADUANEIROS");
-  // Itemiza as "Demais Despesas" quando há quebra (porto/despachante); senão, linha única.
-  const bd = (result as unknown as { despesasBreakdown?: {
-    liberacaoBl: number; armazenagem: number; freteInterno: number;
-    despacho: number; expediente: number; portoCode: string | null;
-  } }).despesasBreakdown;
-  if (bd) {
-    put(`Armazenagem${bd.portoCode ? ` (${bd.portoCode})` : ""}`, bd.armazenagem);
-    put("Liberação de BL", bd.liberacaoBl);
-    put("Frete interno", bd.freteInterno);
-    put("Comissão Despacho Aduaneiro", bd.despacho);
-    put("Taxa de Expediente", bd.expediente);
-  } else {
-    put("Demais despesas (BL, armazenagem, frete interno, despacho)", s.demaisDespesasTotal, { formula: refTot("demais") });
+  // ============================================================
+  // ACRÉSCIMOS ACORDADOS (abaixo da área espelhada 1:1)
+  // ============================================================
+  let r = ESTV_TOT + 3; // 138
+  const put = (label: string, value: number | ExcelJS.CellValue, o: { fmt?: string; boldRow?: boolean } = {}) => {
+    dark(est, `B${r}`, label, { size: 16, al: "left" });
+    set(est, `H${r}`, value as CellVal, { size: 16, bold: o.boldRow, fmt: o.fmt ?? BRL2, al: "center", border: true });
+    r++;
+  };
+  const header = (txt: string) => {
+    est.mergeCells(`B${r}:H${r}`);
+    set(est, `B${r}`, txt, { size: 16, bold: true, al: "center", border: true });
+    r++;
+  };
+
+  if (s.finalidade !== "consumo_proprio" && ctx.internal) {
+    header("GANHO DA OPERAÇÃO (visão interna)");
+    put("Margem da venda", s.ganho.margemVenda);
+    if (s.royaltiesTotal > 0) put("Margem de royalties", s.ganho.margemRoyalties);
+    put("Ganho do benefício de ICMS", s.ganho.ganhoIcms);
+    put("Ganho total da operação", s.ganho.total, { boldRow: true });
+    r++;
   }
-  put("AFRMM", s.afrmmTotal, { formula: refTot("afrmm") });
-  put("Total", s.customsCostsTotal, { bold: true });
-  r++;
-
-  section("NF-e DE NACIONALIZAÇÃO");
-  put("Produto (CIF)", s.nfeProduto);
-  put("I.I.", s.nfeIi);
-  put("IPI", s.nfeIpi);
-  put("Outras Despesas (PIS+COFINS+ICMS+Siscomex+AFRMM)", s.nfeOutrasDespesas);
-  put("NF-e Nacionalização", s.nfeNacionalizacao, { bold: true });
-  r++;
-
-  section("CUSTO LÍQUIDO DO IMPORTADOR");
-  put("Tributos recuperáveis (créditos)", s.recoverableCreditsTotal);
-  put("Pacote logístico", s.pacoteLogistico);
-  put("Assessoria", s.assessoriaTotal, { formula: refTot("assess") });
-  put("Custo Líquido Total", s.netCostTotal, { formula: refTot("nettotal"), bold: true });
-  r++;
-
-  // CONSUMO PRÓPRIO: não há revenda — o entregável é o custo nacionalizado.
-  if (s.finalidade === "consumo_proprio") {
-    section("IMPORTAÇÃO PARA CONSUMO PRÓPRIO");
-    put("Custo nacionalizado (sem revenda, tributos viram custo)", s.netCostTotal, { formula: refTot("nettotal"), bold: true });
-    put("Custo unitário médio", result.items.length ? s.netCostTotal / result.items.reduce((a, i) => a + i.quantity, 0) : 0);
-    const warns0 = [...result.warnings, ...((result as { ncmWarnings?: string[] }).ncmWarnings ?? [])];
-    if (warns0.length) {
-      r++;
-      section("AVISOS");
-      warns0.forEach((w) => put(`• ${w}`));
-    }
-    return;
-  }
-
-  section("ESTIMATIVA DE VENDA DO IMPORTADOR");
-  put("Margem bruta (lucro / (1 − IRPJ − CSLL))", s.margemBruta, { fmt: PCT });
-  put("Fator markup", s.markupFactor, { fmt: PCT });
-  put("Valor dos Produtos", s.salePriceTotal, { formula: refTot("produtos"), bold: true });
-  put("ICMS venda", s.icmsVendaTotal, { formula: refTot("vicms") });
-  put("IPI venda", s.ipiVendaTotal, { formula: refTot("vipi") });
-  put("ICMS ST", s.icmsStTotal);
-  put("VALOR TOTAL DA VENDA", s.totalSaleInvoice, { formula: refTot("vnf"), bold: true });
-  put("Lucro desejado (R$)", s.lucroDesejadoValor);
-  put("IRPJ", s.irpjValor);
-  put("CSLL", s.csllValor);
-  r++;
-
-  section("GANHO DA OPERAÇÃO");
-  put("Margem da venda", s.ganho.margemVenda);
-  if (s.royaltiesTotal > 0) put("Margem de royalties", s.ganho.margemRoyalties);
-  if (ctx.internal) put("Ganho do benefício de ICMS", s.ganho.ganhoIcms);
-  put("Ganho total da operação", s.ganho.total, { bold: true });
 
   if (ctx.hasBuyer && s.buyer) {
+    const b = s.buyer;
+    header("ESTIMATIVA DO COMPRADOR - LUCRO REAL");
+    put("Custo Líquido do Comprador", b.netCostTotal);
+    put("Margem bruta", b.margemBruta, { fmt: PCT2 });
+    put("Markup", b.markupFactor, { fmt: MKP4 });
+    put("Valor dos Produtos", b.salePriceTotal);
+    put("ICMS venda", b.icmsVendaTotal);
+    put("IPI venda", b.ipiVendaTotal);
+    put("ICMS ST", b.icmsStTotal);
+    put("VALOR TOTAL DA VENDA", b.totalSaleInvoice, { boldRow: true });
+    put("Lucro desejado (R$)", b.lucroDesejadoValor);
+    put("IRPJ", b.irpjValor);
+    put("CSLL", b.csllValor);
     r++;
-    section("CUSTO LÍQUIDO DO COMPRADOR — LUCRO REAL");
-    put("Custo Líquido do Comprador", s.buyer.netCostTotal, { formula: refTot("bnet"), bold: true });
+  }
+
+  if (s.finalidade === "consumo_proprio") {
+    header("IMPORTAÇÃO PARA CONSUMO PRÓPRIO");
+    put("Custo nacionalizado (tributos viram custo)", s.netCostTotal, { boldRow: true });
     r++;
-    section("ESTIMATIVA DE VENDA DO COMPRADOR — LUCRO REAL");
-    put("Margem bruta", s.buyer.margemBruta, { fmt: PCT });
-    put("Fator markup", s.buyer.markupFactor, { fmt: PCT });
-    put("Valor dos Produtos", s.buyer.salePriceTotal, { formula: refTot("bprodutos"), bold: true });
-    put("ICMS venda", s.buyer.icmsVendaTotal, { formula: refTot("bicms") });
-    put("IPI venda", s.buyer.ipiVendaTotal, { formula: refTot("bipi") });
-    put("ICMS ST", s.buyer.icmsStTotal);
-    put("VALOR TOTAL DA VENDA", s.buyer.totalSaleInvoice, { formula: refTot("bnf"), bold: true });
-    put("Lucro desejado (R$)", s.buyer.lucroDesejadoValor);
-    put("IRPJ", s.buyer.irpjValor);
-    put("CSLL", s.buyer.csllValor);
   }
 
   const warns = [...result.warnings, ...((result as { ncmWarnings?: string[] }).ncmWarnings ?? [])];
   if (warns.length) {
-    r++;
-    section("AVISOS");
-    warns.forEach((w) => put(`• ${w}`));
+    header("AVISOS");
+    warns.forEach((w) => {
+      est.mergeCells(`B${r}:H${r}`);
+      set(est, `B${r}`, `• ${w}`, { size: 12, al: "left", wrap: true });
+      r++;
+    });
   }
+
+  // Info de contexto (discreta, abaixo de tudo)
+  r++;
+  set(est, `B${r}`, `${opts.quotationName}${opts.supplierName ? ` · Fornecedor: ${opts.supplierName}` : ""}${opts.originCountry ? ` (${opts.originCountry})` : ""} · Regime: ${regimeLabel(opts.regime)}`, { size: 10, al: "left" });
+  est.getCell(`B${r}`).font = { size: 10, italic: true, color: { argb: "FF888888" } };
 }
