@@ -39,6 +39,7 @@ IDEMPOTENT_MIGRATIONS=(
   "drizzle/0028_widen_product_name_columns.sql"
   "drizzle/0029_add_description_to_proforma_items.sql"
   "drizzle/0030_add_classification_to_products.sql"
+  "drizzle/0036_admin_role.sql"
 )
 
 echo "╔════════════════════════════════════════════════════════════╗"
@@ -112,6 +113,18 @@ if [ $attempts -eq $max ]; then
   docker-compose logs --tail 40 app
   exit 1
 fi
+echo ""
+
+# Passo 5 — limpeza de imagens órfãs (evita o disco encher a cada rebuild)
+# Só roda APÓS o health check passar: se o deploy falhasse, preservaríamos a
+# imagem anterior para rollback. Remove só imagens SEM container (o -a); NÃO
+# toca em volumes (o banco fica intacto).
+log "Limpando imagens Docker não utilizadas (libera disco)..."
+BEFORE="$(docker system df --format '{{.Type}} {{.Reclaimable}}' 2>/dev/null | grep -i '^Images' || true)"
+docker image prune -af >/dev/null 2>&1 || warn "prune de imagens falhou (siga mesmo assim)"
+docker builder prune -f >/dev/null 2>&1 || true
+ok "Imagens antigas removidas"
+df -h / | awk 'NR==1 || /\/$/ {print "  " $0}'
 echo ""
 
 echo "╔════════════════════════════════════════════════════════════╗"
