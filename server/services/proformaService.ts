@@ -8,6 +8,7 @@
  */
 import * as db from "../db";
 import { invokeLLM } from "../_core/llm";
+import { pdfBufferToText } from "./pdfToText";
 import { suggestNCMWithAI, suggestNCMBatch } from "./ncmService";
 import { suggestNCMSmart } from "./smartNcmService";
 import { inferCategories, findProductByNameAndSupplier } from "./productCategorizationService";
@@ -124,21 +125,28 @@ IMPORTANTE:
 ${hints?.supplierName ? `- Fornecedor esperado: ${hints.supplierName}` : ""}
 ${hints?.expectedProducts?.length ? `- Produtos esperados: ${hints.expectedProducts.join(", ")}` : ""}`;
 
-  let base64Data: string;
+  let buffer: Buffer;
   try {
     const fileResponse = await fetch(fileUrl);
     if (!fileResponse.ok) {
       throw new Error(`HTTP ${fileResponse.status} ao baixar arquivo`);
     }
-    const arrayBuffer = await fileResponse.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    base64Data = buffer.toString("base64");
+    buffer = Buffer.from(await fileResponse.arrayBuffer());
   } catch (downloadError) {
     throw new Error(`Erro ao baixar arquivo: ${downloadError instanceof Error ? downloadError.message : String(downloadError)}`);
   }
 
-  const mediaType = mimeType === "application/pdf" ? "application/pdf" : "image/jpeg";
-  const contentType = mimeType === "application/pdf" ? "document" : "image";
+  // PDF de texto → envia TEXTO PURO (economiza tokens, remove peso visual).
+  // PDF-imagem/escaneado ou imagem → mantém base64 (leitura nativa do Claude).
+  let fileBlock: any;
+  if (mimeType === "application/pdf") {
+    const extraido = await pdfBufferToText(buffer);
+    fileBlock = extraido.ok
+      ? { type: "text", text: `Conteúdo da proforma (PDF, texto extraído):\n\n${extraido.text}` }
+      : { type: "document", source: { type: "base64", media_type: "application/pdf", data: buffer.toString("base64") } };
+  } else {
+    fileBlock = { type: "image", source: { type: "base64", media_type: "image/jpeg", data: buffer.toString("base64") } };
+  }
 
   const result = await invokeLLM({
     messages: [
@@ -146,14 +154,7 @@ ${hints?.expectedProducts?.length ? `- Produtos esperados: ${hints.expectedProdu
         role: "user",
         content: [
           { type: "text", text: prompt },
-          {
-            type: contentType as any,
-            source: {
-              type: "base64",
-              media_type: mediaType,
-              data: base64Data,
-            },
-          } as any,
+          fileBlock,
         ],
       },
     ],

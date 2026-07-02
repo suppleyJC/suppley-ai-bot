@@ -11,6 +11,7 @@
  */
 import type { MessageContent } from "../_core/llm";
 import { isSpreadsheet, spreadsheetBufferToText } from "./spreadsheetToText";
+import { pdfBufferToText } from "./pdfToText";
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
 
@@ -32,10 +33,21 @@ export async function buildAttachmentBlock(att: AttachmentRef): Promise<MessageC
       return { type: "text", text: `Conteúdo da planilha anexada (${att.name}):\n\n${tabela}` };
     }
 
-    const data = buffer.toString("base64");
+    // PDF: extrai TEXTO PURO (economiza tokens e elimina peso visual/imagens/
+    // metadados). PDF escaneado (sem camada de texto) cai no base64 abaixo.
     if (att.mimeType === "application/pdf") {
-      return { type: "document", source: { type: "base64", media_type: "application/pdf", data } };
+      const extraido = await pdfBufferToText(buffer);
+      if (extraido.ok) {
+        return {
+          type: "text",
+          text: `Conteúdo do PDF anexado (${att.name}${extraido.pageCount ? `, ${extraido.pageCount} pág.` : ""}):\n\n${extraido.text}`,
+        };
+      }
+      // Sem texto extraível (provável PDF-imagem): mantém leitura nativa.
+      return { type: "document", source: { type: "base64", media_type: "application/pdf", data: buffer.toString("base64") } };
     }
+
+    const data = buffer.toString("base64");
     const media = (IMAGE_TYPES as readonly string[]).includes(att.mimeType)
       ? (att.mimeType as (typeof IMAGE_TYPES)[number])
       : "image/jpeg";

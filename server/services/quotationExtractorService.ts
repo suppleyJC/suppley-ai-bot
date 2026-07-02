@@ -1,4 +1,5 @@
 import { invokeLLM } from "../_core/llm";
+import { pdfBase64ToText } from "./pdfToText";
 
 export interface ExtractedProduct {
   productName: string;
@@ -40,8 +41,15 @@ export async function extractQuotationFromPdfDirect(dataUrl: string): Promise<Ex
 
   const base64Data = dataUrl.replace("data:application/pdf;base64,", "");
 
+  // PDF de texto → envia TEXTO PURO (economiza tokens). PDF-imagem/escaneado
+  // cai no base64 (leitura nativa do Claude), para não perder cotações fotografadas.
+  const extraido = await pdfBase64ToText(base64Data);
+  const pdfBlock: any = extraido.ok
+    ? { type: "text", text: `Conteúdo da cotação (PDF, texto extraído):\n\n${extraido.text}` }
+    : { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Data } };
+
   try {
-    console.log("[QuotationExtractor] Calling LLM with base64 PDF...");
+    console.log(`[QuotationExtractor] Calling LLM (${extraido.ok ? "texto extraído" : "PDF base64"})...`);
     const response = await invokeLLM({
       messages: [
         {
@@ -109,16 +117,9 @@ Retorne os dados em formato JSON com a seguinte estrutura:
           content: [
             {
               type: "text",
-              text: "Analise este PDF de cotação e extraia todas as informações dos produtos e valores. Retorne os dados em formato JSON estruturado."
+              text: "Analise esta cotação e extraia todas as informações dos produtos e valores. Retorne os dados em formato JSON estruturado."
             },
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: base64Data
-              }
-            }
+            pdfBlock
           ]
         }
       ],
