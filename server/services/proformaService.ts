@@ -35,11 +35,25 @@ export interface ProformaItemInput {
   unitPriceCents: number;
 }
 
+/** Setores válidos do cadastro de fornecedores (industries.sector). */
+export const SUPPLIER_SECTORS = [
+  "metals", "construction", "machinery", "electronics", "chemicals", "textiles",
+  "food", "automotive", "plastics", "wood", "packaging", "energy", "other",
+] as const;
+export type SupplierSector = (typeof SUPPLIER_SECTORS)[number];
+
+function normalizeSector(value?: string | null): SupplierSector | undefined {
+  const v = (value || "").trim().toLowerCase();
+  return (SUPPLIER_SECTORS as readonly string[]).includes(v) ? (v as SupplierSector) : undefined;
+}
+
 export interface ProformaExtraction {
   supplierName?: string;
   supplierCountry?: string;
   supplierEmail?: string;
   supplierPhone?: string;
+  /** Setor do fornecedor sugerido pela IA (enum industries.sector). */
+  supplierSector?: string;
   currency: string;
   incoterm: string;
   paymentTerms?: string;
@@ -64,6 +78,15 @@ const EXTRACTION_SCHEMA = {
       supplierCountry: { type: ["string", "null"], description: "País do fornecedor" },
       supplierEmail: { type: ["string", "null"] },
       supplierPhone: { type: ["string", "null"] },
+      supplierSector: {
+        type: ["string", "null"],
+        enum: [...SUPPLIER_SECTORS, null],
+        description:
+          "Setor do fornecedor deduzido do nome da empresa e dos produtos cotados: " +
+          "metals (metais/aço/ferro), construction (construção civil), machinery (máquinas), " +
+          "electronics, chemicals, textiles, food, automotive, plastics, wood (madeira), " +
+          "packaging (embalagens/fitas/adesivos), energy. Use 'other' apenas se nada se aplicar.",
+      },
       currency: { type: "string", description: "Moeda ISO (USD, EUR, CNY...)" },
       incoterm: { type: "string", description: "FOB, CIF, EXW, DDP, etc." },
       paymentTerms: { type: ["string", "null"] },
@@ -104,7 +127,9 @@ export async function extractProformaFromFile(
   const prompt = `Você é um especialista em comércio exterior processando uma PROFORMA INVOICE.
 
 Extraia os dados com máxima precisão:
-1. Fornecedor/fabricante: nome, país, email, telefone
+1. Fornecedor/fabricante: nome, país, email, telefone e SETOR de atuação
+   ("supplierSector": deduza pelo nome da empresa e pelos produtos cotados — ex.: fitas adesivas → packaging;
+   pregos/escoras de aço → metals; use "other" só em último caso)
 2. Data do documento: mês, dia, ano (quando disponível)
 3. Cada item: nome do produto, NCM (se houver), quantidade, unidade, preço unitário
 4. Moeda, incoterm (FOB/CIF/EXW/DDP), condições de pagamento, lead time, MOQ, total FOB
@@ -169,6 +194,7 @@ ${hints?.expectedProducts?.length ? `- Produtos esperados: ${hints.expectedProdu
   parsed.items = parsed.items || [];
   parsed.currency = parsed.currency || "USD";
   parsed.incoterm = parsed.incoterm || "FOB";
+  parsed.supplierSector = normalizeSector(parsed.supplierSector);
   parsed.confidence = typeof parsed.confidence === "number" ? parsed.confidence : 50;
 
   // Classifica a NCM dos itens que vieram sem NCM no documento, usando o motor
@@ -225,6 +251,7 @@ export async function createProforma(
     supplierCountry?: string;
     supplierEmail?: string;
     supplierPhone?: string;
+    supplierSector?: string;
     currency: string;
     incoterm?: string;
     paymentTerms?: string;
@@ -253,6 +280,7 @@ export async function createProforma(
     supplierCountry: data.supplierCountry,
     supplierEmail: data.supplierEmail,
     supplierPhone: data.supplierPhone,
+    supplierSector: normalizeSector(data.supplierSector),
     currency: data.currency,
     incoterm: data.incoterm ?? "FOB",
     paymentTerms: data.paymentTerms,
@@ -300,6 +328,7 @@ export async function updateProforma(
     supplierCountry?: string;
     supplierEmail?: string;
     supplierPhone?: string;
+    supplierSector?: string;
     currency?: string;
     incoterm?: string;
     paymentTerms?: string;
@@ -317,6 +346,7 @@ export async function updateProforma(
     supplierCountry: data.supplierCountry,
     supplierEmail: data.supplierEmail,
     supplierPhone: data.supplierPhone,
+    supplierSector: normalizeSector(data.supplierSector),
     currency: data.currency,
     incoterm: data.incoterm,
     paymentTerms: data.paymentTerms,
@@ -352,19 +382,28 @@ export async function updateProforma(
 /** Upsert do fornecedor na base unificada (industries, tipoEntidade=fornecedor). */
 async function upsertFornecedor(
   userId: number,
-  data: { name: string; country: string; email?: string; phone?: string; incoterm?: string; currency?: string; paymentTerms?: string; leadTimeDays?: number }
+  data: { name: string; country: string; email?: string; phone?: string; incoterm?: string; currency?: string; paymentTerms?: string; leadTimeDays?: number; sector?: string }
 ): Promise<number> {
+  const sector = normalizeSector(data.sector);
   const existing = await db.getIndustriesByUser(userId);
   const match = existing.find(
     (i) => i.name.trim().toLowerCase() === data.name.trim().toLowerCase()
   );
-  if (match) return match.id;
+  if (match) {
+    // Encaminha o setor sugerido só quando o cadastro ainda não tem um definido
+    // ("other" = não categorizado). Nunca sobrescreve escolha manual do usuário.
+    if (sector && sector !== "other" && (!match.sector || match.sector === "other")) {
+      await db.updateIndustry(match.id, userId, { sector } as any);
+    }
+    return match.id;
+  }
 
   const created = await db.createIndustry({
     userId,
     name: data.name,
     country: data.country || "Desconhecido",
     tipoEntidade: "fornecedor",
+    sector: sector ?? "other",
     contactEmail: data.email,
     contactPhone: data.phone,
     preferredIncoterm: (data.incoterm as any) || "FOB",
@@ -406,7 +445,18 @@ export async function distributeProformaToBase(
       currency: proforma.currency,
       paymentTerms: proforma.paymentTerms || undefined,
       leadTimeDays: proforma.leadTimeDays || undefined,
+      sector: (proforma as any).supplierSector || undefined,
     });
+  } else if (industriaId) {
+    // Fornecedor já vinculado: encaminha o setor sugerido se o cadastro ainda
+    // estiver sem categoria (mesma regra do upsert — não sobrescreve manual).
+    const sugerido = normalizeSector((proforma as any).supplierSector);
+    if (sugerido && sugerido !== "other") {
+      const ind = await db.getIndustryById(industriaId, userId);
+      if (ind && (!ind.sector || ind.sector === "other")) {
+        await db.updateIndustry(industriaId, userId, { sector: sugerido } as any);
+      }
+    }
   }
 
   // Pré-calcula câmbio para BRL (para registrar em supplierPrices)

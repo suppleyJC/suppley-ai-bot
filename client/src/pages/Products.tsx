@@ -42,7 +42,6 @@ import {
   AlertTriangle,
   Building2,
   Tag as TagIcon,
-  SlidersHorizontal,
   ChevronRight,
   Boxes,
   Scale,
@@ -413,7 +412,6 @@ interface ModelGroup {
 export default function Products() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formData, setFormData] = useState<ProductFormData>(initialFormData);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Busca + navegação por classe (macro) + criticidade + seleção do modelo
   const [search, setSearch] = useState("");
@@ -632,43 +630,87 @@ export default function Products() {
         </Dialog>
       </div>
 
-      {/* Busca + ordenação */}
+      {/* Barra de filtros — busca, classe, criticidade e ordenação juntas */}
       {products && products.length > 0 && (
-        <div className="flex flex-col md:flex-row md:items-center gap-3 py-4 border-b">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nome, NCM, classe, especificação…"
-              className="pl-9"
-            />
+        <div className="flex flex-col gap-3 py-4 border-b">
+          <div className="flex flex-col md:flex-row md:items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nome, NCM, classe, especificação…"
+                className="pl-9"
+              />
+            </div>
+            <Select
+              value={selectedClass ?? "all"}
+              onValueChange={(v) => setSelectedClass(v === "all" ? null : v)}
+            >
+              <SelectTrigger className="md:w-56">
+                <span className="flex items-center gap-2 truncate">
+                  <Layers className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <SelectValue />
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as classes ({products.length})</SelectItem>
+                {classFacets.map((c) => (
+                  <SelectItem key={c.key} value={c.key}>
+                    {c.label} ({c.count})
+                  </SelectItem>
+                ))}
+                {semClasse > 0 && (
+                  <SelectItem value="__none__">Sem classe ({semClasse})</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+              <SelectTrigger className="md:w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">Ordenar por nome</SelectItem>
+                <SelectItem value="price">Ordenar por preço</SelectItem>
+                <SelectItem value="date">Mais recente primeiro</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="gap-2 lg:hidden"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Classes
-          </Button>
-          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-            <SelectTrigger className="md:w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="name">Ordenar por nome</SelectItem>
-              <SelectItem value="price">Ordenar por preço</SelectItem>
-              <SelectItem value="date">Mais recente primeiro</SelectItem>
-            </SelectContent>
-          </Select>
-          {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={clearAllFilters}>
-              <X className="mr-1 h-4 w-4" />
-              Limpar
-            </Button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <AlertTriangle className="h-3.5 w-3.5" /> Criticidade:
+            </span>
+            {(["alta", "media", "baixa"] as const).map((value) => {
+              const meta = CRIT_META[value];
+              const count = products.filter((p) => p.criticidade === value).length;
+              const active = selectedCrit.has(value);
+              return (
+                <button
+                  key={value}
+                  onClick={() => {
+                    const next = new Set(selectedCrit);
+                    if (active) next.delete(value); else next.add(value);
+                    setSelectedCrit(next);
+                  }}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                    active
+                      ? "border-violet-300 bg-violet-50 text-violet-700"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ background: meta.dot }} />
+                  {meta.label}
+                  <span className="text-[10px] text-muted-foreground">{count}</span>
+                </button>
+              );
+            })}
+            {hasFilters && (
+              <Button variant="ghost" size="sm" onClick={clearAllFilters} className="h-7 px-2 text-xs">
+                <X className="mr-1 h-3.5 w-3.5" />
+                Limpar filtros
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
@@ -686,74 +728,6 @@ export default function Products() {
         </Card>
       ) : (
         <div className="flex gap-6 flex-1 min-h-0 py-4">
-          {/* CAMADA 1 — Classe macro (navegação) */}
-          <aside
-            className={`${sidebarOpen ? "block" : "hidden"} lg:block w-full lg:w-56 flex-shrink-0 border-r pr-4 overflow-y-auto`}
-          >
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <Layers className="h-4 w-4" /> Classes
-                </h3>
-                <div className="space-y-1">
-                  <ClassButton
-                    label="Todas"
-                    count={products.length}
-                    active={selectedClass === null}
-                    onClick={() => { setSelectedClass(null); setSidebarOpen(false); }}
-                  />
-                  {classFacets.map((c) => (
-                    <ClassButton
-                      key={c.key}
-                      label={c.label}
-                      count={c.count}
-                      active={selectedClass === c.key}
-                      onClick={() => { setSelectedClass(c.key); setSidebarOpen(false); }}
-                    />
-                  ))}
-                  {semClasse > 0 && (
-                    <ClassButton
-                      label="Sem classe"
-                      count={semClasse}
-                      active={selectedClass === "__none__"}
-                      onClick={() => { setSelectedClass("__none__"); setSidebarOpen(false); }}
-                    />
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" /> Criticidade
-                </h3>
-                <div className="space-y-1">
-                  {(["alta", "media", "baixa"] as const).map((value) => {
-                    const meta = CRIT_META[value];
-                    const count = products.filter((p) => p.criticidade === value).length;
-                    const active = selectedCrit.has(value);
-                    return (
-                      <button
-                        key={value}
-                        onClick={() => {
-                          const next = new Set(selectedCrit);
-                          if (active) next.delete(value); else next.add(value);
-                          setSelectedCrit(next);
-                        }}
-                        className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors ${
-                          active ? "bg-violet-50 text-violet-700" : "hover:bg-muted"
-                        }`}
-                      >
-                        <span className="h-2 w-2 rounded-full" style={{ background: meta.dot }} />
-                        <span className="flex-1 text-left">{meta.label}</span>
-                        <span className="text-xs text-muted-foreground">{count}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </aside>
-
           {/* CAMADA 2 — Modelos (lista) */}
           <div className="flex-1 min-w-0 flex flex-col">
             <p className="text-sm text-muted-foreground mb-3">
@@ -843,22 +817,6 @@ export default function Products() {
         </div>
       )}
     </div>
-  );
-}
-
-function ClassButton({
-  label, count, active, onClick,
-}: { label: string; count: number; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors ${
-        active ? "bg-violet-600 text-white" : "hover:bg-muted text-slate-700"
-      }`}
-    >
-      <span className="flex-1 truncate text-left">{label}</span>
-      <span className={`text-xs ${active ? "text-violet-100" : "text-muted-foreground"}`}>{count}</span>
-    </button>
   );
 }
 

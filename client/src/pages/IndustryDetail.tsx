@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-import { ArrowLeft, Trash2, Plus, Star, Package, Users, Mail, Phone, MessageCircle, Globe, TrendingUp } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, Star, Package, Users, Mail, Phone, MessageCircle, Globe, TrendingUp, Pencil } from "lucide-react";
 import { PriceHistoryView } from "@/components/PriceHistoryView";
 
 const SECTORS_MAP: Record<string, string> = {
@@ -25,6 +25,7 @@ export default function IndustryDetail({ id }: { id: string }) {
   const [, setLocation] = useLocation();
   const industryId = parseInt(id);
   const [showAddProduct, setShowAddProduct] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any | null>(null);
   const [showAddContact, setShowAddContact] = useState(false);
   const [showAddRating, setShowAddRating] = useState(false);
 
@@ -40,6 +41,23 @@ export default function IndustryDetail({ id }: { id: string }) {
       utils.industries.products.list.invalidate({ industryId });
       setShowAddProduct(false);
       toast.success("Produto adicionado ao catálogo!");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateProductMutation = trpc.industries.products.update.useMutation({
+    onSuccess: () => {
+      utils.industries.products.list.invalidate({ industryId });
+      setEditingProduct(null);
+      toast.success("Produto do catálogo atualizado!");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deleteProductMutation = trpc.industries.products.delete.useMutation({
+    onSuccess: () => {
+      utils.industries.products.list.invalidate({ industryId });
+      toast.success("Produto removido do catálogo");
     },
     onError: (err) => toast.error(err.message),
   });
@@ -68,6 +86,15 @@ export default function IndustryDetail({ id }: { id: string }) {
       toast.success("Indústria removida");
       setLocation("/industries");
     },
+  });
+
+  const updateMutation = trpc.industries.update.useMutation({
+    onSuccess: () => {
+      utils.industries.get.invalidate({ id: industryId });
+      utils.industries.list.invalidate();
+      toast.success("Setor atualizado!");
+    },
+    onError: (err) => toast.error(err.message),
   });
 
   if (isLoading) {
@@ -159,7 +186,20 @@ export default function IndustryDetail({ id }: { id: string }) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
               <p className="text-muted-foreground">Setor</p>
-              <p className="font-medium">{SECTORS_MAP[industry.sector] || industry.sector}</p>
+              <Select
+                value={industry.sector}
+                onValueChange={(v) => updateMutation.mutate({ id: industryId, sector: v as any })}
+                disabled={updateMutation.isPending}
+              >
+                <SelectTrigger className="h-8 w-full max-w-[200px] font-medium border-transparent px-0 shadow-none hover:border-input focus:border-input [&>svg]:opacity-40">
+                  <SelectValue>{SECTORS_MAP[industry.sector] || industry.sector}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SECTORS_MAP).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <p className="text-muted-foreground">Incoterm</p>
@@ -213,7 +253,10 @@ export default function IndustryDetail({ id }: { id: string }) {
         {/* Produtos */}
         <TabsContent value="products" className="mt-4">
           <div className="flex justify-between items-center mb-4">
-            <p className="text-sm text-muted-foreground">Produtos oferecidos por esta indústria com preços EXW/FOB</p>
+            <p className="text-sm text-muted-foreground">
+              Portfólio completo do fornecedor com preços EXW/FOB — a Excambia consulta este catálogo
+              para direcionar demandas mesmo de itens ainda não cotados
+            </p>
             <Dialog open={showAddProduct} onOpenChange={setShowAddProduct}>
               <DialogTrigger asChild>
                 <Button size="sm" className="gap-1"><Plus className="h-4 w-4" /> Produto</Button>
@@ -238,6 +281,7 @@ export default function IndustryDetail({ id }: { id: string }) {
                     <th className="text-right p-3 font-medium">FOB</th>
                     <th className="text-right p-3 font-medium">MOQ</th>
                     <th className="text-left p-3 font-medium">Unidade</th>
+                    <th className="text-right p-3 font-medium">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -252,12 +296,49 @@ export default function IndustryDetail({ id }: { id: string }) {
                       <td className="p-3 text-right font-mono">{p.priceFob ? `${p.currency} ${Number(p.priceFob).toFixed(2)}` : "—"}</td>
                       <td className="p-3 text-right">{p.moq ? p.moq.toLocaleString() : "—"}</td>
                       <td className="p-3">{p.unit}</td>
+                      <td className="p-3">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar" onClick={() => setEditingProduct(p)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                            title="Remover do catálogo"
+                            onClick={() => {
+                              if (confirm(`Remover "${p.name}" do catálogo deste fornecedor?`)) {
+                                deleteProductMutation.mutate({ id: p.id });
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
+
+          {/* Edição de produto do catálogo */}
+          <Dialog open={editingProduct != null} onOpenChange={(open) => { if (!open) setEditingProduct(null); }}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader><DialogTitle>Editar Produto do Catálogo</DialogTitle></DialogHeader>
+              {editingProduct && (
+                <ProductForm
+                  industryId={industryId}
+                  initial={editingProduct}
+                  submitLabel="Salvar Alterações"
+                  onSubmit={(data) => {
+                    const { industryId: _ignored, ...rest } = data;
+                    updateProductMutation.mutate({ id: editingProduct.id, ...rest });
+                  }}
+                  isLoading={updateProductMutation.isPending}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* Contatos */}
@@ -401,19 +482,31 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 // Sub-forms
-function ProductForm({ industryId, onSubmit, isLoading }: { industryId: number; onSubmit: (data: any) => void; isLoading: boolean }) {
+function ProductForm({ industryId, onSubmit, isLoading, initial, submitLabel = "Adicionar Produto" }: {
+  industryId: number; onSubmit: (data: any) => void; isLoading: boolean;
+  initial?: any; submitLabel?: string;
+}) {
   const [form, setForm] = useState({
     industryId,
-    name: "", description: "", sku: "", ncmCode: "", hsCode: "",
-    category: "", subcategory: "", specifications: "",
-    unit: "UN", weightPerUnit: "",
-    priceExw: undefined as number | undefined,
-    priceFob: undefined as number | undefined,
-    priceCif: undefined as number | undefined,
-    currency: "USD",
-    moq: undefined as number | undefined,
-    leadTimeDays: undefined as number | undefined,
-    packagingInfo: "", qualityGrade: "", certifications: "",
+    name: initial?.name ?? "",
+    description: initial?.description ?? "",
+    sku: initial?.sku ?? "",
+    ncmCode: initial?.ncmCode ?? "",
+    hsCode: initial?.hsCode ?? "",
+    category: initial?.category ?? "",
+    subcategory: initial?.subcategory ?? "",
+    specifications: initial?.specifications ?? "",
+    unit: initial?.unit ?? "UN",
+    weightPerUnit: initial?.weightPerUnit ?? "",
+    priceExw: (initial?.priceExw != null ? Number(initial.priceExw) : undefined) as number | undefined,
+    priceFob: (initial?.priceFob != null ? Number(initial.priceFob) : undefined) as number | undefined,
+    priceCif: (initial?.priceCif != null ? Number(initial.priceCif) : undefined) as number | undefined,
+    currency: initial?.currency ?? "USD",
+    moq: (initial?.moq ?? undefined) as number | undefined,
+    leadTimeDays: (initial?.leadTimeDays ?? undefined) as number | undefined,
+    packagingInfo: initial?.packagingInfo ?? "",
+    qualityGrade: initial?.qualityGrade ?? "",
+    certifications: initial?.certifications ?? "",
   });
 
   return (
@@ -494,7 +587,7 @@ function ProductForm({ industryId, onSubmit, isLoading }: { industryId: number; 
         </div>
       </div>
       <Button type="submit" disabled={isLoading || !form.name} className="w-full">
-        {isLoading ? "Salvando..." : "Adicionar Produto"}
+        {isLoading ? "Salvando..." : submitLabel}
       </Button>
     </form>
   );

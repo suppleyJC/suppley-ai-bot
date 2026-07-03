@@ -47,6 +47,49 @@ function mimeFromName(name: string): string {
   return "application/octet-stream";
 }
 
+/** Mesma data (dia) para agrupar mensagens sob um separador temporal. */
+function isSameDay(a?: string | Date | null, b?: string | Date | null): boolean {
+  if (!a || !b) return true;
+  const da = new Date(a);
+  const db = new Date(b);
+  return (
+    da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate()
+  );
+}
+
+/** Rótulo do dia: "Hoje", "Ontem" ou "14 de jun." (com ano se for outro ano). */
+function dayLabel(d: string | Date): string {
+  const date = new Date(d);
+  const hoje = new Date();
+  const ontem = new Date();
+  ontem.setDate(hoje.getDate() - 1);
+  if (isSameDay(date, hoje)) return "Hoje";
+  if (isSameDay(date, ontem)) return "Ontem";
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+  if (date.getFullYear() !== hoje.getFullYear()) opts.year = "numeric";
+  return date.toLocaleDateString("pt-BR", opts);
+}
+
+/** Hora curta da mensagem (ex.: 14:32). */
+function timeLabel(d: string | Date): string {
+  return new Date(d).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Separador de dia no fio da conversa — âncora temporal das interações. */
+function DayDivider({ date }: { date: string | Date }) {
+  return (
+    <div className="flex items-center gap-3 py-1" aria-label={`Mensagens de ${dayLabel(date)}`}>
+      <span className="h-px flex-1 bg-slate-200/80" />
+      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[11px] font-medium text-slate-400">
+        {dayLabel(date)}
+      </span>
+      <span className="h-px flex-1 bg-slate-200/80" />
+    </div>
+  );
+}
+
 /** Converte um File em base64 puro (sem o prefixo data:). */
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -395,18 +438,25 @@ export default function ExcambiaChat() {
             <Welcome onPick={(t) => setDraft(t)} />
           ) : (
             <div className="flex w-full max-w-full sm:max-w-2xl lg:max-w-3xl shrink-0 flex-col gap-4 sm:gap-6 px-3 sm:px-6 pt-4 sm:pt-6 pb-2">
-              {mensagens.map((m: any) => (
-                <Message
-                  key={m.id}
-                  role={m.role}
-                  content={m.content}
-                  toolResults={m.toolResults}
-                  conversaId={activeId}
-                  operacaoId={conv?.operacaoId ?? undefined}
-                />
-              ))}
+              {mensagens.map((m: any, i: number) => {
+                const anterior = mensagens[i - 1];
+                const mostraDia = m.criadaEm && (!anterior || !isSameDay(anterior?.criadaEm, m.criadaEm));
+                return (
+                  <React.Fragment key={m.id}>
+                    {mostraDia && <DayDivider date={m.criadaEm} />}
+                    <Message
+                      role={m.role}
+                      content={m.content}
+                      criadaEm={m.criadaEm}
+                      toolResults={m.toolResults}
+                      conversaId={activeId}
+                      operacaoId={conv?.operacaoId ?? undefined}
+                    />
+                  </React.Fragment>
+                );
+              })}
               {optimistic.map((o) => (
-                <Message key={o.id} role="user" content={o.content} />
+                <Message key={o.id} role="user" content={o.content} criadaEm={new Date()} />
               ))}
               {(streaming || uploading) && (
                 streamingReply ? (
@@ -593,14 +643,21 @@ function StreamingActivity({ events }: { events: any[] }) {
   );
 }
 
-function Message({ role, content, pending, toolResults, conversaId, operacaoId }: {
-  role: string; content: string; pending?: boolean;
+function Message({ role, content, pending, criadaEm, toolResults, conversaId, operacaoId }: {
+  role: string; content: string; pending?: boolean; criadaEm?: string | Date;
   toolResults?: any; conversaId?: number; operacaoId?: number;
 }) {
   if (role === "user") {
     return (
-      <div className="max-w-[85%] sm:max-w-[75%] self-end whitespace-pre-wrap break-words rounded-2xl bg-violet-600 px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-[14px] leading-relaxed text-white shadow-sm">
-        {content}
+      <div className="group flex max-w-[85%] sm:max-w-[75%] flex-col items-end gap-0.5 self-end">
+        <div className="whitespace-pre-wrap break-words rounded-2xl bg-violet-600 px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-[14px] leading-relaxed text-white shadow-sm">
+          {content}
+        </div>
+        {criadaEm && (
+          <span className="pr-1 text-[10px] text-slate-400 opacity-0 transition group-hover:opacity-100">
+            {dayLabel(criadaEm)} · {timeLabel(criadaEm)}
+          </span>
+        )}
       </div>
     );
   }
@@ -624,7 +681,14 @@ function Message({ role, content, pending, toolResults, conversaId, operacaoId }
               </div>
               <CalcResultCard toolResults={toolResults} conversaId={conversaId} operacaoId={operacaoId} />
               <OperationJourneyCard toolResults={toolResults} />
-              <CopyButton text={content} />
+              <div className="flex items-center gap-2">
+                <CopyButton text={content} />
+                {criadaEm && (
+                  <span className="mt-1.5 text-[10px] text-slate-400 opacity-0 transition group-hover:opacity-100">
+                    {dayLabel(criadaEm)} · {timeLabel(criadaEm)}
+                  </span>
+                )}
+              </div>
             </>
           )}
         </div>

@@ -18,11 +18,14 @@ export const buscarAtivoTool: AgentTool = {
   name: "buscar_ativo",
   schema: defineSchema(
     "buscar_ativo",
-    "Consulta a BASE da empresa por um produto: Ativos & Insumos cadastrados E Proformas/cotações. " +
+    "Consulta a BASE da empresa por um produto: Ativos & Insumos cadastrados, Proformas/cotações " +
+    "E o PORTFÓLIO declarado dos fornecedores (catálogo cadastrado no card de cada fornecedor). " +
     "Retorna NCM, preço de referência e fornecedor. O casamento é inteligente — acha o item mesmo " +
     "que escrito de forma diferente (ordem das palavras, '×' vs 'x', acentos). " +
     "Use SEMPRE antes de afirmar que um produto não está cadastrado e no início de um cálculo, " +
-    "para reaproveitar NCM e preço já registrados. Ex.: 'tenho prego 17x27?', 'preço da escora 4m'.",
+    "para reaproveitar NCM e preço já registrados. Também use para DIRECIONAR demandas: se um " +
+    "fornecedor tem o item no portfólio mas nunca foi cotado, sugira pedir cotação a ele. " +
+    "Ex.: 'tenho prego 17x27?', 'preço da escora 4m', 'quem fornece fita adesiva?'.",
     {
       type: "object",
       properties: { termo: { type: "string", description: "Nome ou descrição do produto como a pessoa falou" } },
@@ -33,14 +36,14 @@ export const buscarAtivoTool: AgentTool = {
     const termo = typeof args.termo === "string" ? args.termo.trim() : "";
     if (!termo) return { ok: false, summary: "Informe o termo de busca.", error: "termo vazio" };
 
-    const { ativos, proformas } = await buscarCatalogo({ termo, userId: ctx.userId });
+    const { ativos, proformas, portfolio } = await buscarCatalogo({ termo, userId: ctx.userId });
 
-    if (ativos.length === 0 && proformas.length === 0) {
+    if (ativos.length === 0 && proformas.length === 0 && portfolio.length === 0) {
       return {
         ok: true,
-        summary: `Nada encontrado na base (nem em Ativos & Insumos, nem em Proformas) para "${termo}". ` +
+        summary: `Nada encontrado na base (Ativos & Insumos, Proformas ou portfólio dos fornecedores) para "${termo}". ` +
           `Pode ser um item novo — dá para montar o cálculo do zero.`,
-        data: { ativos: [], proformas: [] },
+        data: { ativos: [], proformas: [], portfolio: [] },
       };
     }
 
@@ -58,11 +61,26 @@ export const buscarAtivoTool: AgentTool = {
       );
       partes.push(`Proformas/cotações na base:\n${linhas.join("\n")}`);
     }
+    if (portfolio.length) {
+      const linhas = portfolio.slice(0, 5).map((h) => {
+        const preco = h.priceFobCents != null
+          ? `FOB ${h.currency} ${fmt(h.priceFobCents)}/${h.unit}`
+          : h.priceExwCents != null
+            ? `EXW ${h.currency} ${fmt(h.priceExwCents)}/${h.unit}`
+            : "sem preço declarado";
+        return `- ${h.productName}${h.sku ? ` (${h.sku})` : ""} — ${h.supplierName} (${h.supplierCountry}): ${preco}` +
+          `${h.moq ? `, MOQ ${h.moq}` : ""}${h.ncm ? `, NCM ${h.ncm}` : ""}`;
+      });
+      partes.push(
+        `Portfólio declarado dos fornecedores (catálogo do card — o fornecedor TEM o item; ` +
+        `se não houver cotação recente, vale direcionar a demanda e pedir preço):\n${linhas.join("\n")}`,
+      );
+    }
 
     return {
       ok: true,
       summary: `Encontrei na base para "${termo}":\n\n${partes.join("\n\n")}`,
-      data: { ativos, proformas },
+      data: { ativos, proformas, portfolio },
     };
   },
 };

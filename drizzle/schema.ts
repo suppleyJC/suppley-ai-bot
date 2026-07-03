@@ -1905,6 +1905,9 @@ export const proformas = mysqlTable("proformas", {
   supplierCountry: varchar("supplierCountry", { length: 100 }),
   supplierEmail: varchar("supplierEmail", { length: 320 }),
   supplierPhone: varchar("supplierPhone", { length: 50 }),
+  // Setor sugerido pela IA na extração (mesmos valores do enum industries.sector).
+  // Aplicado ao fornecedor na distribuição; editável pelo usuário na revisão.
+  supplierSector: varchar("supplierSector", { length: 30 }),
 
   // Condições comerciais
   currency: varchar("currency", { length: 3 }).default("USD").notNull(),

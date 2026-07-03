@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { FileText, Upload, Sparkles, Trash2, Plus, ArrowRight, Loader2, CheckCircle2, Building2, Package, Copy, Edit, Share2 } from "lucide-react";
 import OperationCard, { type OperationCardAction } from "@/components/OperationCard";
@@ -21,11 +22,31 @@ type ItemDraft = {
   unitPrice: number; // em unidades da moeda (não centavos) — UX
 };
 
+// Setores do cadastro de fornecedores (industries.sector) com rótulos PT-BR.
+const SECTOR_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "metals", label: "Metais" },
+  { value: "construction", label: "Construção Civil" },
+  { value: "machinery", label: "Máquinas e Equipamentos" },
+  { value: "electronics", label: "Eletrônicos" },
+  { value: "chemicals", label: "Químicos" },
+  { value: "textiles", label: "Têxteis" },
+  { value: "food", label: "Alimentos" },
+  { value: "automotive", label: "Automotivo" },
+  { value: "plastics", label: "Plásticos" },
+  { value: "wood", label: "Madeira" },
+  { value: "packaging", label: "Embalagens" },
+  { value: "energy", label: "Energia" },
+  { value: "other", label: "Outros" },
+];
+
 type Draft = {
   supplierName: string;
   supplierCountry: string;
   supplierEmail: string;
   supplierPhone: string;
+  supplierSector: string;
+  /** true quando o setor veio da sugestão da IA (mostra o hint na revisão). */
+  sectorSuggested?: boolean;
   currency: string;
   incoterm: string;
   paymentTerms: string;
@@ -43,6 +64,7 @@ const emptyDraft: Draft = {
   supplierCountry: "",
   supplierEmail: "",
   supplierPhone: "",
+  supplierSector: "",
   currency: "USD",
   incoterm: "FOB",
   paymentTerms: "",
@@ -111,6 +133,7 @@ export default function Proformas() {
         supplierCountry: p.supplierCountry ?? "",
         supplierEmail: p.supplierEmail ?? "",
         supplierPhone: p.supplierPhone ?? "",
+        supplierSector: (p as any).supplierSector ?? "",
         currency: p.currency ?? "USD",
         incoterm: p.incoterm ?? "FOB",
         paymentTerms: p.paymentTerms ?? "",
@@ -173,6 +196,8 @@ export default function Proformas() {
         supplierCountry: extracted.supplierCountry || "",
         supplierEmail: extracted.supplierEmail || "",
         supplierPhone: extracted.supplierPhone || "",
+        supplierSector: (extracted as any).supplierSector || "",
+        sectorSuggested: Boolean((extracted as any).supplierSector),
         currency: extracted.currency || "USD",
         incoterm: extracted.incoterm || "FOB",
         paymentTerms: extracted.paymentTerms || "",
@@ -237,6 +262,7 @@ export default function Proformas() {
           supplierCountry: draft.supplierCountry,
           supplierEmail: draft.supplierEmail || undefined,
           supplierPhone: draft.supplierPhone || undefined,
+          supplierSector: draft.supplierSector || undefined,
           currency: draft.currency,
           incoterm: draft.incoterm,
           paymentTerms: draft.paymentTerms || undefined,
@@ -258,6 +284,7 @@ export default function Proformas() {
         supplierCountry: draft.supplierCountry,
         supplierEmail: draft.supplierEmail || undefined,
         supplierPhone: draft.supplierPhone || undefined,
+        supplierSector: draft.supplierSector || undefined,
         currency: draft.currency,
         incoterm: draft.incoterm,
         paymentTerms: draft.paymentTerms || undefined,
@@ -383,6 +410,29 @@ export default function Proformas() {
                 </Field>
                 <Field label="Telefone">
                   <Input value={draft.supplierPhone} onChange={(e) => setDraft({ ...draft, supplierPhone: e.target.value })} />
+                </Field>
+                <Field label="Setor">
+                  <Select
+                    value={draft.supplierSector || "none"}
+                    onValueChange={(v) =>
+                      setDraft({ ...draft, supplierSector: v === "none" ? "" : v, sectorSuggested: false })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o setor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Não definido</SelectItem>
+                      {SECTOR_OPTIONS.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {draft.sectorSuggested && draft.supplierSector && (
+                    <p className="text-[10px] text-violet-600 mt-0.5">
+                      Sugerido pela Excambia — ajuste se necessário. Aplicado ao fornecedor na distribuição.
+                    </p>
+                  )}
                 </Field>
               </div>
             </div>

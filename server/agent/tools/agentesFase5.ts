@@ -17,6 +17,7 @@ import {
 import * as ncmService from "../../services/ncmService";
 import * as fase5Db from "../../db/fase5Db";
 import * as proformaDb from "../../db/proformaDb";
+import * as industriesDb from "../../db/industriesDb";
 import { catalogMatchScore } from "../../services/productSimilarity";
 
 /* ============================================================
@@ -244,6 +245,22 @@ export interface ProformaHit {
   quotationDate: Date;
 }
 
+/** Item do PORTFÓLIO declarado de um fornecedor (industry_products). */
+export interface PortfolioHit {
+  productId: number;
+  productName: string;
+  sku: string | null;
+  ncm: string | null;
+  supplierId: number;
+  supplierName: string;
+  supplierCountry: string;
+  priceFobCents: number | null;
+  priceExwCents: number | null;
+  currency: string;
+  moq: number | null;
+  unit: string;
+}
+
 /**
  * Busca no CATÁLOGO inteiro: Ativos & Insumos (products) E Proformas cadastradas
  * (proformaItems). O casamento é fuzzy (token/containment via catalogMatchScore),
@@ -255,6 +272,7 @@ export interface ProformaHit {
 export async function buscarCatalogo(input: { termo: string; userId: number }): Promise<{
   ativos: AtivoHit[];
   proformas: ProformaHit[];
+  portfolio: PortfolioHit[];
 }> {
   // 1) ATIVOS (products) — fuzzy sobre nome + descrição
   const todos = await fase5Db.listAtivos(input.userId);
@@ -301,7 +319,37 @@ export async function buscarCatalogo(input: { termo: string; userId: number }): 
       currency: it.currency, unit: it.unit, quantity: it.quantity, quotationDate: it.quotationDate,
     }));
 
-  return { ativos, proformas };
+  // 3) PORTFÓLIO dos fornecedores (industry_products) — catálogo DECLARADO no
+  //    card do fornecedor. Mesmo sem cotação, revela quem TEM o item e permite
+  //    direcionar a demanda para esse fornecedor e pedir preço.
+  const portfolioRows = await industriesDb.listIndustryPortfolio(input.userId);
+  const portfolio: PortfolioHit[] = portfolioRows
+    .map((r) => ({
+      r,
+      score: catalogMatchScore(
+        input.termo,
+        `${r.product.name} ${r.product.description ?? ""} ${r.product.category ?? ""} ${r.product.sku ?? ""}`,
+      ),
+    }))
+    .filter((x) => x.score >= CATALOGO_MATCH_THRESHOLD)
+    .sort((x, y) => y.score - x.score)
+    .slice(0, 8)
+    .map(({ r }) => ({
+      productId: r.product.id,
+      productName: r.product.name,
+      sku: r.product.sku,
+      ncm: r.product.ncmCode,
+      supplierId: r.industryId,
+      supplierName: r.industryName,
+      supplierCountry: r.industryCountry,
+      priceFobCents: r.product.priceFob,
+      priceExwCents: r.product.priceExw,
+      currency: r.product.currency,
+      moq: r.product.moq,
+      unit: r.product.unit,
+    }));
+
+  return { ativos, proformas, portfolio };
 }
 
 /** Compat: retorna só os ativos (products). Usado pelo router fase5. */

@@ -170,6 +170,25 @@ export async function deleteIndustryProduct(id: number, userId: number) {
   return true;
 }
 
+/**
+ * Portfólio completo declarado dos fornecedores do usuário (industry_products ×
+ * industries). É a base de consulta da Excambia: mesmo sem cotação registrada,
+ * ela identifica quais fornecedores TÊM o item no catálogo e direciona demandas.
+ */
+export async function listIndustryPortfolio(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    product: industryProducts,
+    industryId: industries.id,
+    industryName: industries.name,
+    industryCountry: industries.country,
+    industryStatus: industries.status,
+  }).from(industryProducts)
+    .innerJoin(industries, eq(industryProducts.industryId, industries.id))
+    .where(and(eq(industryProducts.userId, userId), eq(industryProducts.isActive, true)));
+}
+
 export async function getProductRanking(userId: number, ncmCode?: string, category?: string) {
   const db = await getDb();
   if (!db) return [];
