@@ -380,7 +380,7 @@ export async function updateProforma(
 // ============================================================
 
 /** Upsert do fornecedor na base unificada (industries, tipoEntidade=fornecedor). */
-async function upsertFornecedor(
+export async function upsertFornecedor(
   userId: number,
   data: { name: string; country: string; email?: string; phone?: string; incoterm?: string; currency?: string; paymentTerms?: string; leadTimeDays?: number; sector?: string }
 ): Promise<number> {

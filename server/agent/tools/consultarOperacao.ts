@@ -87,6 +87,23 @@ export const consultarOperacaoTool: AgentTool = {
     const finOut = (financeiro ?? []).filter((f: any) => f.direcao === "saida")
       .reduce((s: number, f: any) => s + (f.valorBrlCents ?? f.valorCents ?? 0), 0);
 
+    // Previsto × realizado (fechamento do ciclo): saídas por status + estimativa.
+    const saidaPrevista = (financeiro ?? [])
+      .filter((f: any) => f.direcao === "saida" && f.status === "previsto")
+      .reduce((s: number, f: any) => s + (f.valorBrlCents ?? f.valorCents ?? 0), 0);
+    const saidaRealizada = (financeiro ?? [])
+      .filter((f: any) => f.direcao === "saida" && f.status === "realizado")
+      .reduce((s: number, f: any) => s + (f.valorBrlCents ?? f.valorCents ?? 0), 0);
+    let prevRealTxt = "";
+    if (saidaPrevista > 0 || saidaRealizada > 0) {
+      prevRealTxt = `\nPrevisto × realizado (saídas): previsto ${brl(saidaPrevista)} · realizado ${brl(saidaRealizada)}`;
+      const base = operacao.valorEstimadoBrlCents ?? saidaPrevista;
+      if (base > 0 && saidaRealizada > 0) {
+        const desvio = Math.round(((saidaRealizada - base) / base) * 1000) / 10;
+        prevRealTxt += ` (desvio ${desvio > 0 ? "+" : ""}${desvio}% sobre o estimado)`;
+      }
+    }
+
     const resumo =
       `Operação ${operacao.codigo ?? `OP-${operacao.id}`} — ${operacao.titulo}\n` +
       `Estágio: ${ESTAGIO_LABEL[operacao.estagioAtual] ?? operacao.estagioAtual} · Status: ${operacao.status}\n` +
@@ -94,7 +111,7 @@ export const consultarOperacaoTool: AgentTool = {
       (operacao.origemPais ? `Origem: ${operacao.origemPais}\n` : "") +
       (operacao.valorEstimadoBrlCents != null ? `Valor estimado: ${brl(operacao.valorEstimadoBrlCents)}\n` : "") +
       `\nMarcos:\n${marcosTxt}\n\nDocumentos:\n${docsTxt}` +
-      ((financeiro ?? []).length ? `\n\nFinanceiro: entradas ${brl(finIn)} · saídas ${brl(finOut)}` : "");
+      ((financeiro ?? []).length ? `\n\nFinanceiro: entradas ${brl(finIn)} · saídas ${brl(finOut)}${prevRealTxt}` : "");
 
     return {
       ok: true,

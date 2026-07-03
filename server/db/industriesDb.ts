@@ -184,6 +184,7 @@ export async function listIndustryPortfolio(userId: number) {
     industryName: industries.name,
     industryCountry: industries.country,
     industryStatus: industries.status,
+    industryRating: industries.overallRating,
   }).from(industryProducts)
     .innerJoin(industries, eq(industryProducts.industryId, industries.id))
     .where(and(eq(industryProducts.userId, userId), eq(industryProducts.isActive, true)));

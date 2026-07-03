@@ -658,6 +658,41 @@ export async function listarMarcos(userId: number, operacaoId: number) {
 }
 
 // ---------------------------------------------------------------------------
+// Concluir operação (fechamento do ciclo previsto × realizado).
+// Marca status "concluida" + estágio "closed" e registra o evento na timeline.
+// ---------------------------------------------------------------------------
+export async function concluirOperacao(input: {
+  userId: number;
+  operacaoId: number;
+  resumo?: string;
+}): Promise<Operacao | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [op] = await db.select().from(operacoes)
+    .where(and(eq(operacoes.id, input.operacaoId), eq(operacoes.userId, input.userId)))
+    .limit(1);
+  if (!op) throw new Error("operação não encontrada");
+
+  await db.update(operacoes)
+    .set({ status: "concluida", estagioAtual: "closed" })
+    .where(eq(operacoes.id, input.operacaoId));
+
+  await addEvento({
+    operacaoId: input.operacaoId,
+    tipo: "estagio_avancado",
+    estagio: "closed",
+    autor: "excambia",
+    titulo: `Operação ${op.codigo} concluída`,
+    payload: input.resumo ? { resumo: input.resumo } : undefined,
+  });
+
+  const [updated] = await db.select().from(operacoes)
+    .where(eq(operacoes.id, input.operacaoId)).limit(1);
+  return updated ?? null;
+}
+
+// ---------------------------------------------------------------------------
 // Excluir operação (e toda a sua descendência) — Fase 3.
 // Remove eventos, estágios, anexos, financeiro e marcos antes da própria
 // operação. Validando posse. Não há "soft delete": a esteira é apagada.

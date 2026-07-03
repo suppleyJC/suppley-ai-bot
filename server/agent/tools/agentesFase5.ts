@@ -259,6 +259,8 @@ export interface PortfolioHit {
   currency: string;
   moq: number | null;
   unit: string;
+  /** Rating geral do fornecedor (0–5), alimentado pelo feedback de operações. */
+  supplierRating: number | null;
 }
 
 /**
@@ -347,6 +349,7 @@ export async function buscarCatalogo(input: { termo: string; userId: number }): 
       currency: r.product.currency,
       moq: r.product.moq,
       unit: r.product.unit,
+      supplierRating: r.industryRating != null && Number(r.industryRating) > 0 ? Number(r.industryRating) : null,
     }));
 
   return { ativos, proformas, portfolio };

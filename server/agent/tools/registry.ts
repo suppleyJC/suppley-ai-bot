@@ -29,6 +29,9 @@ import { analiseMercadoTool } from "./analiseMercado";
 import { estatisticasComexTool } from "./estatisticasComex";
 import { precificarReferenciaTool } from "./precificarReferencia";
 import { registrarMemoriaTool } from "./registrarMemoria";
+import { registrarResultadoOperacaoTool } from "./registrarResultadoOperacao";
+import { qualidadeDadosTool } from "./qualidadeDados";
+import { catalogarDocumentoTool } from "./catalogarDocumento";
 import { compararRotasImportacaoTool } from "./compararRotasImportacao";
 import { calcularCubagemTool } from "./calcularCubagem";
 import { precificacaoNacionalTool, depreciacaoAtivoTool } from "./precificacaoNacional";
@@ -56,6 +59,12 @@ export const BASE_TOOLS: AgentTool[] = [
   precificarReferenciaTool,
   // Memória persistente — a Excambia grava aprendizados duráveis do usuário/empresa
   registrarMemoriaTool,
+  // Fechamento do ciclo — resultado real da operação (previsto × realizado + rating)
+  registrarResultadoOperacaoTool,
+  // Qualidade de dados — auditoria da base (duplicatas, campos ausentes, inconsistências)
+  qualidadeDadosTool,
+  // Catalogação via chat — cotação/catálogo anexado vira dado na base
+  catalogarDocumentoTool,
   // Estratégia interestadual — compara importar direto vs. via estado-hub com benefício
   compararRotasImportacaoTool,
   // Cubagem — quantas unidades cabem em 20'/40'/40HC (volume + peso)

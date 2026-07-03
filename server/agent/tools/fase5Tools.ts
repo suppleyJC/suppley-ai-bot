@@ -14,6 +14,26 @@ const fmt = (cents?: number | null) =>
 const fmtData = (d?: Date | null) =>
   d ? new Date(d).toLocaleDateString("pt-BR", { month: "short", year: "numeric" }) : "s/data";
 
+/** Dias desde a data (null se não houver data). */
+const idadeDias = (d?: Date | null): number | null =>
+  d ? Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000) : null;
+
+/**
+ * Validade temporal de uma cotação: até 90 dias é ATUAL (pode virar operação
+ * de cotação); acima disso é REFERÊNCIA (apenas cálculo/estudo — revalidar preço).
+ */
+export const COTACAO_VALIDADE_DIAS = 90;
+
+const marcaValidade = (d?: Date | null): string => {
+  const dias = idadeDias(d);
+  if (dias == null) return " [sem data — confirmar validade]";
+  if (dias > COTACAO_VALIDADE_DIAS) {
+    const meses = Math.floor(dias / 30);
+    return ` [COTAÇÃO ANTIGA: ${meses} ${meses === 1 ? "mês" : "meses"} — usar só como referência; revalidar preço]`;
+  }
+  return " [cotação atual]";
+};
+
 export const buscarAtivoTool: AgentTool = {
   name: "buscar_ativo",
   schema: defineSchema(
@@ -57,7 +77,7 @@ export const buscarAtivoTool: AgentTool = {
     if (proformas.length) {
       const linhas = proformas.slice(0, 5).map((p) =>
         `- ${p.productName} — ${p.supplierName || "fornecedor n/d"}: ${p.currency} ${fmt(p.unitPriceCents)}/${p.unit} ` +
-        `(NCM ${p.ncm || "n/d"}, ${fmtData(p.quotationDate)}, proforma ${p.numero || "s/nº"})`,
+        `(NCM ${p.ncm || "n/d"}, ${fmtData(p.quotationDate)}, proforma ${p.numero || "s/nº"})${marcaValidade(p.quotationDate)}`,
       );
       partes.push(`Proformas/cotações na base:\n${linhas.join("\n")}`);
     }
@@ -69,7 +89,8 @@ export const buscarAtivoTool: AgentTool = {
             ? `EXW ${h.currency} ${fmt(h.priceExwCents)}/${h.unit}`
             : "sem preço declarado";
         return `- ${h.productName}${h.sku ? ` (${h.sku})` : ""} — ${h.supplierName} (${h.supplierCountry}): ${preco}` +
-          `${h.moq ? `, MOQ ${h.moq}` : ""}${h.ncm ? `, NCM ${h.ncm}` : ""}`;
+          `${h.moq ? `, MOQ ${h.moq}` : ""}${h.ncm ? `, NCM ${h.ncm}` : ""}` +
+          `${h.supplierRating != null ? `, rating do fornecedor ${h.supplierRating.toFixed(1)}/5` : ""}`;
       });
       partes.push(
         `Portfólio declarado dos fornecedores (catálogo do card — o fornecedor TEM o item; ` +
