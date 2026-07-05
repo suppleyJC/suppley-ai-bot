@@ -114,6 +114,14 @@ export const CALC_SCHEMA_PROPERTIES = {
       "Margem de lucro líquido desejada sobre a venda, em FRAÇÃO (ex.: 0.10 = 10%). Só vale para " +
       "revenda. Padrão 0.05 (5%). Use o valor que a pessoa pedir — a margem é ajustável.",
   },
+  precoVendaAlvoBrl: {
+    type: "number",
+    description:
+      "Preço de venda ALVO TOTAL em R$ (para a quantidade calculada) que a pessoa quer praticar na " +
+      "revenda. Quando informado, o motor verifica se o FOB atual permite atingir esse preço MANTENDO " +
+      "a margem desejada e, se não der, calcula o FOB-alvo a negociar com o fornecedor (solve reverso). " +
+      "Use quando a mercadoria é para venda e a pessoa disser o preço de venda pretendido.",
+  },
 } as const;
 
 /** Normaliza o modal textual vindo do LLM para o enum do motor. */

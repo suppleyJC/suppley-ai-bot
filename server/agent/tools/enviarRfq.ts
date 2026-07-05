@@ -45,6 +45,19 @@ const schema = defineSchema(
         enum: ["EXW", "FCA", "FOB", "CIF", "CPT", "CIP", "DAP", "DDP"],
         description: "Incoterm preferido (default: FOB)",
       },
+      preco_alvo_usd: {
+        type: "number",
+        description:
+          "Preço FOB ALVO por unidade em USD a negociar com o fornecedor (ex.: 11.50). Vem do solve " +
+          "reverso do cálculo (o FOB máximo que ainda bate o preço de venda + margem desejados). " +
+          "Quando informado, a RFQ já sai com o target — otimiza a negociação.",
+      },
+      preco_atual_usd: {
+        type: "number",
+        description:
+          "Preço unitário em USD que a pessoa PAGA HOJE por esse item (balizador). Ajuda o fornecedor " +
+          "a entender o alvo e serve de referência para avaliar o spread.",
+      },
       notas: { type: "string", description: "Notas adicionais para os fornecedores" },
     },
     required: ["titulo", "quantidade"],
@@ -79,6 +92,15 @@ export const enviarRfqTool: AgentTool = {
       const incoterm = (args.incoterm ?? "FOB") as any;
       const unitStr = (typeof args.unidade === "string" ? args.unidade : "UN").toUpperCase();
 
+      // Target de negociação (USD/unid → USD cents) e balizador (preço atual).
+      const precoAlvoUsd = typeof args.preco_alvo_usd === "number" && args.preco_alvo_usd > 0 ? args.preco_alvo_usd : undefined;
+      const precoAtualUsd = typeof args.preco_atual_usd === "number" && args.preco_atual_usd > 0 ? args.preco_atual_usd : undefined;
+      const targetUnitPriceCents = precoAlvoUsd != null ? Math.round(precoAlvoUsd * 100) : null;
+      const lastImportPriceCents = precoAtualUsd != null ? Math.round(precoAtualUsd * 100) : null;
+      const alvoNota = precoAlvoUsd != null ? `Preço-alvo FOB: USD ${precoAlvoUsd.toFixed(2)}/${unitStr}.` : "";
+      const notasBase = typeof args.notas === "string" ? args.notas : "";
+      const notasFinal = [notasBase, alvoNota].filter(Boolean).join(" ") || null;
+
       // Cria RFQ
       const rfqNumber = rfqService.generateRfqNumber();
       const [rfqRes] = await db.insert(rfqs).values({
@@ -94,7 +116,8 @@ export const enviarRfqTool: AgentTool = {
         urgency,
         currency: "USD",
         status: "sourcing",
-        notes: typeof args.notas === "string" ? args.notas : null,
+        targetPriceCents: targetUnitPriceCents,
+        notes: notasFinal,
       });
       const rfqId = (rfqRes as any).insertId as number;
 
@@ -107,6 +130,8 @@ export const enviarRfqTool: AgentTool = {
         ncmCode,
         quantity: Number(args.quantidade),
         unit: unitStr,
+        targetUnitPriceCents,
+        lastImportPriceCents,
         ncmConfirmed: !!ncmCode,
       });
 
@@ -124,15 +149,18 @@ export const enviarRfqTool: AgentTool = {
           produto: args.titulo,
           quantidade: args.quantidade,
           unidade: unitStr,
+          precoAlvoUsd: precoAlvoUsd ?? null,
+          precoAtualUsd: precoAtualUsd ?? null,
         },
       });
 
       const qtd_fmt = `${Number(args.quantidade).toLocaleString("pt-BR")} ${unitStr}`;
       return {
         ok: true,
-        summary: `RFQ ${rfqNumber} enviada com sucesso! Solicitação: ${args.titulo} (${qtd_fmt}). ` +
+        summary: `RFQ ${rfqNumber} enviada com sucesso! Solicitação: ${args.titulo} (${qtd_fmt})` +
+          (precoAlvoUsd != null ? `, com preço-alvo FOB USD ${precoAlvoUsd.toFixed(2)}/${unitStr}` : "") + `. ` +
           `A Excambia está buscando fornecedores. Respostas devem chegar em breve.`,
-        data: { rfqNumber, rfqId },
+        data: { rfqNumber, rfqId, precoAlvoUsd: precoAlvoUsd ?? null },
       };
     } catch (e: any) {
       return {

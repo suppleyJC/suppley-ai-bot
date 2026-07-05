@@ -380,3 +380,84 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
   const result = calculateImportCost(globals, items);
   return { ...result, ncmWarnings, despesasBreakdown };
 }
+
+// ============================================================
+// ANÁLISE DE PREÇO-ALVO (solve reverso p/ negociação com fornecedor)
+// ============================================================
+
+export interface PrecoAlvoAnalise {
+  /** Preço de venda alvo informado (total, em BRL). */
+  precoVendaAlvo: number;
+  /** Preço de venda sugerido pelo motor no FOB atual (já com a margem desejada). */
+  precoVendaSugerido: number;
+  /** Custo nacionalizado total no FOB atual. */
+  custoNacionalizado: number;
+  /** true = no FOB atual já dá para vender ao alvo mantendo a margem. */
+  viavel: boolean;
+  /** Folga (alvo − sugerido); negativo quando inviável. */
+  folga: number;
+  /** FOB total atual na moeda da cotação (Σ quantidade × preço FOB). */
+  fobAtualTotal: number;
+  /** FOB total necessário para bater o alvo com a margem (ou null). */
+  fobAlvoTotal: number | null;
+  /** Fator FOB alvo/atual (ex.: 0.85 = precisa 15% mais barato). */
+  fatorFob: number | null;
+  /** Redução necessária no FOB, em % (ou null). */
+  reducaoNecessariaPct: number | null;
+}
+
+/**
+ * Solve REVERSO: dado um preço de venda ALVO, descobre se o FOB atual permite
+ * atingi-lo mantendo a margem desejada e, se não, qual o FOB-alvo a negociar.
+ *
+ * O motor é AFIM no FOB (impostos escalam com o valor aduaneiro; frete/seguro e
+ * despesas fixas formam o intercepto). Por isso 2 amostras (FOB atual e FOB×0,5)
+ * determinam a reta preço-de-venda × FOB exatamente — sem iteração.
+ *
+ * Só se aplica a REVENDA (consumo próprio não tem preço de venda).
+ */
+export async function analisarPrecoAlvo(
+  input: EstimativaInput,
+  precoVendaAlvoBrl: number,
+  base?: EstimativaResult,
+): Promise<PrecoAlvoAnalise> {
+  const r1 = base ?? (await calculateEstimativa(input));
+  const sp1 = r1.summary.salePriceTotal;
+  const landed = r1.summary.netCostTotal;
+  const fobTotal1 = input.products.reduce((s, p) => s + p.quantity * p.unitPrice, 0);
+
+  // Segunda amostra com FOB reduzido à metade (frete/seguro/despesas ficam fixos).
+  const input2: EstimativaInput = {
+    ...input,
+    products: input.products.map((p) => ({ ...p, unitPrice: p.unitPrice * 0.5 })),
+  };
+  const r2 = await calculateEstimativa(input2);
+  const sp2 = r2.summary.salePriceTotal;
+  const fobTotal2 = fobTotal1 * 0.5;
+
+  const a = fobTotal1 !== fobTotal2 ? (sp1 - sp2) / (fobTotal1 - fobTotal2) : 0;
+  const b = sp1 - a * fobTotal1;
+
+  let fobAlvoTotal: number | null = null;
+  let fatorFob: number | null = null;
+  let reducaoNecessariaPct: number | null = null;
+  if (a > 0) {
+    fobAlvoTotal = Math.max(0, (precoVendaAlvoBrl - b) / a);
+    if (fobTotal1 > 0) {
+      fatorFob = fobAlvoTotal / fobTotal1;
+      reducaoNecessariaPct = Math.round(((fobTotal1 - fobAlvoTotal) / fobTotal1) * 1000) / 10;
+    }
+  }
+
+  return {
+    precoVendaAlvo: precoVendaAlvoBrl,
+    precoVendaSugerido: sp1,
+    custoNacionalizado: landed,
+    viavel: sp1 <= precoVendaAlvoBrl,
+    folga: precoVendaAlvoBrl - sp1,
+    fobAtualTotal: fobTotal1,
+    fobAlvoTotal,
+    fatorFob,
+    reducaoNecessariaPct,
+  };
+}

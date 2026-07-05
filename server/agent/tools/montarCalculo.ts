@@ -109,6 +109,33 @@ export const montarCalculoTool: AgentTool = {
         ).join(" · ")}. `
       : "";
 
+    // 7) PREÇO-ALVO (solve reverso p/ negociação) — quando a pessoa dá o preço de
+    //    venda pretendido e a finalidade é revenda: verifica viabilidade e, se não
+    //    der, calcula o FOB-alvo a negociar com o fornecedor.
+    let alvoTxt = "";
+    let alvoData: estimativaService.PrecoAlvoAnalise | undefined;
+    const precoVendaAlvoBrl = typeof args.precoVendaAlvoBrl === "number" ? args.precoVendaAlvoBrl : undefined;
+    if (precoVendaAlvoBrl && precoVendaAlvoBrl > 0 && estimativaInput.finalidade !== "consumo_proprio") {
+      try {
+        alvoData = await estimativaService.analisarPrecoAlvo(estimativaInput, precoVendaAlvoBrl, resultado);
+        if (alvoData.viavel) {
+          alvoTxt =
+            ` 🎯 Preço-alvo R$ ${brl(precoVendaAlvoBrl)}: VIÁVEL no FOB atual — o preço mínimo com a margem ` +
+            `é R$ ${brl(alvoData.precoVendaSugerido)} (folga de R$ ${brl(alvoData.folga)}).`;
+        } else {
+          const red = alvoData.reducaoNecessariaPct;
+          const fatorTxt = alvoData.fatorFob != null
+            ? ` FOB precisa cair ~${red}% (fator ${alvoData.fatorFob.toFixed(2)}) — esse é o alvo de negociação com o fornecedor.`
+            : "";
+          alvoTxt =
+            ` 🎯 Preço-alvo R$ ${brl(precoVendaAlvoBrl)}: NÃO fecha no FOB atual — o mínimo com a margem é ` +
+            `R$ ${brl(alvoData.precoVendaSugerido)}.${fatorTxt}`;
+        }
+      } catch {
+        /* análise de alvo é best-effort; não bloqueia o cálculo */
+      }
+    }
+
     return {
       ok: true,
       summary:
@@ -117,8 +144,9 @@ export const montarCalculoTool: AgentTool = {
         (precoVenda != null ? `Preço de venda sugerido ~ R$ ${brl(precoVenda)}. ` : "") +
         (margemPct != null ? `Margem bruta ${margemPct}%. ` : "") +
         porItem +
+        alvoTxt +
         (resultado?.ncmWarnings?.length ? `⚠️ ${resultado.ncmWarnings.length} aviso(s) de NCM estimada — confirme antes de fechar.` : ""),
-      data: resultado,
+      data: alvoData ? { ...resultado, precoAlvo: alvoData } : resultado,
     };
   },
 };

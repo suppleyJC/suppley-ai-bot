@@ -184,9 +184,11 @@ export const precificarReferenciaTool: AgentTool = {
       const rot = ref.externo.escopo === "global"
         ? "Referência global de mercado"
         : "Média de importação para o Brasil";
+      const tendMap: Record<string, string> = { alta: " — preço em ALTA", baixa: " — preço em QUEDA", estavel: " — preço estável" };
+      const tend = tendMap[ref.externo.tendenciaPreco ?? ""] ?? "";
       partes.push(
         `${rot}: US$ ${ref.externo.precoMedioUsdKg.toFixed(2)}/kg` +
-        `${ref.externo.brlPorKgPresente != null ? ` (~${fmtBRL(ref.externo.brlPorKgPresente)}/kg)` : ""}.`,
+        `${ref.externo.brlPorKgPresente != null ? ` (~${fmtBRL(ref.externo.brlPorKgPresente)}/kg)` : ""}${tend}.`,
       );
       if (ref.comparavel && ref.maisCompetitivo && ref.diffPct != null) {
         partes.push(
