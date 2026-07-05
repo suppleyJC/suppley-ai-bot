@@ -502,6 +502,20 @@ export async function distributeProformaToBase(
       productIds.push(existingProduct.id);
       await db.updateProformaItem(item.id, { productId: existingProduct.id });
 
+      // Backfill do país de origem se o card ainda não tiver (herda do fornecedor da proforma).
+      if (proforma.supplierCountry) {
+        try {
+          const full = await db.getProductById(existingProduct.id, userId);
+          if (full && !full.paisOrigem) {
+            await db.updateProduct(existingProduct.id, userId, {
+              paisOrigem: proforma.supplierCountry,
+            });
+          }
+        } catch {
+          /* backfill best-effort */
+        }
+      }
+
       try {
         const unitPriceBrlCents = Math.round(item.unitPriceCents * exchangeRate);
         await registerSupplierPrice({
@@ -540,6 +554,8 @@ export async function distributeProformaToBase(
         unit: item.unit || "UN",
         supplierId: industriaId ?? undefined,
         origem: "cotado_nao_importado",
+        // País de origem do card = país do fornecedor da proforma que o originou.
+        paisOrigem: proforma.supplierCountry ?? undefined,
         ncmStatus: ncm ? "validado" : "sugerido",
         custoImportadoRefCents: item.unitPriceCents,
         // P7: Categorização inferida

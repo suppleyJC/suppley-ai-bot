@@ -358,7 +358,7 @@ const DEFAULT_SISCOMEX = 154.23;
 // AFRMM longo curso = 8% (Lei 14.301/2022 — programa BR do Mar; reduziu de 25% p/ 8%).
 const DEFAULT_AFRMM_RATE = 0.08;        // sobre frete marítimo em BRL
 const DEFAULT_ICMS_GROSSUP = 0.04;      // Res. Senado 13/2012 (importados)
-const DEFAULT_ICMS_ANTECIPADO = 0.026;  // TTD 409/SC — primeiros 36 meses
+const DEFAULT_ICMS_ANTECIPADO = 0.01;   // TTD máximo SC (após 36 meses, 1,0%) — padrão
 const DEFAULT_IRPJ = 0.25;              // 15% + adicional 10%
 const DEFAULT_CSLL = 0.09;
 

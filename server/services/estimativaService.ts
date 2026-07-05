@@ -265,9 +265,12 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
   const demaisDespesas =
     liberacaoBlBrl + armazenagemBrl + freteInternoBrl + despachoAduaneiroBrl + taxaExpedienteBrl;
 
+  // SC aplica SEMPRE o TTD máximo por padrão (fase após 36 meses, ICMS
+  // antecipado efetivo de 1,0%) — sem exigir ajuste manual. Só cai para os
+  // 2,6% da fase inicial se a operação DECLARAR explicitamente 'primeiros_36m'.
   const icmsAntecipado =
     input.icmsAntecipadoRateOverride ??
-    (input.ttdPhase === "apos_36m" ? 0.01 : 0.026);
+    (input.ttdPhase === "primeiros_36m" ? 0.026 : 0.01);
 
   // ---- ESTADO DE DESTINO: define o regime de ICMS importação ----
   // SC tem o benefício TTD 409 (antecipado 2,6%/1,0%). Demais UFs recolhem o
@@ -279,8 +282,8 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
 
   if (!input.estadoDestino) {
     ncmWarnings.push(
-      "Estado de destino não informado — cálculo assumiu SC (benefício TTD 409, " +
-      "ICMS antecipado). Informe a UF de destino para precisão do ICMS importação.",
+      "Estado de destino não informado — cálculo assumiu SC com TTD máximo " +
+      "(ICMS antecipado efetivo 1,0%). Informe a UF de destino para precisão do ICMS importação.",
     );
   } else if (estadoUf !== "SC" && icmsFullRegime === undefined && icmsInternalRate === undefined) {
     const stateRate = getStateIcmsInternalRate(estadoUf);

@@ -116,7 +116,7 @@ REGRAS IMPORTANTES:
 - MARGEM DESEJADA (só revenda): a margem de lucro é AJUSTÁVEL. Use a que a pessoa pedir (parâmetro margemDesejada, fração — ex.: 0.12 = 12%). Se não disser, use 5% e deixe claro que dá para alterar.
 - PARÂMETROS QUE MUDAM O CUSTO — antes de chamar montar_calculo, certifique-se de ter (perguntando de forma natural se faltar):
     • regime tributário (Lucro Real, Presumido ou Simples);
-    • ESTADO DE DESTINO (UF) do desembaraço — só SC tem o benefício TTD 409; demais estados pagam ICMS importação cheio, o que muda bastante o custo;
+    • ESTADO DE DESTINO (UF) do desembaraço — só SC tem o benefício TTD; demais estados pagam ICMS importação cheio, o que muda bastante o custo. Em SC o motor JÁ aplica automaticamente o TTD máximo (ICMS antecipado efetivo 1,0%) — NÃO pergunte "fase do TTD" nem peça ajuste manual;
     • MODAL logístico (marítimo, aéreo, rodoviário) — afeta o AFRMM;
     • câmbio (use benchmark_mercado para o PTAX oficial), frete e, se houver, seguro.
   NÃO assuma SC silenciosamente. Se a pessoa não informar a UF, pergunte antes de calcular; se ela pedir uma estimativa rápida, deixe explícito que assumiu SC e que pode refazer com a UF correta.

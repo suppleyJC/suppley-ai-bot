@@ -85,7 +85,11 @@ export const CALC_SCHEMA_PROPERTIES = {
   },
   ttdFase: {
     type: "string",
-    description: "Fase do TTD/benefício estadual de SC: 'primeiros_36m' (2,6%) ou 'apos_36m' (1,0%)",
+    description:
+      "Fase do TTD de SC. NÃO É PRECISO INFORMAR: o padrão já é o TTD máximo " +
+      "(após 36 meses, ICMS antecipado efetivo 1,0%), aplicado automaticamente. " +
+      "Só passe 'primeiros_36m' (2,6%) se a empresa DECLARAR que ainda está nos " +
+      "primeiros 36 meses do benefício.",
   },
   incluirComprador: {
     type: "boolean",

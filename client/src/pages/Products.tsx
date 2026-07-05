@@ -47,6 +47,7 @@ import {
   Scale,
   Box,
   Barcode,
+  MapPin,
 } from "lucide-react";
 import { NCMAutocomplete } from "@/components/NCMAutocomplete";
 import { PriceHistoryView } from "@/components/PriceHistoryView";
@@ -403,6 +404,7 @@ interface ModelGroup {
   classe: string | null;
   criticidade: string | null;
   description: string | null;
+  paisOrigem: string | null;
   primary: any;
   variants: any[];
   price: { unitPriceCents: number; currency: string; quotationDate: string | Date; supplierName: string | null } | null;
@@ -534,6 +536,7 @@ export default function Products() {
         classe: variants.find((v) => v.classe)?.classe ?? null,
         criticidade: crit,
         description: primary.description ?? null,
+        paisOrigem: variants.find((v) => v.paisOrigem)?.paisOrigem ?? null,
         primary,
         variants,
         price,
@@ -730,11 +733,21 @@ export default function Products() {
         <div className="flex gap-6 flex-1 min-h-0 py-4">
           {/* CAMADA 2 — Modelos (lista) */}
           <div className="flex-1 min-w-0 flex flex-col">
-            <p className="text-sm text-muted-foreground mb-3">
-              {models.length} {models.length === 1 ? "item" : "itens"}
-              {hasFilters ? ` · filtro ativo` : ""}
-            </p>
-            {models.length === 0 ? (
+            {hasFilters && (
+              <p className="text-sm text-muted-foreground mb-3">
+                {models.length} {models.length === 1 ? "item" : "itens"} · filtro ativo
+              </p>
+            )}
+            {!hasFilters ? (
+              <div className="flex-1 flex items-center justify-center rounded-2xl border border-dashed border-slate-200 p-10 text-center">
+                <div>
+                  <Search className="mb-3 h-10 w-10 mx-auto text-slate-300" />
+                  <p className="text-sm text-slate-400">
+                    Busque por nome, NCM ou fornecedor — ou filtre por classe/criticidade — para listar os ativos.
+                  </p>
+                </div>
+              </div>
+            ) : models.length === 0 ? (
               <Card className="flex-1 flex items-center justify-center">
                 <CardContent className="py-16 text-center">
                   <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -773,6 +786,7 @@ export default function Products() {
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                             <span className="font-mono">{mo.ncmCode}</span>
                             {mo.classe && <span className="inline-flex items-center gap-1"><Layers className="h-3 w-3" />{mo.classe.trim()}</span>}
+                            {mo.paisOrigem && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{mo.paisOrigem}</span>}
                             <span className="inline-flex items-center gap-1">
                               <Building2 className="h-3 w-3" />
                               {mo.suppliersCount > 0 ? `${mo.suppliersCount} fornecedor${mo.suppliersCount > 1 ? "es" : ""}` : "sem fornecedor"}
@@ -881,6 +895,7 @@ function ModelDetail({
           <Spec icon={<Scale className="h-3.5 w-3.5" />} label="Peso" value={p.weightKg != null ? `${p.weightKg} kg` : "—"} />
           <Spec icon={<Barcode className="h-3.5 w-3.5" />} label="Volume" value={p.volumeM3 != null ? `${p.volumeM3} m³` : "—"} />
           <Spec icon={<Layers className="h-3.5 w-3.5" />} label="Categoria" value={[p.categoria, p.subcategoria].filter(Boolean).join(" · ") || "—"} />
+          <Spec icon={<MapPin className="h-3.5 w-3.5" />} label="País de origem" value={model.paisOrigem || "—"} />
         </div>
         {p.aplicacao && (
           <div className="text-sm">
