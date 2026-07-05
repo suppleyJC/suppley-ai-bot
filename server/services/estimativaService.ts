@@ -17,6 +17,7 @@ import {
   type RegimeTributario,
 } from "./importCostEngine";
 import { getStateIcmsInternalRate, getStateName } from "./statePricingService";
+import { getStateImportBenefit } from "./stateBenefits";
 import { isMercosulCountry } from "./taxCalculationService";
 
 export interface EstimativaProductInput {
@@ -271,6 +272,8 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
   const icmsAntecipado =
     input.icmsAntecipadoRateOverride ??
     (input.ttdPhase === "primeiros_36m" ? 0.026 : 0.01);
+  // Pode ser sobrescrito por um benefício estadual CONFIRMADO (fora de SC).
+  let icmsAntecipadoEfetivo = icmsAntecipado;
 
   // ---- ESTADO DE DESTINO: define o regime de ICMS importação ----
   // SC tem o benefício TTD 409 (antecipado 2,6%/1,0%). Demais UFs recolhem o
@@ -286,20 +289,36 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
       "(ICMS antecipado efetivo 1,0%). Informe a UF de destino para precisão do ICMS importação.",
     );
   } else if (estadoUf !== "SC" && icmsFullRegime === undefined && icmsInternalRate === undefined) {
-    const stateRate = getStateIcmsInternalRate(estadoUf);
-    if (stateRate) {
-      icmsFullRegime = true;
-      icmsInternalRate = stateRate;
+    const beneficio = getStateImportBenefit(estadoUf);
+    if (beneficio?.aplicarAutomatico && beneficio.icmsEfetivo != null) {
+      // Benefício estadual CONFIRMADO: aplica como ICMS importação efetivo
+      // (mesma mecânica do TTD/SC — antecipado com gross-up de 4%).
+      icmsFullRegime = false;
+      icmsAntecipadoEfetivo = beneficio.icmsEfetivo;
       ncmWarnings.push(
-        `Estado ${estadoUf} (${getStateName(estadoUf) ?? estadoUf}): aplicado ICMS importação ` +
-        `CHEIO a ${(stateRate * 100).toFixed(1)}% (alíquota interna). O benefício TTD 409 ` +
-        `(antecipado) é exclusivo de Santa Catarina.`,
+        `Estado ${estadoUf}: aplicado o benefício ${beneficio.programa} — ICMS importação ` +
+        `efetivo ${(beneficio.icmsEfetivo * 100).toFixed(1)}% (${beneficio.baseLegal}). ` +
+        `Confirme o enquadramento da empresa no programa.`,
       );
     } else {
-      ncmWarnings.push(
-        `Estado "${input.estadoDestino}" não reconhecido — mantido o regime padrão (SC/TTD 409). ` +
-        `Confira a UF de destino.`,
-      );
+      const stateRate = getStateIcmsInternalRate(estadoUf);
+      if (stateRate) {
+        icmsFullRegime = true;
+        icmsInternalRate = stateRate;
+        const extra = beneficio
+          ? ` OBS: ${estadoUf} tem o programa ${beneficio.programa} (${beneficio.baseLegal}) — ` +
+            `para considerar o benefício, confirme a alíquota efetiva do seu enquadramento e eu recalculo.`
+          : ` O benefício TTD (antecipado) é exclusivo de Santa Catarina.`;
+        ncmWarnings.push(
+          `Estado ${estadoUf} (${getStateName(estadoUf) ?? estadoUf}): aplicado ICMS importação ` +
+          `CHEIO a ${(stateRate * 100).toFixed(1)}% (alíquota interna).${extra}`,
+        );
+      } else {
+        ncmWarnings.push(
+          `Estado "${input.estadoDestino}" não reconhecido — mantido o regime padrão (SC/TTD). ` +
+          `Confira a UF de destino.`,
+        );
+      }
     }
   }
 
@@ -325,7 +344,7 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
     assessoriaRate: input.assessoriaRate,
 
     icmsGrossUpRate: input.icmsGrossUpRateOverride,
-    icmsAntecipadoRate: icmsAntecipado,
+    icmsAntecipadoRate: icmsAntecipadoEfetivo,
     icmsNegociadoClienteRate: input.icmsNegociadoClienteRate,
     icmsFullRegime,
     icmsInternalRate,
