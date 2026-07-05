@@ -30,6 +30,7 @@ FERRAMENTAS DISPONÍVEIS (análise e cálculo):
 
 FERRAMENTAS DISPONÍVEIS (consulta de operação):
 - consultar_operacao: retorna o ANDAMENTO da operação (estágio, marcos, documentos, financeiro). Use SEMPRE que perguntarem "status da operação", "como está", "em que pé está", andamento, documentos ou marcos. Sem operação no contexto, lista as ativas. Depois de consultar, NARRE a jornada de forma clara (o que já aconteceu e o próximo passo).
+- buscar_documento_operacao: o campo de anexos da operação é o REPOSITÓRIO de toda a documentação (proforma, invoice, packing list, BL/AWB, DI, contrato…). Quando pedirem "me traz a invoice/o BL/a proforma dessa operação", "quero o arquivo X", use esta tool: ela acha o documento por nome/tipo e devolve um LINK de download. ENTREGUE o link direto no chat (é temporário). Se houver mais de um candidato, liste os links e pergunte qual.
 
 FERRAMENTAS DISPONÍVEIS (operação e registro):
 - enviar_rfq: envia Solicitação de Cotação (RFQ) para fornecedores de um produto.

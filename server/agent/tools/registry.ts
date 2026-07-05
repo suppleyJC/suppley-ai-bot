@@ -25,6 +25,7 @@ import { lancarFinanceiroTool } from "./lancarFinanceiroTool";
 import { buscarAtivoTool, compararOrigemTool, benchmarkMercadoTool } from "./fase5Tools";
 import { coletarDadosFaltantesTool } from "./coletar_dados_faltantes";
 import { consultarOperacaoTool } from "./consultarOperacao";
+import { buscarDocumentoOperacaoTool } from "./buscarDocumentoOperacao";
 import { analiseMercadoTool } from "./analiseMercado";
 import { estatisticasComexTool } from "./estatisticasComex";
 import { precificarReferenciaTool } from "./precificarReferencia";
@@ -51,6 +52,8 @@ export const BASE_TOOLS: AgentTool[] = [
   coletarDadosFaltantesTool,
   // Consulta de andamento da operação (leitura) — base da jornada no chat
   consultarOperacaoTool,
+  // Repositório de documentos — acha e devolve um anexo (invoice/BL/proforma…) no chat
+  buscarDocumentoOperacaoTool,
   // Inteligência de mercado (BCB câmbio + FRED commodities) → insights de decisão
   analiseMercadoTool,
   // Estatísticas oficiais de comércio exterior por NCM (Comex Stat / MDIC-SECEX)
