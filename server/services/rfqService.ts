@@ -413,8 +413,8 @@ export function optimizePortAndState(
       baseFreightMultiplier: 1.0, // Referência
       transitDaysFromChina: 35,
       hasFiscalBenefit: true,
-      benefitDescription: "TTD 409: Crédito presumido de 75% do ICMS na importação",
-      icmsRate: 400, // 4% com TTD (efetivo após crédito)
+      benefitDescription: "TTD/SC: ICMS antecipado efetivo de 1,0% (TTD máximo, após 36 meses)",
+      icmsRate: 100, // 1,0% — alinhado ao motor certificado (TTD máximo)
     },
     {
       port: "Santos",

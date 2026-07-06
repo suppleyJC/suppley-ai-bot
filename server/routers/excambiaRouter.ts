@@ -2,7 +2,6 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import * as db from "../db";
 import { TRPCError } from "@trpc/server";
-import * as excambiaService from "../services/excambiaAgentService";
 import * as openaiService from "../services/openaiService";
 import { runExcambia } from "../agent/orchestrator";
 
@@ -25,108 +24,6 @@ agentChat: protectedProcedure
       messages: input.messages,
     });
     return { reply: out.reply, toolsUsed: out.toolsUsed, toolResults: out.toolResults };
-  }),
-
-// Chat with Excambia
-chat: protectedProcedure
-  .input(z.object({
-    messages: z.array(z.object({
-      role: z.enum(["user", "assistant", "system"]),
-      content: z.string(),
-    })),
-    includeHistory: z.boolean().default(true),
-  }))
-  .mutation(async ({ ctx, input }) => {
-    // Get user quotation history + RFQ history for context
-    let context: excambiaService.AnalysisContext | undefined;
-    
-    if (input.includeHistory) {
-      const history = await excambiaService.getUserQuotationHistory(ctx.user.id, 5);
-      const rfqHistory = await excambiaService.getUserRfqHistory(ctx.user.id, 5);
-      
-      if (history.length > 0 || rfqHistory.length > 0) {
-        context = {
-          quotations: history.length > 0 ? history.map(q => ({
-            id: q.id,
-            name: q.supplierName || "Sem nome",
-            totalFobCents: Number(q.totalFobCents),
-            totalCifCents: Number(q.totalCifCents),
-            totalTaxesCents: Number(q.totalTaxesCents),
-            totalCostCents: Number(q.totalCostCents),
-            suggestedPriceCents: Number(q.totalSuggestedPriceCents),
-            createdAt: q.createdAt,
-          })) : undefined,
-          rfqs: rfqHistory.length > 0 ? rfqHistory : undefined,
-        };
-      }
-    }
-    
-    const response = await excambiaService.processMessage(ctx.user.id, input.messages, context);
-    
-    return { response };
-  }),
-
-// Analyze document (PDF or image)
-analyzeDocument: protectedProcedure
-  .input(z.object({
-    documentUrl: z.string().url(),
-    mimeType: z.string(),
-    question: z.string().optional(),
-  }))
-  .mutation(async ({ ctx, input }) => {
-    const analysis = await excambiaService.analyzeDocument(
-      ctx.user.id,
-      input.documentUrl,
-      input.mimeType,
-      input.question
-    );
-    
-    return { analysis };
-  }),
-
-// Generate viability analysis for a quotation
-analyzeViability: protectedProcedure
-  .input(z.object({
-    products: z.array(z.object({
-      name: z.string(),
-      ncm: z.string(),
-      quantity: z.number(),
-      unitPriceFob: z.number(),
-      totalCost: z.number(),
-      suggestedPrice: z.number(),
-      targetPrice: z.number().optional(),
-    })),
-    totalFob: z.number(),
-    totalCost: z.number(),
-    totalTaxes: z.number(),
-    markup: z.number(),
-  }))
-  .mutation(async ({ input }) => {
-    const analysis = await excambiaService.generateViabilityAnalysis(input);
-    return { analysis };
-  }),
-
-// Generate negotiation suggestions
-suggestNegotiation: protectedProcedure
-  .input(z.object({
-    supplierName: z.string(),
-    products: z.array(z.object({
-      name: z.string(),
-      ncm: z.string(),
-      unitPriceFob: z.number(),
-    })),
-    totalFob: z.number(),
-  }))
-  .mutation(async ({ input }) => {
-    const suggestions = await excambiaService.generateNegotiationSuggestions(input);
-    return { suggestions };
-  }),
-
-// Get quotation history for context
-getHistory: protectedProcedure
-  .input(z.object({ limit: z.number().default(10) }).optional())
-  .query(async ({ ctx, input }) => {
-    return excambiaService.getUserQuotationHistory(ctx.user.id, input?.limit ?? 10);
   }),
 
 // OpenAI API Key Management
