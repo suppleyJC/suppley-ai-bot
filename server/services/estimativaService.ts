@@ -18,6 +18,7 @@ import {
 } from "./importCostEngine";
 import { getStateIcmsInternalRate, getStateName } from "./statePricingService";
 import { getStateImportBenefit } from "./stateBenefits";
+import { consultarTtce, ttceEnabled } from "./ttceService";
 import { isMercosulCountry } from "./taxCalculationService";
 
 export interface EstimativaProductInput {
@@ -188,6 +189,30 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
             `NCM ${p.ncmCode}: Ex-Tarifário ${ex.exCode ?? ""} aplicado ` +
             `(${ex.legalBasis ?? "base legal a confirmar"}). Confirme a vigência.`,
           );
+        }
+
+        // TTCE (Portal Único Siscomex) — fonte oficial do tratamento aplicado
+        // (ex-tarifário/GECEX, preferências). Opt-in via TTCE_ENABLED; fail-closed
+        // (null → segue com as tabelas locais). Só REDUZ alíquota, nunca eleva.
+        if (ttceEnabled()) {
+          const ttce = await consultarTtce({ ncm: ncmClean, paisOrigem: input.paisOrigem });
+          if (ttce) {
+            const antesIi = iiRate;
+            if (ttce.iiRate != null && iiRate !== undefined && ttce.iiRate < iiRate) {
+              iiRate = ttce.iiRate;
+            }
+            if (ttce.ipiRate != null && ipiRate !== undefined && ttce.ipiRate < ipiRate) {
+              ipiRate = ttce.ipiRate;
+            }
+            if (antesIi !== iiRate || ttce.exTarifario) {
+              const fund = ttce.exTarifario?.fundamento ?? ttce.fundamentos[0] ?? "TTCE/Portal Único";
+              ncmWarnings.push(
+                `NCM ${p.ncmCode}: tratamento oficial TTCE aplicado` +
+                (ttce.exTarifario?.codigo ? ` (Ex ${ttce.exTarifario.codigo})` : "") +
+                ` — II ${(iiRate! * 100).toFixed(1)}%. Fonte: ${fund}.`,
+              );
+            }
+          }
         }
         // A II vem do seed oficial MDIC (notes registra a origem). Só alertamos
         // quando a alíquota é uma estimativa por capítulo (fonte não cobriu o NCM)
