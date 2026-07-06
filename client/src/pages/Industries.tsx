@@ -109,6 +109,9 @@ export default function Industries({ tipoEntidade }: { tipoEntidade?: "fornecedo
     },
   });
 
+  // Ambiente limpo (como Ativos): a lista só aparece quando há busca/filtro ativo.
+  const hasFilters = searchQuery.trim() !== "" || filterSector !== "all" || filterStatus !== "all";
+
   // Filtrar e ordenar
   const filteredIndustries = (industriesList || [])
     .filter(ind => {
@@ -258,6 +261,16 @@ export default function Industries({ tipoEntidade }: { tipoEntidade?: "fornecedo
             </Card>
           ))}
         </div>
+      ) : !hasFilters ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
+            <Search className="mb-3 h-10 w-10 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">
+              Busque por nome, país ou tags — ou filtre por setor/status — para listar
+              {stats?.total ? ` os ${stats.total} cadastros` : " os cadastros"}.
+            </p>
+          </CardContent>
+        </Card>
       ) : filteredIndustries.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">

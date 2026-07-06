@@ -79,6 +79,34 @@ const CLASS_KEYWORDS: Record<string, string> = {
 };
 
 /**
+ * Capítulo NCM (2 dígitos) → classe macro. Taxonomia universal usada como
+ * fallback quando o nome não casa com nenhuma palavra-chave curada — evita que
+ * a classe fique vazia (ou vire nome de produto) para a maioria dos itens.
+ */
+const NCM_CHAPTER_CLASS: Record<string, string> = {
+  "25": "Sal, enxofre e pedras", "26": "Minérios", "27": "Combustíveis minerais",
+  "28": "Químicos inorgânicos", "29": "Químicos orgânicos", "30": "Produtos farmacêuticos",
+  "31": "Adubos e fertilizantes", "32": "Tintas e pigmentos", "33": "Cosméticos e óleos essenciais",
+  "34": "Sabões, ceras e lubrificantes", "38": "Químicos diversos", "39": "Plásticos e obras",
+  "40": "Borracha e obras", "44": "Madeira e obras", "48": "Papel e cartão",
+  "68": "Obras de pedra e cimento", "69": "Produtos cerâmicos", "70": "Vidro e obras",
+  "72": "Ferro fundido e aço", "73": "Obras de ferro ou aço", "74": "Cobre e obras",
+  "76": "Alumínio e obras", "82": "Ferramentas e talheres", "83": "Obras diversas de metal",
+  "84": "Máquinas e equipamentos", "85": "Material elétrico", "87": "Veículos e tratores",
+  "90": "Óptica e precisão", "94": "Móveis e iluminação", "95": "Brinquedos e esporte",
+  "61": "Vestuário de malha", "62": "Vestuário (exceto malha)", "63": "Artefatos têxteis",
+  "64": "Calçados",
+};
+
+/** Classe pelo capítulo (2 primeiros dígitos) da NCM, ou undefined. */
+export function inferClassFromNcm(ncmCode?: string): string | undefined {
+  if (!ncmCode) return undefined;
+  const digits = ncmCode.replace(/\D/g, "");
+  if (digits.length < 2 || digits === "00000000") return undefined;
+  return NCM_CHAPTER_CLASS[digits.slice(0, 2)] ?? `Capítulo NCM ${digits.slice(0, 2)}`;
+}
+
+/**
  * Extrai possível classe do nome do produto
  */
 export function inferClassFromName(productName: string): string | undefined {
@@ -206,6 +234,13 @@ export async function inferCategories(
         result.categoria = result.categoria || ref.categoria || undefined;
         result.subcategoria = result.subcategoria || ref.subcategoria || undefined;
       }
+    }
+
+    // Fallback universal: se ainda não há classe, usa o capítulo da NCM — assim
+    // todo produto entra numa classe macro real (não fica órfão nem vira "nome").
+    if (!result.classe) {
+      const porNcm = inferClassFromNcm(ncmCode);
+      if (porNcm) result.classe = porNcm;
     }
 
     return result;

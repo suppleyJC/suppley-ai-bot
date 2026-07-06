@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { classeEfetiva, classesCompartilhadas, SEM_CLASSE } from "@/lib/ncmClass";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -475,45 +476,44 @@ export default function Products() {
   const supplierName = (id: number | null) =>
     id ? suppliers?.find((s) => s.id === id)?.name ?? null : null;
 
-  // CLASSE MACRO — deduplicada por chave (trim + minúsculas), resolve "Pregos" x "Pregos ".
+  // Classes CURADAS genuínas (compartilhadas por ≥2 produtos) — o resto cai no capítulo NCM.
+  const classesReais = useMemo(() => classesCompartilhadas(products ?? []), [products]);
+
+  // CLASSE MACRO — classe efetiva (curada compartilhada OU capítulo NCM OU "Sem classificação").
   const classFacets = useMemo(() => {
     const m = new Map<string, { label: string; count: number }>();
     for (const p of products ?? []) {
-      const raw = (p.classe || "").trim();
-      if (!raw) continue;
-      const key = raw.toLowerCase();
-      const e = m.get(key) ?? { label: raw, count: 0 };
+      const label = classeEfetiva(p, classesReais);
+      const key = label.toLowerCase();
+      const e = m.get(key) ?? { label, count: 0 };
       e.count++;
       m.set(key, e);
     }
     return Array.from(m.entries())
       .map(([key, v]) => ({ key, label: v.label, count: v.count }))
-      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
-  }, [products]);
+      .sort((a, b) => {
+        if (a.label === SEM_CLASSE) return 1; // "Sem classificação" por último
+        if (b.label === SEM_CLASSE) return -1;
+        return a.label.localeCompare(b.label, "pt-BR");
+      });
+  }, [products, classesReais]);
 
-  const semClasse = useMemo(
-    () => (products ?? []).filter((p) => !(p.classe || "").trim()).length,
-    [products],
-  );
-
-  // Filtro: classe + criticidade + busca textual
+  // Filtro: classe efetiva + criticidade + busca textual
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (products ?? []).filter((p) => {
-      const cls = (p.classe || "").trim().toLowerCase();
-      if (selectedClass === "__none__" && cls) return false;
-      if (selectedClass && selectedClass !== "__none__" && cls !== selectedClass) return false;
+      if (selectedClass && classeEfetiva(p, classesReais).toLowerCase() !== selectedClass) return false;
       if (selectedCrit.size > 0 && !selectedCrit.has(p.criticidade || "")) return false;
       if (!q) return true;
       const tags = ((p.tags as string[] | null) ?? []).join(" ");
       const haystack = [
-        p.name, p.ncmCode, p.classe, p.categoria, p.subcategoria,
+        p.name, p.ncmCode, p.classe, classeEfetiva(p, classesReais), p.categoria, p.subcategoria,
         p.aplicacao, p.description, supplierName(p.supplierId),
         p.latestPrice?.supplierName, tags,
       ].filter(Boolean).join(" ").toLowerCase();
       return haystack.includes(q);
     });
-  }, [products, search, selectedClass, selectedCrit, suppliers]);
+  }, [products, search, selectedClass, selectedCrit, suppliers, classesReais]);
 
   // CAMADA MODELO — agrupa variações pelo nome normalizado.
   const models = useMemo<ModelGroup[]>(() => {
@@ -529,11 +529,12 @@ export default function Products() {
       const price = variants.find((v) => v.latestPrice)?.latestPrice ?? null;
       const supplierIds = new Set(variants.map((v) => v.supplierId).filter(Boolean));
       const crit = variants.find((v) => v.criticidade)?.criticidade ?? null;
+      const classeGrupo = classeEfetiva(primary, classesReais);
       return {
         key,
         name: variants[0].name,
         ncmCode: variants[0].ncmCode,
-        classe: variants.find((v) => v.classe)?.classe ?? null,
+        classe: classeGrupo === SEM_CLASSE ? null : classeGrupo,
         criticidade: crit,
         description: primary.description ?? null,
         paisOrigem: variants.find((v) => v.paisOrigem)?.paisOrigem ?? null,
@@ -554,7 +555,7 @@ export default function Products() {
       return 0;
     });
     return list;
-  }, [filtered, sortBy]);
+  }, [filtered, sortBy, classesReais]);
 
   const selected = models.find((mo) => mo.key === selectedKey) ?? null;
 
@@ -663,9 +664,6 @@ export default function Products() {
                     {c.label} ({c.count})
                   </SelectItem>
                 ))}
-                {semClasse > 0 && (
-                  <SelectItem value="__none__">Sem classe ({semClasse})</SelectItem>
-                )}
               </SelectContent>
             </Select>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
