@@ -1,12 +1,14 @@
 /**
- * attachmentBlock — converte um anexo (PDF/imagem/planilha) já no storage em um
- * bloco de conteúdo multimodal que o Claude consegue ler.
+ * attachmentBlock — converte um anexo já no storage em um bloco de conteúdo
+ * multimodal que o Claude consegue ler.
  *
  * Compartilhado entre o caminho síncrono (conversasRouter.send) e o de streaming
  * (chatStreamRoute) para que AMBOS encaminhem o arquivo ao agente da mesma forma.
- *  - PDF        → bloco `document` (base64)
- *  - imagem     → bloco `image` (base64)
- *  - planilha   → parseada para texto/Markdown (o Claude não lê o binário)
+ *  - PDF          → texto extraído (ou `document` base64 p/ PDF escaneado)
+ *  - imagem       → bloco `image` (base64)
+ *  - planilha     → parseada para texto/Markdown (o Claude não lê o binário)
+ *  - .docx        → texto extraído (mammoth)
+ *  - texto/código → conteúdo bruto (.txt, .md, .json, .py, .xml, .ts, .js…)
  * Best-effort: erro vira null (segue só com o texto).
  */
 import type { MessageContent } from "../_core/llm";
@@ -14,6 +16,33 @@ import { isSpreadsheet, spreadsheetBufferToText } from "./spreadsheetToText";
 import { pdfBufferToText } from "./pdfToText";
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+// Extensões tratadas como TEXTO PURO (código e dados incluídos).
+const TEXT_EXTS = [
+  ".txt", ".md", ".json", ".py", ".xml", ".yaml", ".yml",
+  ".ts", ".js", ".sql", ".html", ".css", ".log",
+];
+const TEXT_MIMES = ["text/plain", "text/markdown", "application/json", "text/x-python", "application/x-python", "text/xml", "application/xml"];
+
+// Protege o contexto do agente contra arquivos de texto gigantes (o limite de
+// upload é 16MB — um .txt desse tamanho estouraria a janela do modelo).
+const MAX_TEXT_CHARS = 120_000;
+
+function isPlainTextFile(mimeType: string, name: string): boolean {
+  const n = (name || "").toLowerCase();
+  if (TEXT_EXTS.some((ext) => n.endsWith(ext))) return true;
+  return TEXT_MIMES.includes(mimeType);
+}
+
+function truncateForContext(text: string, name: string): string {
+  if (text.length <= MAX_TEXT_CHARS) return text;
+  return (
+    text.slice(0, MAX_TEXT_CHARS) +
+    `\n\n[…arquivo "${name}" truncado: ${text.length.toLocaleString("pt-BR")} caracteres no total; exibidos os primeiros ${MAX_TEXT_CHARS.toLocaleString("pt-BR")}]`
+  );
+}
 
 export interface AttachmentRef {
   url: string;
@@ -31,6 +60,25 @@ export async function buildAttachmentBlock(att: AttachmentRef): Promise<MessageC
     if (isSpreadsheet(att.mimeType, att.name)) {
       const tabela = await spreadsheetBufferToText(buffer, { name: att.name, mimeType: att.mimeType });
       return { type: "text", text: `Conteúdo da planilha anexada (${att.name}):\n\n${tabela}` };
+    }
+
+    // Word (.docx): extrai o texto com mammoth.
+    if (att.mimeType === DOCX_MIME || att.name.toLowerCase().endsWith(".docx")) {
+      const mammoth = await import("mammoth");
+      const { value } = await mammoth.extractRawText({ buffer });
+      return {
+        type: "text",
+        text: `Conteúdo do documento Word anexado (${att.name}):\n\n${truncateForContext(value ?? "", att.name)}`,
+      };
+    }
+
+    // Texto/código/dados (.txt, .md, .json, .py, .xml…): conteúdo bruto.
+    if (isPlainTextFile(att.mimeType, att.name)) {
+      const texto = buffer.toString("utf-8");
+      return {
+        type: "text",
+        text: `Conteúdo do arquivo anexado (${att.name}):\n\n${truncateForContext(texto, att.name)}`,
+      };
     }
 
     // PDF: extrai TEXTO PURO (economiza tokens e elimina peso visual/imagens/

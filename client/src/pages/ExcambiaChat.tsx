@@ -29,9 +29,23 @@ const ALLOWED_UPLOAD_TYPES = [
   "application/vnd.ms-excel", // .xls
   "text/csv",
   "application/csv",
+  // Documentos Word (texto extraído no backend)
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+  // Texto, código e dados (enviados como conteúdo bruto ao agente)
+  "text/plain",
+  "text/markdown",
+  "application/json",
+  "text/x-python",
+  "application/x-python",
+  "text/xml",
+  "application/xml",
 ];
 // Alguns navegadores não preenchem file.type p/ csv/xls; validamos também pela extensão.
-const ALLOWED_UPLOAD_EXTS = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".xlsx", ".xls", ".csv"];
+const ALLOWED_UPLOAD_EXTS = [
+  ".pdf", ".jpg", ".jpeg", ".png", ".webp",
+  ".xlsx", ".xls", ".csv",
+  ".docx", ".txt", ".md", ".json", ".py", ".xml", ".yaml", ".yml",
+];
 const MAX_UPLOAD_BYTES = 16 * 1024 * 1024; // 16MB
 
 /** Infere o MIME type pela extensão (fallback quando o navegador não preenche file.type). */
@@ -44,6 +58,13 @@ function mimeFromName(name: string): string {
   if (n.endsWith(".png")) return "image/png";
   if (n.endsWith(".webp")) return "image/webp";
   if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
+  if (n.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (n.endsWith(".txt") || n.endsWith(".log")) return "text/plain";
+  if (n.endsWith(".md")) return "text/markdown";
+  if (n.endsWith(".json")) return "application/json";
+  if (n.endsWith(".py")) return "text/x-python";
+  if (n.endsWith(".xml")) return "application/xml";
+  if (n.endsWith(".yaml") || n.endsWith(".yml")) return "text/plain";
   return "application/octet-stream";
 }
 
@@ -288,7 +309,7 @@ export default function ExcambiaChat() {
     const nome = file.name.toLowerCase();
     const extOk = ALLOWED_UPLOAD_EXTS.some((ext) => nome.endsWith(ext));
     if (!ALLOWED_UPLOAD_TYPES.includes(file.type) && !extOk) {
-      toast.error("Tipo não suportado. Envie PDF, imagem (JPEG/PNG/WebP) ou planilha (XLSX/XLS/CSV).");
+      toast.error("Tipo não suportado. Envie documento (PDF/DOCX/TXT), planilha (XLSX/CSV), imagem (JPEG/PNG/WebP) ou código/dados (JSON/PY/XML).");
       return;
     }
     if (file.size > MAX_UPLOAD_BYTES) {
@@ -476,7 +497,7 @@ export default function ExcambiaChat() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv,image/jpeg,image/png,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                accept=".pdf,.docx,.txt,.md,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv,.json,.py,.xml,.yaml,.yml,image/jpeg,image/png,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,application/json,text/x-python,application/xml"
                 className="hidden"
                 onChange={handleFileUpload}
               />
@@ -484,7 +505,7 @@ export default function ExcambiaChat() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading || streaming}
-                title="Anexar PDF, imagem ou planilha (XLSX/CSV)"
+                title="Anexar documento (PDF/DOCX/TXT), planilha (XLSX/CSV), imagem ou código/dados (JSON/PY)"
                 className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-violet-600 flex-shrink-0 disabled:opacity-50"
               >
                 {uploading ? (
