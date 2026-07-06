@@ -8,6 +8,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { chatStreamRouter } from "../routes/chatStreamRoute";
+import { rfqInboundRouter } from "../routes/rfqInboundRoute";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -38,6 +39,8 @@ async function startServer() {
   registerOAuthRoutes(app);
   // Chat streaming endpoint (SSE)
   app.use(chatStreamRouter);
+  // Webhook de respostas de RFQ por email (cotação semi-automatizada)
+  app.use(rfqInboundRouter);
   // tRPC API
   app.use(
     "/api/trpc",

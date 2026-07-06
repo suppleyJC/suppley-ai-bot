@@ -33,6 +33,12 @@ import { registrarMemoriaTool } from "./registrarMemoria";
 import { registrarResultadoOperacaoTool } from "./registrarResultadoOperacao";
 import { qualidadeDadosTool } from "./qualidadeDados";
 import { catalogarDocumentoTool } from "./catalogarDocumento";
+import {
+  prepararCotacaoFornecedorTool,
+  enviarCotacaoFornecedorTool,
+  registrarRespostaFornecedorTool,
+  contrapropostaFornecedorTool,
+} from "./cotacaoFornecedor";
 import { compararRotasImportacaoTool } from "./compararRotasImportacao";
 import { calcularCubagemTool } from "./calcularCubagem";
 import { precificacaoNacionalTool, depreciacaoAtivoTool } from "./precificacaoNacional";
@@ -68,6 +74,12 @@ export const BASE_TOOLS: AgentTool[] = [
   qualidadeDadosTool,
   // Catalogação via chat — cotação/catálogo anexado vira dado na base
   catalogarDocumentoTool,
+  // Cotação semi-automatizada (humano-no-loop): preparar → aprovar → enviar →
+  // registrar retorno vs alvo → contraproposta (nunca aceita sozinha)
+  prepararCotacaoFornecedorTool,
+  enviarCotacaoFornecedorTool,
+  registrarRespostaFornecedorTool,
+  contrapropostaFornecedorTool,
   // Estratégia interestadual — compara importar direto vs. via estado-hub com benefício
   compararRotasImportacaoTool,
   // Cubagem — quantas unidades cabem em 20'/40'/40HC (volume + peso)
