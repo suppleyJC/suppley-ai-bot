@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,8 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { FileText, Upload, Sparkles, Trash2, Plus, ArrowRight, Loader2, CheckCircle2, Building2, Package, Copy, Edit, Share2 } from "lucide-react";
-import OperationCard, { type OperationCardAction } from "@/components/OperationCard";
+import { FileText, Upload, Sparkles, Trash2, Plus, ArrowRight, Loader2, Building2, Package, Edit, Share2, Search, X, MapPin, CalendarDays, ChevronRight } from "lucide-react";
 
 type ItemDraft = {
   productName: string;
@@ -87,8 +86,32 @@ export default function Proformas() {
   const [isUploading, setIsUploading] = useState(false);
   const [loadingEditId, setLoadingEditId] = useState<number | null>(null);
 
+  // Ambiente limpo tipo Ativos: busca + filtro por status ("classe" da proforma) + seleção.
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
   const utils = trpc.useUtils();
   const { data: proformas, isLoading } = trpc.proforma.list.useQuery();
+
+  const hasFilters = search.trim() !== "" || filterStatus !== "all";
+
+  const statusFacets = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of proformas ?? []) m.set(p.status, (m.get(p.status) ?? 0) + 1);
+    return Array.from(m.entries()).map(([status, count]) => ({ status, count }));
+  }, [proformas]);
+
+  const filteredProformas = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (proformas ?? []).filter((p) => {
+      if (filterStatus !== "all" && p.status !== filterStatus) return false;
+      if (!q) return true;
+      const hay = [`PF-${p.numero || p.id}`, p.supplierName, p.supplierCountry, p.status]
+        .filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }, [proformas, search, filterStatus]);
 
   const uploadMutation = trpc.calculations.uploadQuotation.useMutation();
   const extractMutation = trpc.proforma.extract.useMutation();
@@ -315,64 +338,36 @@ export default function Proformas() {
   const busy = createMutation.isPending || updateMutation.isPending || distributeMutation.isPending;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Proformas & Invoices</h1>
-        <p className="text-muted-foreground">
-          Suba a proforma — a Excambia estrutura os dados e distribui: fabricante → Indústrias &amp;
-          Fornecedores, produtos/valores → Ativos &amp; Insumos.
-        </p>
-      </div>
+    <div className="flex flex-col h-full gap-4">
+      {/* input de arquivo (oculto) — acionado pelo botão do cabeçalho */}
+      <input
+        id="proforma-file"
+        type="file"
+        accept=".pdf,image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleFileUpload}
+        disabled={isUploading}
+      />
 
-      {/* Entrada */}
-      {!draft && (
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card className="border-dashed">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Sparkles className="h-5 w-5 text-[#682ABA]" /> Subir proforma (PDF/imagem)
-              </CardTitle>
-              <CardDescription>A Excambia extrai fornecedor, itens, preços e condições.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <label
-                htmlFor="proforma-file"
-                className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8 cursor-pointer hover:bg-muted/50 transition"
-              >
-                {isUploading ? (
-                  <Loader2 className="h-8 w-8 animate-spin text-[#682ABA] mb-2" />
-                ) : (
-                  <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                )}
-                <p className="text-sm font-medium">{isUploading ? "Processando..." : "Clique para enviar"}</p>
-                <p className="text-xs text-muted-foreground">PDF, JPG ou PNG · até 16MB</p>
-                <input
-                  id="proforma-file"
-                  type="file"
-                  accept=".pdf,image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                  disabled={isUploading}
-                />
-              </label>
-            </CardContent>
-          </Card>
-
-          <Card className="border-dashed">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Plus className="h-5 w-5" /> Cadastro manual
-              </CardTitle>
-              <CardDescription>Preencha os dados da proforma manualmente.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="outline" className="w-full" onClick={startManual}>
-                Começar cadastro manual
-              </Button>
-            </CardContent>
-          </Card>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Proformas &amp; Invoices</h1>
+          <p className="text-muted-foreground text-sm">
+            Suba a proforma — a Excambia estrutura e distribui: fabricante → Fornecedores, itens/valores → Ativos.
+          </p>
         </div>
-      )}
+        {!draft && (
+          <div className="flex gap-2 flex-shrink-0">
+            <Button onClick={() => document.getElementById("proforma-file")?.click()} disabled={isUploading} className="gap-2">
+              {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {isUploading ? "Processando…" : "Subir proforma"}
+            </Button>
+            <Button variant="outline" onClick={startManual} className="gap-2">
+              <Plus className="h-4 w-4" /> Manual
+            </Button>
+          </div>
+        )}
+      </div>
 
       {/* Revisão / edição do rascunho */}
       {draft && (
@@ -564,68 +559,157 @@ export default function Proformas() {
         </Card>
       )}
 
-      {/* Lista */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Proformas cadastradas</CardTitle>
-        </CardHeader>
-        <CardContent>
+      {/* Lista limpa tipo Ativos (oculta durante a edição de um rascunho) */}
+      {!draft && (
+        <>
+          {proformas && proformas.length > 0 && (
+            <div className="flex flex-col md:flex-row md:items-center gap-3 py-1 border-b pb-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar por número, fornecedor, país…"
+                  className="pl-9"
+                />
+              </div>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="md:w-56"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os status ({proformas.length})</SelectItem>
+                  {statusFacets.map((f) => (
+                    <SelectItem key={f.status} value={f.status}>
+                      {STATUS_LABEL[f.status]?.label ?? f.status} ({f.count})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {hasFilters && (
+                <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setFilterStatus("all"); }} className="h-9 px-2 text-xs">
+                  <X className="mr-1 h-3.5 w-3.5" /> Limpar
+                </Button>
+              )}
+            </div>
+          )}
+
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Carregando...</p>
           ) : !proformas || proformas.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-12 text-muted-foreground">
               <FileText className="h-10 w-10 mx-auto mb-2 opacity-40" />
-              <p className="text-sm">Nenhuma proforma ainda. Suba a primeira acima.</p>
+              <p className="text-sm">Nenhuma proforma ainda. Suba a primeira no botão acima.</p>
             </div>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {proformas.map((p) => (
-                <OperationCard
-                  key={p.id}
-                  entity={{
-                    id: p.id,
-                    title: `PF-${p.numero || p.id}`,
-                    supplierName: p.supplierName ?? undefined,
-                    status: p.status,
-                    estimatedValue: p.totalFobCents ?? undefined,
-                    origin: p.supplierCountry ?? undefined,
-                    // Mostra data de distribuição se já foi distribuída, senão mostra atualização
-                    lastUpdated: p.status === "distribuida" ? (p.distributedAt ?? p.updatedAt) : p.updatedAt,
-                    avatar: {
-                      initials: (p.supplierName || "PF").substring(0, 2).toUpperCase(),
-                      color: "teal",
-                    },
-                  }}
-                  compact={false}
-                  actions={(() => {
-                    const acts: OperationCardAction[] = [
-                      {
-                        label: loadingEditId === p.id ? "Abrindo..." : "Revisar",
-                        icon: <Edit className="h-4 w-4" />,
-                        onClick: async () => { await openForEdit(p.id); },
-                      },
-                    ];
-                    if (p.status !== "distribuida") {
-                      acts.push({
-                        label: "Distribuir",
-                        icon: <Share2 className="h-4 w-4" />,
-                        onClick: async () => { distributeMutation.mutate({ proformaId: p.id }); },
-                      });
-                    }
-                    acts.push({
-                      label: "Excluir",
-                      icon: <Trash2 className="h-4 w-4" />,
-                      variant: "destructive",
-                      onClick: () => handleDeleteProforma(p.id, `PF-${p.numero || p.id}`),
-                    });
-                    return acts;
-                  })()}
-                />
-              ))}
+            <div className="flex gap-6 flex-1 min-h-0">
+              {/* esquerda: lista (limpa até haver busca/filtro) */}
+              <div className="flex-1 min-w-0 flex flex-col">
+                {hasFilters && (
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {filteredProformas.length} {filteredProformas.length === 1 ? "proforma" : "proformas"} · filtro ativo
+                  </p>
+                )}
+                {!hasFilters ? (
+                  <div className="flex-1 flex items-center justify-center rounded-2xl border border-dashed border-slate-200 p-10 text-center">
+                    <div>
+                      <Search className="mb-3 h-10 w-10 mx-auto text-slate-300" />
+                      <p className="text-sm text-slate-400">
+                        Busque por número/fornecedor — ou filtre por status — para listar as proformas.
+                      </p>
+                    </div>
+                  </div>
+                ) : filteredProformas.length === 0 ? (
+                  <Card className="flex-1 flex items-center justify-center">
+                    <CardContent className="py-16 text-center">
+                      <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                      <h3 className="text-lg font-semibold mb-1">Nenhum resultado</h3>
+                      <p className="text-muted-foreground">Ajuste a busca ou o status.</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="flex-1 overflow-auto pr-1 space-y-1.5">
+                    {filteredProformas.map((p) => {
+                      const st = STATUS_LABEL[p.status];
+                      const isSel = p.id === selectedId;
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => setSelectedId(p.id)}
+                          className={`w-full rounded-xl border p-3 text-left transition-all ${
+                            isSel
+                              ? "border-violet-400 bg-violet-50/60 ring-1 ring-violet-200"
+                              : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60"
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span className="font-semibold text-slate-800">PF-{p.numero || p.id}</span>
+                                {st && <Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge>}
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                                <span className="inline-flex items-center gap-1 truncate">
+                                  <Building2 className="h-3 w-3" />{p.supplierName || "Fornecedor n/d"}
+                                </span>
+                                {p.supplierCountry && (
+                                  <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{p.supplierCountry}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="text-right">
+                                {p.totalFobCents != null ? (
+                                  <div className="text-sm font-semibold text-slate-800">{fmtCents(p.totalFobCents, p.currency)}</div>
+                                ) : (
+                                  <span className="text-[11px] text-muted-foreground">sem total</span>
+                                )}
+                                <div className="text-[11px] text-muted-foreground">{fmtDate(p.quotationDate ?? p.updatedAt)}</div>
+                              </div>
+                              <ChevronRight className={`h-4 w-4 ${isSel ? "text-violet-500" : "text-slate-300"}`} />
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* detalhe inline (telas menores) */}
+                {selectedId && (
+                  <div className="lg:hidden mt-4">
+                    <ProformaDetail
+                      id={selectedId}
+                      loadingEditId={loadingEditId}
+                      onEdit={openForEdit}
+                      onDistribute={(id) => distributeMutation.mutate({ proformaId: id })}
+                      onDelete={handleDeleteProforma}
+                      onClose={() => setSelectedId(null)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* direita: detalhe da proforma selecionada */}
+              <aside className="hidden lg:block w-[400px] flex-shrink-0 overflow-y-auto">
+                {selectedId ? (
+                  <ProformaDetail
+                    id={selectedId}
+                    loadingEditId={loadingEditId}
+                    onEdit={openForEdit}
+                    onDistribute={(id) => distributeMutation.mutate({ proformaId: id })}
+                    onDelete={handleDeleteProforma}
+                    onClose={() => setSelectedId(null)}
+                  />
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 p-10 text-center">
+                    <FileText className="mb-3 h-10 w-10 text-slate-300" />
+                    <p className="text-sm text-slate-400">Selecione uma proforma para ver fornecedor, itens e condições.</p>
+                  </div>
+                )}
+              </aside>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </>
+      )}
     </div>
   );
 
@@ -645,6 +729,141 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="space-y-1">
       <Label className="text-xs">{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function fmtCents(cents?: number | null, currency?: string | null): string {
+  if (cents == null) return "—";
+  const v = (cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return currency ? `${currency} ${v}` : `R$ ${v}`;
+}
+function fmtDate(d?: string | Date | null): string {
+  if (!d) return "—";
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString("pt-BR");
+}
+
+/** Painel de detalhe da proforma selecionada — abre ao clicar no card. */
+function ProformaDetail({
+  id, loadingEditId, onEdit, onDistribute, onDelete, onClose,
+}: {
+  id: number;
+  loadingEditId: number | null;
+  onEdit: (id: number) => void | Promise<void>;
+  onDistribute: (id: number) => void;
+  onDelete: (id: number, label: string) => void;
+  onClose: () => void;
+}) {
+  const { data, isLoading } = trpc.proforma.get.useQuery({ id });
+
+  if (isLoading) {
+    return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-muted-foreground">Carregando…</div>;
+  }
+  if (!data) {
+    return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-muted-foreground">Proforma não encontrada.</div>;
+  }
+
+  const p = data.proforma as any;
+  const items = (data.items ?? []) as any[];
+  const st = STATUS_LABEL[p.status];
+  const label = `PF-${p.numero || p.id}`;
+  const sectorLabel = SECTOR_OPTIONS.find((s) => s.value === p.supplierSector)?.label;
+  const total = items.reduce((s, it) => s + (it.unitPriceCents || 0) * (it.quantity || 0), 0);
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white">
+      <div className="flex items-start gap-2 border-b border-slate-100 p-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-base font-bold text-slate-900">{label}</h2>
+            {st && <Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge>}
+          </div>
+          <p className="mt-0.5 text-sm text-slate-600 truncate">{p.supplierName || "Fornecedor não informado"}</p>
+        </div>
+        <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100" title="Fechar">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="space-y-4 p-4">
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => onEdit(id)} disabled={loadingEditId === id} className="gap-1.5">
+            <Edit className="h-3.5 w-3.5" /> {loadingEditId === id ? "Abrindo…" : "Revisar"}
+          </Button>
+          {p.status !== "distribuida" && (
+            <Button size="sm" variant="outline" onClick={() => onDistribute(id)} className="gap-1.5">
+              <Share2 className="h-3.5 w-3.5" /> Distribuir
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={() => onDelete(id, label)} className="gap-1.5 text-destructive hover:text-destructive">
+            <Trash2 className="h-3.5 w-3.5" /> Excluir
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Spec label="País" value={p.supplierCountry || "—"} />
+          <Spec label="Setor" value={sectorLabel || "—"} />
+          <Spec label="Email" value={p.supplierEmail || "—"} />
+          <Spec label="Telefone" value={p.supplierPhone || "—"} />
+        </div>
+
+        <div>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Condições comerciais</p>
+          <div className="grid grid-cols-2 gap-2">
+            <Spec label="Data" value={fmtDate(p.quotationDate)} icon={<CalendarDays className="h-3 w-3" />} />
+            <Spec label="Moeda" value={p.currency || "—"} />
+            <Spec label="Incoterm" value={p.incoterm || "—"} />
+            <Spec label="Lead time" value={p.leadTimeDays != null ? `${p.leadTimeDays} dias` : "—"} />
+            <Spec label="MOQ" value={p.moq != null ? String(p.moq) : "—"} />
+            <Spec label="Pagamento" value={p.paymentTerms || "—"} />
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Itens ({items.length})</p>
+          <div className="space-y-1.5">
+            {items.map((it, i) => (
+              <div key={i} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-700 truncate">{it.productName}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {it.quantity} {it.unit || "UN"}{it.ncmCode ? ` · NCM ${it.ncmCode}` : ""}
+                    </p>
+                  </div>
+                  <div className="text-right text-sm font-semibold text-slate-800 shrink-0">
+                    {fmtCents(it.unitPriceCents, p.currency)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {total > 0 && (
+            <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 text-sm">
+              <span className="text-muted-foreground">Total FOB</span>
+              <span className="font-semibold text-slate-800">{fmtCents(total, p.currency)}</span>
+            </div>
+          )}
+        </div>
+
+        {p.fileUrl && (
+          <a href={p.fileUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-violet-600 hover:underline">
+            <FileText className="h-3.5 w-3.5" /> Abrir arquivo original
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Spec({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-1.5">
+      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+        {icon} {label}
+      </div>
+      <div className="text-sm font-medium text-slate-700 truncate">{value}</div>
     </div>
   );
 }
