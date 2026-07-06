@@ -333,14 +333,14 @@ export default function Operacoes() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Buscar código, título, cliente…"
-                className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-300 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-base sm:text-sm text-slate-700 placeholder:text-slate-300 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
               />
             </div>
           </div>
 
           {view === "lista" ? (
             /* ===================== VISÃO LISTA ===================== */
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
               {filtradas.length === 0 ? (
                 <p className="p-10 text-center text-sm text-slate-400">
                   Nenhuma operação encontrada{query ? ` para “${query}”` : ""}.

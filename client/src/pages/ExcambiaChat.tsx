@@ -470,7 +470,7 @@ export default function ExcambiaChat() {
         </div>
 
         {/* composer — fixo no rodapé (não encolhe) */}
-        <div className="flex w-full flex-shrink-0 justify-center bg-gradient-to-t from-[#faf9fc] px-3 sm:px-6 pb-4 sm:pb-6 pt-2.5 sm:pt-3.5">
+        <div className="flex w-full flex-shrink-0 justify-center bg-gradient-to-t from-[#faf9fc] px-3 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-6 pt-2.5 sm:pt-3.5">
           <div className="w-full max-w-full sm:max-w-2xl lg:max-w-3xl">
             <div className="flex items-end gap-2 sm:gap-2.5 rounded-[18px] border border-[#e2def0] bg-white p-2 sm:p-2.5 pl-3 sm:pl-4 shadow-[0_4px_20px_rgba(49,18,96,0.05)] transition-colors focus-within:border-violet-500 focus-within:shadow-[0_4px_24px_rgba(104,42,186,0.12)]">
               <input
@@ -507,7 +507,7 @@ export default function ExcambiaChat() {
                 value={draft} onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                 rows={1} placeholder='Ex.: "5.400 escoras galvanizadas da China"…'
-                className="flex-1 resize-none bg-transparent py-1.5 text-sm sm:text-[14px] leading-relaxed text-slate-700 outline-none placeholder:text-slate-400 max-h-[200px] overflow-y-auto scrollbar-custom"
+                className="flex-1 resize-none bg-transparent py-1.5 text-base sm:text-[14px] leading-relaxed text-slate-700 outline-none placeholder:text-slate-400 max-h-[200px] overflow-y-auto scrollbar-custom"
               />
               <button onClick={handleSend}
                 className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-[10px] bg-violet-600 text-white hover:bg-violet-700 flex-shrink-0">

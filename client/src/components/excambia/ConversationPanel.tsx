@@ -111,7 +111,7 @@ export default function ConversationPanel({
       <div className="mx-3 sm:mx-4 mb-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 sm:px-3 py-1.5 sm:py-2 flex-shrink-0">
         <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…"
-          className="w-full bg-transparent text-sm text-slate-600 outline-none placeholder:text-slate-400" />
+          className="w-full bg-transparent text-base sm:text-sm text-slate-600 outline-none placeholder:text-slate-400" />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-4">

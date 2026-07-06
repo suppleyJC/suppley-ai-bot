@@ -366,7 +366,7 @@ function DashboardLayoutContent({
 
       <SidebarInset className="bg-background">
         {isMobile && (
-          <div className="flex border-b h-16 items-center justify-between bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+          <div className="flex border-b h-16 items-center justify-between bg-background/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-10 w-10 rounded-xl bg-muted" />
               <div className="flex items-center gap-2">

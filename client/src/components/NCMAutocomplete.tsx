@@ -159,7 +159,7 @@ export function NCMAutocomplete({
             </Button>
           </div>
         </PopoverTrigger>
-        <PopoverContent className="w-[500px] p-0" align="start">
+        <PopoverContent className="w-[min(500px,calc(100vw-2rem))] p-0" align="start">
           <Command>
             <CommandInput 
               placeholder="Buscar NCM por código ou descrição..." 
