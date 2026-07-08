@@ -33,6 +33,8 @@ import { registrarMemoriaTool } from "./registrarMemoria";
 import { registrarResultadoOperacaoTool } from "./registrarResultadoOperacao";
 import { qualidadeDadosTool } from "./qualidadeDados";
 import { catalogarDocumentoTool } from "./catalogarDocumento";
+import { lerItensProformaTool } from "./lerItensProforma";
+import { relerDocumentoTool } from "./relerDocumento";
 import {
   prepararCotacaoFornecedorTool,
   enviarCotacaoFornecedorTool,
@@ -74,6 +76,10 @@ export const BASE_TOOLS: AgentTool[] = [
   qualidadeDadosTool,
   // Catalogação via chat — cotação/catálogo anexado vira dado na base
   catalogarDocumentoTool,
+  // Leitura de volta — itens REAIS das proformas catalogadas (nada de inventar)
+  lerItensProformaTool,
+  // Re-hidratação — relê o conteúdo de arquivo guardado (proforma/anexo) no contexto
+  relerDocumentoTool,
   // Cotação semi-automatizada (humano-no-loop): preparar → aprovar → enviar →
   // registrar retorno vs alvo → contraproposta (nunca aceita sozinha)
   prepararCotacaoFornecedorTool,
