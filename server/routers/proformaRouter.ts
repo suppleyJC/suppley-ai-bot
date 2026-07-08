@@ -15,7 +15,8 @@ const itemSchema = z.object({
   ncmCode: z.string().optional(),
   quantity: z.number().int().positive(),
   unit: z.string().default("UN"),
-  unitPriceCents: z.number().int().nonnegative(),
+  // null = item cotado SEM preço (entra na base sinalizado, fora do histórico)
+  unitPriceCents: z.number().int().nonnegative().nullable(),
 });
 
 export const proformaRouter = router({
@@ -62,6 +63,8 @@ export const proformaRouter = router({
         quotationDate: z.string().optional(), // ISO 8601: YYYY-MM-DD
         items: z.array(itemSchema).min(1, "Inclua ao menos um item"),
         fileUrl: z.string().optional(),
+        // Chave permanente no storage (S3) — link re-assinável a qualquer momento
+        fileKey: z.string().optional(),
         fileName: z.string().optional(),
         documentoId: z.number().optional(),
         operacaoId: z.number().optional(),

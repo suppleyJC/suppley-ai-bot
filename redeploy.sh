@@ -43,6 +43,7 @@ IDEMPOTENT_MIGRATIONS=(
   "drizzle/0037_proforma_supplier_sector.sql"
   "drizzle/0038_supplier_ratings.sql"
   "drizzle/0039_rfq_outreach_quotes.sql"
+  "drizzle/0040_proforma_file_key_optional_price.sql"
 )
 
 echo "╔════════════════════════════════════════════════════════════╗"

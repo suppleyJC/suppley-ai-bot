@@ -1925,6 +1925,9 @@ export const proformas = mysqlTable("proformas", {
 
   // Documento original
   fileUrl: varchar("fileUrl", { length: 512 }),
+  // Chave PERMANENTE no storage (S3) — fileUrl pré-assinada expira em ~1h;
+  // com a chave a URL é re-assinada na hora (repositório recuperável).
+  fileKey: varchar("fileKey", { length: 512 }),
   fileName: varchar("fileName", { length: 255 }),
 
   // Extração IA (antes da aprovação humana)
@@ -1965,7 +1968,9 @@ export const proformaItems = mysqlTable("proforma_items", {
   ncmCode: varchar("ncmCode", { length: 10 }),
   quantity: int("quantity").notNull(),
   unit: varchar("unit", { length: 20 }).default("UN").notNull(),
-  unitPriceCents: bigint("unitPriceCents", { mode: "number" }).notNull(),
+  // NULL = item catalogado SEM preço na cotação (entra na base sinalizado;
+  // antes era descartado e a proforma "perdia" itens silenciosamente).
+  unitPriceCents: bigint("unitPriceCents", { mode: "number" }),
   totalPriceCents: bigint("totalPriceCents", { mode: "number" }),
 
   // Pós-distribuição / cálculo

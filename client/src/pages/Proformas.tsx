@@ -55,6 +55,8 @@ type Draft = {
   items: ItemDraft[];
   confidence?: number;
   fileUrl?: string;
+  /** Chave permanente no storage — o link do arquivo é re-assinado no detalhe. */
+  fileKey?: string;
   fileName?: string;
 };
 
@@ -239,6 +241,7 @@ export default function Proformas() {
         })),
         confidence: extracted.confidence,
         fileUrl: uploaded.fileUrl,
+        fileKey: uploaded.fileKey,
         fileName: file.name,
       });
       toast.success(`Proforma extraída (confiança ${extracted.confidence}%). Revise antes de salvar.`);
@@ -315,6 +318,7 @@ export default function Proformas() {
         moq: draft.moq,
         quotationDate: draft.quotationDate || undefined,
         fileUrl: draft.fileUrl,
+        fileKey: draft.fileKey,
         fileName: draft.fileName,
         extractionConfidence: draft.confidence,
         items,

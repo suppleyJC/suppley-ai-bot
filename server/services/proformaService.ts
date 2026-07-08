@@ -14,6 +14,7 @@ import { suggestNCMSmart } from "./smartNcmService";
 import { inferCategories, findProductByNameAndSupplier } from "./productCategorizationService";
 import { registerSupplierPrice } from "./priceComparisonService";
 import { getExchangeRateAtDate } from "../db/exchangeDb";
+import { storageGet } from "../storage";
 import type { InsertProforma, InsertProformaItem } from "../../drizzle/schema";
 
 // ============================================================
@@ -32,7 +33,8 @@ export interface ProformaItemInput {
   ncmConfidence?: number;
   quantity: number;
   unit: string;
-  unitPriceCents: number;
+  /** null = item cotado SEM preço (entra na base sinalizado, fora do histórico). */
+  unitPriceCents: number | null;
 }
 
 /** Setores válidos do cadastro de fornecedores (industries.sector). */
@@ -261,6 +263,8 @@ export async function createProforma(
     quotationDate?: string;
     items: ProformaItemInput[];
     fileUrl?: string;
+    /** Chave permanente no storage — permite re-assinar a URL a qualquer momento. */
+    fileKey?: string;
     fileName?: string;
     documentoId?: number;
     operacaoId?: number;
@@ -289,6 +293,7 @@ export async function createProforma(
     totalFobCents: data.totalFobCents,
     quotationDate: data.quotationDate ? new Date(data.quotationDate) : undefined,
     fileUrl: data.fileUrl,
+    fileKey: data.fileKey,
     fileName: data.fileName,
     documentoId: data.documentoId,
     operacaoId: data.operacaoId,
@@ -299,7 +304,8 @@ export async function createProforma(
   });
 
   for (const item of data.items) {
-    const total = item.unitPriceCents * item.quantity;
+    // Item sem preço entra com unitPriceCents NULL (sinalizado; não descartado).
+    const total = item.unitPriceCents != null ? item.unitPriceCents * item.quantity : null;
     await db.createProformaItem({
       proformaId,
       productName: item.productName,
@@ -358,7 +364,8 @@ export async function updateProforma(
   // Reescreve os itens: remove os antigos e insere os atuais.
   await db.deleteProformaItems(proformaId);
   for (const item of data.items) {
-    const total = item.unitPriceCents * item.quantity;
+    // Item sem preço entra com unitPriceCents NULL (sinalizado; não descartado).
+    const total = item.unitPriceCents != null ? item.unitPriceCents * item.quantity : null;
     await db.createProformaItem({
       proformaId,
       productName: item.productName,
@@ -516,27 +523,31 @@ export async function distributeProformaToBase(
         }
       }
 
-      try {
-        const unitPriceBrlCents = Math.round(item.unitPriceCents * exchangeRate);
-        await registerSupplierPrice({
-          userId,
-          supplierId: industriaId || 0,
-          productName: item.productName,
-          ncmCode: ncm,
-          unitPriceCents: item.unitPriceCents,
-          currency: proforma.currency,
-          unit: item.unit || "UN",
-          unitPriceBrlCents,
-          exchangeRate: Math.round(exchangeRate * 1000000), // armazena como rate * 1000000
-          quantity: item.quantity || 1,
-          incoterm: proforma.incoterm || undefined,
-          quotationDate: proforma.quotationDate || undefined,
-        });
-      } catch (err) {
-        console.error(
-          `[proformaService] Falha ao registrar preço para produto existente ${existingProduct.id}:`,
-          err,
-        );
+      // Item sem preço na cotação: mantém o vínculo do produto, mas não gera
+      // registro no histórico de preços (não há preço a registrar).
+      if (item.unitPriceCents != null) {
+        try {
+          const unitPriceBrlCents = Math.round(item.unitPriceCents * exchangeRate);
+          await registerSupplierPrice({
+            userId,
+            supplierId: industriaId || 0,
+            productName: item.productName,
+            ncmCode: ncm,
+            unitPriceCents: item.unitPriceCents,
+            currency: proforma.currency,
+            unit: item.unit || "UN",
+            unitPriceBrlCents,
+            exchangeRate: Math.round(exchangeRate * 1000000), // armazena como rate * 1000000
+            quantity: item.quantity || 1,
+            incoterm: proforma.incoterm || undefined,
+            quotationDate: proforma.quotationDate || undefined,
+          });
+        } catch (err) {
+          console.error(
+            `[proformaService] Falha ao registrar preço para produto existente ${existingProduct.id}:`,
+            err,
+          );
+        }
       }
     } else {
       // Produto novo: cria com categorização inferida (P7)
@@ -557,7 +568,7 @@ export async function distributeProformaToBase(
         // País de origem do card = país do fornecedor da proforma que o originou.
         paisOrigem: proforma.supplierCountry ?? undefined,
         ncmStatus: ncm ? "validado" : "sugerido",
-        custoImportadoRefCents: item.unitPriceCents,
+        custoImportadoRefCents: item.unitPriceCents ?? undefined,
         // P7: Categorização inferida
         classe: categories.classe,
         categoria: categories.categoria,
@@ -573,28 +584,30 @@ export async function distributeProformaToBase(
         productIds.push(product.id);
         await db.updateProformaItem(item.id, { productId: product.id });
 
-        // Registra o preço inicial em supplierPrices
-        try {
-          const unitPriceBrlCents = Math.round(item.unitPriceCents * exchangeRate);
-          await registerSupplierPrice({
-            userId,
-            supplierId: industriaId || 0,
-            productName: item.productName,
-            ncmCode: ncm,
-            unitPriceCents: item.unitPriceCents,
-            currency: proforma.currency,
-            unit: item.unit || "UN",
-            unitPriceBrlCents,
-            exchangeRate: Math.round(exchangeRate * 1000000),
-            quantity: item.quantity || 1,
-            incoterm: proforma.incoterm || undefined,
-            quotationDate: proforma.quotationDate || undefined,
-          });
-        } catch (err) {
-          console.error(
-            `[proformaService] Falha ao registrar preço para novo produto ${product.id}:`,
-            err,
-          );
+        // Registra o preço inicial em supplierPrices (só quando o item tem preço)
+        if (item.unitPriceCents != null) {
+          try {
+            const unitPriceBrlCents = Math.round(item.unitPriceCents * exchangeRate);
+            await registerSupplierPrice({
+              userId,
+              supplierId: industriaId || 0,
+              productName: item.productName,
+              ncmCode: ncm,
+              unitPriceCents: item.unitPriceCents,
+              currency: proforma.currency,
+              unit: item.unit || "UN",
+              unitPriceBrlCents,
+              exchangeRate: Math.round(exchangeRate * 1000000),
+              quantity: item.quantity || 1,
+              incoterm: proforma.incoterm || undefined,
+              quotationDate: proforma.quotationDate || undefined,
+            });
+          } catch (err) {
+            console.error(
+              `[proformaService] Falha ao registrar preço para novo produto ${product.id}:`,
+              err,
+            );
+          }
         }
       }
     }
@@ -622,6 +635,19 @@ export async function getProformaDetail(userId: number, proformaId: number) {
   const proforma = await db.getProformaById(proformaId, userId);
   if (!proforma) return null;
   const items = await db.getProformaItems(proformaId);
+
+  // Link do arquivo original SEMPRE utilizável: quando há fileKey (chave
+  // permanente no storage), re-assina a URL na hora — a fileUrl gravada é
+  // pré-assinada e expira em ~1h (link "apodrecia" no detalhe da proforma).
+  if (proforma.fileKey) {
+    try {
+      const { url } = await storageGet(proforma.fileKey, 3600);
+      proforma.fileUrl = url;
+    } catch {
+      /* best-effort: mantém a fileUrl gravada */
+    }
+  }
+
   return { proforma, items };
 }
 

@@ -9,11 +9,25 @@
  */
 import type { Tool } from "../../_core/llm";
 
+/** Referência do arquivo anexado no turno atual (chave PERMANENTE no storage). */
+export interface AnexoTurno {
+  /** Chave no S3 — permite re-assinar a URL a qualquer momento (não expira). */
+  fileKey: string;
+  name: string;
+  mimeType?: string;
+}
+
 /** Contexto passado a toda execução de tool — quem está pedindo e em qual operação. */
 export interface ToolContext {
   userId: number;
   operacaoId?: number;        // se a conversa está dentro de uma operação
   estagio?: string;           // estágio atual (demand|source|analyze|execute|finance)
+  /**
+   * Arquivo anexado NESTA mensagem (se houver). Tools que persistem documentos
+   * (ex.: catalogar_documento) usam isto para VINCULAR o arquivo ao registro —
+   * sem depender de URL pré-assinada que expira.
+   */
+  anexo?: AnexoTurno;
 }
 
 /** Resultado padronizado de uma tool. */

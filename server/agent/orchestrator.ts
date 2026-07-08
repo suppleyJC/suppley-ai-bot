@@ -14,7 +14,7 @@
  */
 import { invokeLLM, type Message } from "../_core/llm";
 import { getToolSchemas, runTool } from "./tools";
-import type { ToolContext } from "./tools/types";
+import type { AnexoTurno, ToolContext } from "./tools/types";
 import { checkBudget } from "./guardrails";
 import { getLearningContext } from "../db";
 
@@ -152,6 +152,11 @@ export interface OrchestratorInput {
   estagio?: string;
   /** Histórico da conversa (sem o system prompt — ele é injetado aqui). */
   messages: Message[];
+  /**
+   * Arquivo anexado NESTA mensagem (chave permanente no storage). Vai para o
+   * ToolContext — catalogar_documento vincula o arquivo à proforma criada.
+   */
+  anexo?: AnexoTurno;
 }
 
 export interface OrchestratorOutput {
@@ -216,6 +221,7 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
     userId: input.userId,
     operacaoId: input.operacaoId,
     estagio: input.estagio,
+    anexo: input.anexo,
   };
 
   const toolSchemas = getToolSchemas(input.estagio);
@@ -309,6 +315,7 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
     userId: input.userId,
     operacaoId: input.operacaoId,
     estagio: input.estagio,
+    anexo: input.anexo,
   };
 
   const toolSchemas = getToolSchemas(input.estagio);

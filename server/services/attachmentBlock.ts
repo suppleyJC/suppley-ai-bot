@@ -48,6 +48,12 @@ export interface AttachmentRef {
   url: string;
   mimeType: string;
   name: string;
+  /**
+   * Chave PERMANENTE no storage (S3). A `url` pré-assinada expira em ~1h; com a
+   * chave o agente vincula o arquivo aos registros que criar (proforma etc.) e
+   * qualquer leitura futura re-assina a URL na hora.
+   */
+  fileKey?: string;
 }
 
 export async function buildAttachmentBlock(att: AttachmentRef): Promise<MessageContent | null> {

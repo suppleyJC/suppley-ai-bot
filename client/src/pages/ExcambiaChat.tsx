@@ -347,7 +347,9 @@ export default function ExcambiaChat() {
           conversaId: id,
           messages,
           ...(operacaoId ? { operacaoId } : {}),
-          attachment: { url: up.fileUrl, mimeType, name: file.name },
+          // fileKey = chave permanente no storage: o agente vincula o arquivo
+          // à proforma que catalogar (a url pré-assinada expira em ~1h).
+          attachment: { url: up.fileUrl, fileKey: up.fileKey, mimeType, name: file.name },
         }),
       });
 

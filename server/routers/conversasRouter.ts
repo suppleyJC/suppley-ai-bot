@@ -93,7 +93,13 @@ export const conversasRouter = router({
       // Anexo opcional (PDF/imagem) já enviado ao storage. Quando presente, o
       // arquivo é lido e encaminhado ao agente junto da última mensagem.
       attachment: z
-        .object({ url: z.string(), mimeType: z.string(), name: z.string() })
+        .object({
+          url: z.string(),
+          mimeType: z.string(),
+          name: z.string(),
+          // Chave permanente no storage — o agente vincula o arquivo ao que criar.
+          fileKey: z.string().optional(),
+        })
         .optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -151,6 +157,14 @@ export const conversasRouter = router({
         operacaoId: input.operacaoId,
         estagio: input.estagio,
         messages: agentMessages,
+        // Chave permanente do anexo → tools vinculam o arquivo ao que criarem.
+        anexo: input.attachment?.fileKey
+          ? {
+              fileKey: input.attachment.fileKey,
+              name: input.attachment.name,
+              mimeType: input.attachment.mimeType,
+            }
+          : undefined,
       });
 
       // Persiste a resposta

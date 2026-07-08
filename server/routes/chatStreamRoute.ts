@@ -150,6 +150,14 @@ router.post("/api/chat/stream", async (req: Request, res: Response) => {
         operacaoId: payload.operacaoId,
         estagio: payload.estagio,
         messages: agentMessages,
+        // Chave permanente do anexo → tools vinculam o arquivo ao que criarem.
+        anexo: payload.attachment?.fileKey
+          ? {
+              fileKey: payload.attachment.fileKey,
+              name: payload.attachment.name,
+              mimeType: payload.attachment.mimeType,
+            }
+          : undefined,
       })) {
         if (chunk.type === "reply") {
           fullReply = chunk.reply;

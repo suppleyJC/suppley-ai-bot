@@ -52,7 +52,10 @@ const schema = defineSchema(
   "(tipo='catalogo') em anexo: leia o documento, extraia os dados e chame esta tool para " +
   "gravar fornecedor + produtos + preços. Cotação vira proforma distribuída (histórico de " +
   "preços); catálogo vira portfólio declarado no card do fornecedor. A tool deduplica " +
-  "fornecedor e produtos — pode chamar sem medo de duplicar. Preços SEMPRE em CENTAVOS.",
+  "fornecedor e produtos — pode chamar sem medo de duplicar. Preços SEMPRE em CENTAVOS. " +
+  "IMPORTANTE: liste TODOS os itens do documento, SEM EXCEÇÃO — inclusive os sem preço " +
+  "(entram sinalizados na base). Se o documento tem 27 linhas, envie 27 itens; NUNCA " +
+  "selecione 'os principais' por conta própria.",
   {
     type: "object",
     properties: {
@@ -148,8 +151,11 @@ export const catalogarDocumentoTool: AgentTool = {
         };
       }
 
+      // NUNCA descarta item: quem não tem preço entra com unitPriceCents NULL
+      // (sinalizado na base; fora do histórico de preços). Antes, itens sem
+      // preço eram filtrados em silêncio e a cotação "perdia" linhas.
       const items: ProformaItemInput[] = itensArg
-        .filter((i) => i.productName && typeof i.unitPriceCents === "number" && i.unitPriceCents > 0)
+        .filter((i) => i.productName)
         .map((i) => ({
           productName: String(i.productName).slice(0, 1000),
           description: i.description ? String(i.description) : undefined,
@@ -157,10 +163,14 @@ export const catalogarDocumentoTool: AgentTool = {
           ncmCode: i.ncmCode ? String(i.ncmCode) : undefined,
           quantity: typeof i.quantity === "number" && i.quantity > 0 ? i.quantity : 1,
           unit: i.unit ? String(i.unit) : "UN",
-          unitPriceCents: Math.round(i.unitPriceCents!),
+          unitPriceCents:
+            typeof i.unitPriceCents === "number" && i.unitPriceCents > 0
+              ? Math.round(i.unitPriceCents)
+              : null,
         }));
-      const semPreco = itensArg.length - items.length;
-      if (items.length === 0) {
+      const comPreco = items.filter((i) => i.unitPriceCents != null).length;
+      const semPreco = items.length - comPreco;
+      if (comPreco === 0) {
         return {
           ok: false,
           summary: "Nenhum item tem preço — para catálogo sem preços, chame novamente com tipo='catalogo'.",
@@ -168,7 +178,10 @@ export const catalogarDocumentoTool: AgentTool = {
         };
       }
 
-      const totalFobCents = items.reduce((s, i) => s + i.unitPriceCents * i.quantity, 0);
+      const totalFobCents = items.reduce(
+        (s, i) => s + (i.unitPriceCents ?? 0) * i.quantity,
+        0,
+      );
       const { id, numero } = await createProforma(ctx.userId, {
         supplierName,
         supplierCountry: typeof args.supplierCountry === "string" ? args.supplierCountry : undefined,
@@ -184,6 +197,11 @@ export const catalogarDocumentoTool: AgentTool = {
         quotationDate: quotationDate ? quotationDate.toISOString().slice(0, 10) : undefined,
         items,
         operacaoId: ctx.operacaoId,
+        // VÍNCULO DO ARQUIVO: o anexo do turno (chave permanente no storage)
+        // fica gravado na proforma — o documento original é recuperável e a
+        // URL é re-assinada a qualquer momento (nada de link que expira).
+        fileKey: ctx.anexo?.fileKey,
+        fileName: ctx.anexo?.name,
         extractionConfidence: 85, // extraída pela Excambia no chat
         status: "revisada",
       });
@@ -192,17 +210,21 @@ export const catalogarDocumentoTool: AgentTool = {
       return {
         ok: true,
         summary:
-          `Cotação catalogada na base: proforma ${numero} de ${supplierName} com ${items.length} item(ns) ` +
-          `(fornecedor e histórico de preços atualizados${semPreco > 0 ? `; ${semPreco} item(ns) sem preço ficaram de fora` : ""}).\n` +
+          `Cotação catalogada na base: proforma ${numero} de ${supplierName} com ${items.length} item(ns) — ` +
+          `${comPreco} com preço${semPreco > 0 ? `, ${semPreco} SEM preço (entraram sinalizados; sem histórico de preço)` : ""} ` +
+          `(fornecedor e histórico de preços atualizados).` +
+          `${ctx.anexo ? ` Arquivo original "${ctx.anexo.name}" vinculado à proforma.` : ""}\n` +
           `${orientacao}\n` +
-          `Informe à pessoa, em uma linha, que os dados foram catalogados (proforma ${numero}).`,
+          `Informe à pessoa, em uma linha, que os dados foram catalogados (proforma ${numero}), citando quantos itens têm preço.`,
         data: {
           proformaId: id,
           numero,
           industriaId: dist.industriaId,
           productIds: dist.productIds,
           itensCatalogados: items.length,
+          itensComPreco: comPreco,
           itensSemPreco: semPreco,
+          arquivoVinculado: ctx.anexo?.name ?? null,
           quotationDate: quotationDate?.toISOString().slice(0, 10) ?? null,
         },
       };
