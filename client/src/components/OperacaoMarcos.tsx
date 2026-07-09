@@ -8,19 +8,10 @@
 import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import {
-  CheckCircle2, Plus, Loader2, PackageCheck, Ship,
-  FileCheck, Zap, ShoppingCart, Factory, Search, Users, Send,
-  FileText, Handshake, Calculator, ThumbsUp,
-} from "lucide-react";
-import { STAGE_LABELS, type Estagio } from "@/lib/stageLabels";
+import { CheckCircle2, Plus, Loader2, PackageCheck } from "lucide-react";
+import { STAGE_LABELS } from "@/lib/stageLabels";
+import { MARCO_META, JORNADA_MARCOS, TODOS_MARCOS, type TipoMarco } from "@/lib/marcoLabels";
 
-type TipoMarco =
-  | "item_pesquisado" | "fornecedores_identificados"
-  | "rfq_enviada" | "cotacao_recebida" | "fornecedor_selecionado"
-  | "calculo_feito" | "go_aprovado"
-  | "pedido_confirmado" | "producao_iniciada" | "produto_embarcado"
-  | "di_registrada" | "nacionalizado" | "entregue";
 type StatusMarco = "planejado" | "realizado" | "cancelado";
 
 interface Marco {
@@ -31,31 +22,10 @@ interface Marco {
   dataReferencia: string | Date;
 }
 
-const TIPO_META: Record<TipoMarco, { label: string; Icon: any }> = {
-  item_pesquisado:           { label: "Item pesquisado",          Icon: Search },
-  fornecedores_identificados:{ label: "Fornecedores identificados", Icon: Users },
-  rfq_enviada:               { label: "RFQ enviada",              Icon: Send },
-  cotacao_recebida:          { label: "Cotação recebida",         Icon: FileText },
-  fornecedor_selecionado:    { label: "Fornecedor selecionado",   Icon: Handshake },
-  calculo_feito:             { label: "Cálculo feito",            Icon: Calculator },
-  go_aprovado:               { label: "GO aprovado",              Icon: ThumbsUp },
-  pedido_confirmado:         { label: "Pedido confirmado",        Icon: ShoppingCart },
-  producao_iniciada:         { label: "Produção iniciada",        Icon: Factory },
-  produto_embarcado:         { label: "Produto embarcado",        Icon: Ship },
-  di_registrada:             { label: "DI registrada",            Icon: FileCheck },
-  nacionalizado:             { label: "Nacionalizado",            Icon: Zap },
-  entregue:                  { label: "Entregue",                 Icon: PackageCheck },
-};
-
-/** Marcos agrupados por estágio da jornada (na ordem do funil). */
-const JORNADA: { estagio: Estagio; tipos: TipoMarco[] }[] = [
-  { estagio: "demand",  tipos: ["item_pesquisado", "fornecedores_identificados"] },
-  { estagio: "source",  tipos: ["rfq_enviada", "cotacao_recebida", "fornecedor_selecionado"] },
-  { estagio: "analyze", tipos: ["calculo_feito", "go_aprovado"] },
-  { estagio: "execute", tipos: ["pedido_confirmado", "producao_iniciada", "produto_embarcado"] },
-  { estagio: "finance", tipos: ["di_registrada", "nacionalizado", "entregue"] },
-];
-const TODOS_TIPOS = JORNADA.flatMap((g) => g.tipos);
+// Fonte única compartilhada com o chat (OperationJourneyCard) — ver lib/marcoLabels.
+const TIPO_META = MARCO_META;
+const JORNADA = JORNADA_MARCOS;
+const TODOS_TIPOS = TODOS_MARCOS;
 
 const STATUS_META: Record<StatusMarco, { txt: string; cls: string }> = {
   planejado:  { txt: "Planejado",  cls: "bg-amber-50 text-amber-700" },

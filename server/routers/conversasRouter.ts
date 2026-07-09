@@ -10,6 +10,7 @@ import { runExcambia } from "../agent/orchestrator";
 import type { Message } from "../_core/llm";
 import { enrichOperacaoFromChat } from "../services/gapEnrichmentService";
 import { buildAttachmentBlock, attachmentMarker } from "../services/attachmentBlock";
+import * as operacaoService from "../services/operacaoService";
 import { TRPCError } from "@trpc/server";
 
 export const conversasRouter = router({
@@ -78,6 +79,31 @@ export const conversasRouter = router({
     .input(z.object({ id: z.number(), operacaoId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       await conversaDb.linkConversaToOperacao(input.id, ctx.user.id, input.operacaoId);
+    }),
+
+  /**
+   * Porta PAINEL → CHAT: acha a conversa ativa vinculada à operação (a mais
+   * recente) ou cria uma nova já vinculada, com o título da operação.
+   * Consumida pelo deep-link /excambia?operacao=ID.
+   */
+  getOrCreateForOperacao: protectedProcedure
+    .input(z.object({ operacaoId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const rows = await conversaDb.listConversasFlat(ctx.user.id);
+      const existente = rows.find((c) => c.operacaoId === input.operacaoId);
+      if (existente) return { id: existente.id, criada: false };
+
+      const det = await operacaoService.getOperacao(ctx.user.id, input.operacaoId);
+      if (!det) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Operação não encontrada" });
+      }
+      const titulo = `${det.operacao.codigo} — ${det.operacao.titulo}`.slice(0, 255);
+      const nova = await conversaDb.createConversa(ctx.user.id, {
+        titulo,
+        operacaoId: input.operacaoId,
+        estagio: det.operacao.estagioAtual as any,
+      });
+      return { id: nova.id, criada: true };
     }),
 
   /** Envia mensagem e chama o orquestrador agêntico */

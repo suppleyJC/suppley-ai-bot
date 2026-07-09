@@ -17,7 +17,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
   ClipboardList, Plus, Loader2, Copy, Trash2, Search, LayoutGrid, List,
-  CheckCircle2, MoreVertical, ChevronDown,
+  CheckCircle2, MoreVertical, ChevronDown, MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -198,6 +198,7 @@ export default function Operacoes() {
   }
 
   const cardActions = (o: OperacaoRow) => [
+    { label: "Conversar no chat", icon: <MessageCircle className="h-4 w-4" />, onClick: () => navigate(`/excambia?operacao=${o.id}`) },
     { label: "Duplicar", icon: <Copy className="h-4 w-4" />, onClick: () => duplicate.mutate({ operacaoId: o.id }) },
     { label: "Excluir", icon: <Trash2 className="h-4 w-4" />, onClick: () => setDelTarget(o), variant: "destructive" as const },
   ];
@@ -413,6 +414,9 @@ export default function Operacoes() {
                                   </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => navigate(`/excambia?operacao=${o.id}`)}>
+                                    <MessageCircle className="mr-2 h-4 w-4" /> Conversar no chat
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => duplicate.mutate({ operacaoId: o.id })}>
                                     <Copy className="mr-2 h-4 w-4" /> Duplicar
                                   </DropdownMenuItem>

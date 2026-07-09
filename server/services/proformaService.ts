@@ -276,32 +276,57 @@ export async function createProforma(
 ): Promise<{ id: number; numero: string }> {
   const numero = await generateProformaNumber(userId);
 
-  const proformaId = await db.createProforma({
-    userId,
-    numero,
-    tipo: data.tipo ?? "proforma",
-    supplierName: data.supplierName,
-    supplierCountry: data.supplierCountry,
-    supplierEmail: data.supplierEmail,
-    supplierPhone: data.supplierPhone,
-    supplierSector: normalizeSector(data.supplierSector),
-    currency: data.currency,
-    incoterm: data.incoterm ?? "FOB",
-    paymentTerms: data.paymentTerms,
-    leadTimeDays: data.leadTimeDays,
-    moq: data.moq,
-    totalFobCents: data.totalFobCents,
-    quotationDate: data.quotationDate ? new Date(data.quotationDate) : undefined,
-    fileUrl: data.fileUrl,
-    fileKey: data.fileKey,
-    fileName: data.fileName,
-    documentoId: data.documentoId,
-    operacaoId: data.operacaoId,
-    rfqId: data.rfqId,
-    extractionConfidence: data.extractionConfidence,
-    rawExtraction: (data.rawExtraction as any) ?? null,
-    status: data.status ?? (data.extractionConfidence != null ? "extraida" : "rascunho"),
-  });
+  // Coluna JSON rejeita string vazia ("Invalid JSON text") — normaliza para null.
+  const rawExtraction =
+    data.rawExtraction == null || data.rawExtraction === "" ? null : data.rawExtraction;
+
+  let proformaId: number;
+  try {
+    proformaId = await db.createProforma({
+      userId,
+      numero,
+      tipo: data.tipo ?? "proforma",
+      supplierName: data.supplierName,
+      supplierCountry: data.supplierCountry,
+      supplierEmail: data.supplierEmail,
+      supplierPhone: data.supplierPhone,
+      supplierSector: normalizeSector(data.supplierSector),
+      currency: data.currency,
+      incoterm: data.incoterm ?? "FOB",
+      paymentTerms: data.paymentTerms,
+      leadTimeDays: data.leadTimeDays,
+      moq: data.moq,
+      totalFobCents: data.totalFobCents,
+      quotationDate: data.quotationDate ? new Date(data.quotationDate) : undefined,
+      fileUrl: data.fileUrl,
+      fileKey: data.fileKey,
+      fileName: data.fileName,
+      documentoId: data.documentoId,
+      operacaoId: data.operacaoId,
+      rfqId: data.rfqId,
+      extractionConfidence: data.extractionConfidence,
+      rawExtraction: rawExtraction as any,
+      status: data.status ?? (data.extractionConfidence != null ? "extraida" : "rascunho"),
+    });
+  } catch (e) {
+    // Traduz falhas de SCHEMA DRIFT (código novo × banco sem migração) numa
+    // mensagem ACIONÁVEL — sem isto o erro do MySQL chega genérico na tela.
+    const msg = String((e as Error)?.message ?? e);
+    if (/unknown column '?fileKey'?/i.test(msg)) {
+      throw new Error(
+        "O banco de dados está sem a coluna proformas.fileKey — a migração 0040 não foi aplicada. " +
+        "No servidor, rode ./redeploy.sh ou aplique manualmente: " +
+        "docker exec -i suppley-mysql mysql -u <usuario> -p<senha> <banco> < drizzle/0040_proforma_file_key_optional_price.sql",
+      );
+    }
+    if (/data too long for column '?fileUrl'?/i.test(msg)) {
+      throw new Error(
+        "A URL do arquivo excedeu o tamanho da coluna proformas.fileUrl — aplique a migração 0041 " +
+        "(drizzle/0041_widen_proforma_file_url.sql) ou rode ./redeploy.sh.",
+      );
+    }
+    throw e;
+  }
 
   for (const item of data.items) {
     // Item sem preço entra com unitPriceCents NULL (sinalizado; não descartado).

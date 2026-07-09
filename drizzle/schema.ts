@@ -1923,8 +1923,8 @@ export const proformas = mysqlTable("proformas", {
   operacaoId: int("operacaoId"),
   rfqId: int("rfqId"),
 
-  // Documento original
-  fileUrl: varchar("fileUrl", { length: 512 }),
+  // Documento original (URL pré-assinada é longa — 1024 como operacao_anexos)
+  fileUrl: varchar("fileUrl", { length: 1024 }),
   // Chave PERMANENTE no storage (S3) — fileUrl pré-assinada expira em ~1h;
   // com a chave a URL é re-assinada na hora (repositório recuperável).
   fileKey: varchar("fileKey", { length: 512 }),

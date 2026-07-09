@@ -37,6 +37,68 @@ export type ModoOperacao = "cotacao" | "desenvolvimento";
 const ORDER: Estagio[] = ["demand", "source", "analyze", "execute", "finance", "closed"];
 
 // ---------------------------------------------------------------------------
+// Vocabulário ÚNICO da jornada (fonte de verdade compartilhada Painel ↔ Excambia).
+// Os rótulos espelham client/src/lib/stageLabels.ts e OperacaoMarcos.tsx —
+// alterar lá exige alterar aqui (e vice-versa) para o chat e o painel falarem
+// a mesma língua.
+// ---------------------------------------------------------------------------
+export const STAGE_LABEL_PT: Record<Estagio, string> = {
+  demand: "Estudo do item", source: "Cotação e RFQ", analyze: "Viabilidade",
+  execute: "Produção e Embarque", finance: "Nacionalização e Entrega",
+  closed: "Encerrada", lost: "Perdida",
+};
+
+export const MARCO_LABEL_PT: Record<TipoMarco, string> = {
+  item_pesquisado: "Item pesquisado",
+  fornecedores_identificados: "Fornecedores identificados",
+  rfq_enviada: "RFQ enviada",
+  cotacao_recebida: "Cotação recebida",
+  fornecedor_selecionado: "Fornecedor selecionado",
+  calculo_feito: "Cálculo feito",
+  go_aprovado: "GO aprovado",
+  pedido_confirmado: "Pedido confirmado",
+  producao_iniciada: "Produção iniciada",
+  produto_embarcado: "Produto embarcado",
+  di_registrada: "DI registrada",
+  nacionalizado: "Nacionalizado",
+  entregue: "Entregue",
+};
+
+/** Estágio da jornada a que cada marco pertence (agrupamento do funil). */
+export const MARCO_ESTAGIO: Record<TipoMarco, Estagio> = {
+  item_pesquisado: "demand",
+  fornecedores_identificados: "demand",
+  rfq_enviada: "source",
+  cotacao_recebida: "source",
+  fornecedor_selecionado: "source",
+  calculo_feito: "analyze",
+  go_aprovado: "analyze",
+  pedido_confirmado: "execute",
+  producao_iniciada: "execute",
+  produto_embarcado: "execute",
+  di_registrada: "finance",
+  nacionalizado: "finance",
+  entregue: "finance",
+};
+
+/** Tipo de evento da timeline gerado por cada marco (alguns reusam eventos existentes). */
+const MARCO_EVENTO: Record<TipoMarco, string> = {
+  item_pesquisado: "item_pesquisado",
+  fornecedores_identificados: "fornecedores_identificados",
+  rfq_enviada: "rfq_enviada",
+  cotacao_recebida: "cotacao_recebida",
+  fornecedor_selecionado: "fornecedor_selecionado",
+  calculo_feito: "calculo_executado",
+  go_aprovado: "go_decidido",
+  pedido_confirmado: "pedido_confirmado",
+  producao_iniciada: "producao_iniciada",
+  produto_embarcado: "produto_embarcado",
+  di_registrada: "di_registrada",
+  nacionalizado: "nacionalizado",
+  entregue: "entregue",
+};
+
+// ---------------------------------------------------------------------------
 // Código sequencial OP-AAAA-NNNN
 // ---------------------------------------------------------------------------
 async function nextCodigo(db: any, userId: number): Promise<string> {
@@ -242,11 +304,6 @@ export async function advanceStage(input: {
 // voltar), sem checagem de gate — é uma ação explícita do usuário arrastando
 // o card. Registra o movimento na timeline.
 // ---------------------------------------------------------------------------
-const STAGE_LABEL_PT: Record<Estagio, string> = {
-  demand: "Estudo do item", source: "Cotação / RFQ", analyze: "Viabilidade",
-  execute: "Produção & Embarque", finance: "Nacionalização & Entrega",
-  closed: "Encerrada", lost: "Perdida",
-};
 export async function setStageManual(input: {
   operacaoId: number;
   to: Estagio;
@@ -583,40 +640,6 @@ export async function registrarMarco(input: {
     .limit(1);
   if (!op) throw new Error("operação não encontrada");
 
-  // Mapeia tipo de marco → estagio esperado (jornada unificada)
-  const estagioEsperado: Record<TipoMarco, Estagio | null> = {
-    item_pesquisado: "demand",
-    fornecedores_identificados: "demand",
-    rfq_enviada: "source",
-    cotacao_recebida: "source",
-    fornecedor_selecionado: "source",
-    calculo_feito: "analyze",
-    go_aprovado: "analyze",
-    pedido_confirmado: "execute",
-    producao_iniciada: "execute",
-    produto_embarcado: "execute",
-    di_registrada: "finance",
-    nacionalizado: "finance",
-    entregue: "finance",
-  };
-
-  // Mapeia tipo de marco → tipo de evento (alguns marcos reusam eventos já existentes).
-  const eventoDoMarco: Record<TipoMarco, string> = {
-    item_pesquisado: "item_pesquisado",
-    fornecedores_identificados: "fornecedores_identificados",
-    rfq_enviada: "rfq_enviada",
-    cotacao_recebida: "cotacao_recebida",
-    fornecedor_selecionado: "fornecedor_selecionado",
-    calculo_feito: "calculo_executado",
-    go_aprovado: "go_decidido",
-    pedido_confirmado: "pedido_confirmado",
-    producao_iniciada: "producao_iniciada",
-    produto_embarcado: "produto_embarcado",
-    di_registrada: "di_registrada",
-    nacionalizado: "nacionalizado",
-    entregue: "entregue",
-  };
-
   const [res] = await db.insert(operacaoMarcos).values({
     operacaoId: input.operacaoId,
     userId: input.userId,
@@ -632,17 +655,48 @@ export async function registrarMarco(input: {
 
   await addEvento({
     operacaoId: input.operacaoId,
-    tipo: (eventoDoMarco[input.tipo] ?? "alerta_ia") as any,
-    estagio: estagioEsperado[input.tipo] ?? op.estagioAtual as Estagio,
+    tipo: (MARCO_EVENTO[input.tipo] ?? "alerta_ia") as any,
+    estagio: MARCO_ESTAGIO[input.tipo] ?? op.estagioAtual as Estagio,
     refTipo: "operacao_marcos",
     refId: id,
     autor: input.autor ?? "usuario",
-    titulo: input.descricao ?? `Marco registrado: ${input.tipo.replace(/_/g, " ")}`,
+    titulo: input.descricao ?? `Marco registrado: ${MARCO_LABEL_PT[input.tipo] ?? input.tipo}`,
     payload: { tipo: input.tipo, status: input.status ?? "realizado" },
   });
 
+  // CONVERGÊNCIA JORNADA ↔ PAINEL: um marco REALIZADO de um estágio à frente
+  // avança a operação (o card muda de coluna sozinho — registrado no chat OU
+  // no painel, a esteira conta a mesma história). Nunca volta estágio, nunca
+  // reabre operação encerrada/perdida.
+  let estagioSincronizado: Estagio | null = null;
+  const alvo = MARCO_ESTAGIO[input.tipo];
+  const atual = op.estagioAtual as Estagio;
+  if (
+    (input.status ?? "realizado") === "realizado" &&
+    alvo && !["closed", "lost"].includes(atual) &&
+    ORDER.indexOf(alvo) > ORDER.indexOf(atual)
+  ) {
+    await db.update(operacaoEstagios)
+      .set({ saiuEm: sql`now()` })
+      .where(and(
+        eq(operacaoEstagios.operacaoId, op.id),
+        eq(operacaoEstagios.estagio, atual as any),
+        sql`${operacaoEstagios.saiuEm} is null`,
+      ));
+    await db.insert(operacaoEstagios).values({ operacaoId: op.id, estagio: alvo as any });
+    await db.update(operacoes).set({ estagioAtual: alvo as any }).where(eq(operacoes.id, op.id));
+    await addEvento({
+      operacaoId: op.id, tipo: "estagio_avancado", estagio: alvo,
+      autor: input.autor ?? "usuario",
+      titulo: `Jornada avançou para ${STAGE_LABEL_PT[alvo]} (marco: ${MARCO_LABEL_PT[input.tipo]})`,
+    });
+    estagioSincronizado = alvo;
+  }
+
   const [marco] = await db.select().from(operacaoMarcos).where(eq(operacaoMarcos.id, id)).limit(1);
-  return marco ?? null;
+  if (!marco) return null;
+  // Anexa a informação de sincronia para quem registrou poder narrar o avanço.
+  return { ...marco, estagioSincronizado };
 }
 
 export async function listarMarcos(userId: number, operacaoId: number) {
@@ -785,4 +839,74 @@ export async function getOperacao(userId: number, id: number) {
     .where(eq(operacaoMarcos.operacaoId, id))
     .orderBy(operacaoMarcos.dataReferencia);
   return { operacao: op, eventos, estagios, anexos, financeiro, marcos };
+}
+
+// ---------------------------------------------------------------------------
+// Snapshot da operação para o CHAT (injetado no system prompt da Excambia).
+// É o elo Painel → Chat: tudo que acontece no painel (marcos, anexos,
+// financeiro, movimentos de coluna) chega à Excambia a cada mensagem, sem
+// depender de ela chamar consultar_operacao.
+// ---------------------------------------------------------------------------
+const AUTOR_LABEL: Record<string, string> = {
+  usuario: "pessoa, no painel", excambia: "você, no chat", sistema: "sistema",
+};
+
+export async function getOperacaoContextoChat(
+  userId: number,
+  operacaoId: number,
+): Promise<string | null> {
+  const det = await getOperacao(userId, operacaoId);
+  if (!det) return null;
+  const { operacao: op, eventos, marcos, anexos, financeiro } = det;
+
+  const brl = (cents?: number | null) =>
+    cents == null ? null : `R$ ${(cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+  const dt = (d: Date | string) =>
+    new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+
+  const linhas: string[] = [];
+  linhas.push(
+    `${op.codigo} — ${op.titulo} · estágio: ${STAGE_LABEL_PT[op.estagioAtual as Estagio] ?? op.estagioAtual} · status: ${op.status}` +
+    (op.modo ? ` · modo: ${op.modo}` : ""),
+  );
+  const meta = [
+    op.clienteNome ? `cliente: ${op.clienteNome}` : null,
+    op.fornecedorNome ? `fornecedor: ${op.fornecedorNome}` : null,
+    op.origemPais || op.origemDesejada ? `origem: ${op.origemPais ?? op.origemDesejada}` : null,
+    brl(op.valorEstimadoBrlCents) ? `valor estimado: ${brl(op.valorEstimadoBrlCents)}` : null,
+    op.prazoDesejado ? `prazo desejado: ${dt(op.prazoDesejado)}` : null,
+  ].filter(Boolean);
+  if (meta.length) linhas.push(meta.join(" · "));
+
+  const realizados = marcos.filter((m) => m.status === "realizado");
+  const pendentes = (Object.keys(MARCO_LABEL_PT) as TipoMarco[])
+    .filter((t) => !realizados.some((m) => m.tipo === t));
+  linhas.push(
+    `Marcos realizados (${realizados.length}/13): ` +
+    (realizados.length
+      ? realizados.map((m) => `${MARCO_LABEL_PT[m.tipo as TipoMarco] ?? m.tipo} (${dt(m.dataReferencia)})`).join(", ")
+      : "nenhum ainda"),
+  );
+  if (pendentes.length) {
+    linhas.push(`Próximos marcos da jornada: ${pendentes.slice(0, 4).map((t) => MARCO_LABEL_PT[t]).join(", ")}${pendentes.length > 4 ? "…" : ""}`);
+  }
+  if (anexos.length) {
+    linhas.push(`Documentos anexados (${anexos.length}): ${anexos.slice(0, 6).map((a) => a.nome).join(", ")}${anexos.length > 6 ? "…" : ""}`);
+  }
+  if (financeiro.length) {
+    const saida = financeiro.filter((f) => f.direcao === "saida")
+      .reduce((s, f) => s + (f.valorBrlCents ?? f.valorCents ?? 0), 0);
+    linhas.push(`Financeiro: ${financeiro.length} lançamento(s) · saídas ${brl(saida) ?? "—"}`);
+  }
+
+  // Timeline (mais recente primeiro) — inclui ações feitas no painel.
+  const recentes = eventos.slice(0, 8);
+  if (recentes.length) {
+    linhas.push("Últimos acontecimentos (timeline):");
+    for (const e of recentes) {
+      linhas.push(`- ${dt(e.criadoEm)} [${AUTOR_LABEL[e.autor] ?? e.autor}] ${e.titulo ?? e.tipo}`);
+    }
+  }
+
+  return linhas.join("\n");
 }

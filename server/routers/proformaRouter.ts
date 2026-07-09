@@ -74,7 +74,16 @@ export const proformaRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return proformaService.createProforma(ctx.user.id, input);
+      try {
+        return await proformaService.createProforma(ctx.user.id, input);
+      } catch (error) {
+        // A causa REAL precisa chegar à tela (schema drift, dado inválido…),
+        // senão o save falha com um "erro interno" genérico e indiagnosticável.
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Erro ao salvar proforma: ${error instanceof Error ? error.message : "desconhecido"}`,
+        });
+      }
     }),
 
   // 2b) Atualiza uma proforma existente (edição do rascunho) + reescreve itens

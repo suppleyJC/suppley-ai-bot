@@ -12,16 +12,12 @@
  */
 import { defineSchema, type AgentTool, type ToolContext, type ToolResult } from "./types";
 import * as operacaoService from "../../services/operacaoService";
+import { STAGE_LABEL_PT, MARCO_LABEL_PT } from "../../services/operacaoService";
 
-const ESTAGIO_LABEL: Record<string, string> = {
-  demand: "Demanda", source: "Fornecedores", analyze: "Viabilidade",
-  execute: "Operação", finance: "Câmbio/Financeiro", closed: "Concluída", lost: "Perdida",
-};
-const MARCO_LABEL: Record<string, string> = {
-  pedido_confirmado: "Pedido confirmado", producao_iniciada: "Produção iniciada",
-  produto_embarcado: "Produto embarcado", di_registrada: "DI registrada",
-  nacionalizado: "Nacionalizado", entregue: "Entregue",
-};
+// Vocabulário ÚNICO Painel ↔ Excambia — mesmos rótulos de estágio e marco
+// exibidos no Painel de Operações (stageLabels.ts / OperacaoMarcos.tsx).
+const ESTAGIO_LABEL: Record<string, string> = STAGE_LABEL_PT;
+const MARCO_LABEL: Record<string, string> = MARCO_LABEL_PT;
 
 const schema = defineSchema(
   "consultar_operacao",
@@ -70,7 +66,7 @@ export const consultarOperacaoTool: AgentTool = {
     if (!det) {
       return { ok: false, summary: `Operação ${opId} não encontrada.`, error: "nao_encontrada" };
     }
-    const { operacao, marcos, anexos, financeiro } = det as any;
+    const { operacao, marcos, anexos, financeiro, eventos } = det as any;
 
     const marcosTxt = (marcos ?? []).length
       ? marcos.map((m: any) =>
@@ -104,6 +100,17 @@ export const consultarOperacaoTool: AgentTool = {
       }
     }
 
+    // Últimos acontecimentos da timeline — incluem ações feitas no PAINEL
+    // (autor "usuario") e as suas ("excambia"): a mesma história dos dois lados.
+    const AUTOR_TXT: Record<string, string> = { usuario: "painel", excambia: "Excambia", sistema: "sistema" };
+    const recentes = (eventos ?? []).slice(0, 8);
+    const eventosTxt = recentes.length
+      ? recentes.map((e: any) =>
+          `• ${new Date(e.criadoEm).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} ` +
+          `[${AUTOR_TXT[e.autor] ?? e.autor}] ${e.titulo ?? e.tipo}`,
+        ).join("\n")
+      : "";
+
     const resumo =
       `Operação ${operacao.codigo ?? `OP-${operacao.id}`} — ${operacao.titulo}\n` +
       `Estágio: ${ESTAGIO_LABEL[operacao.estagioAtual] ?? operacao.estagioAtual} · Status: ${operacao.status}\n` +
@@ -111,7 +118,8 @@ export const consultarOperacaoTool: AgentTool = {
       (operacao.origemPais ? `Origem: ${operacao.origemPais}\n` : "") +
       (operacao.valorEstimadoBrlCents != null ? `Valor estimado: ${brl(operacao.valorEstimadoBrlCents)}\n` : "") +
       `\nMarcos:\n${marcosTxt}\n\nDocumentos:\n${docsTxt}` +
-      ((financeiro ?? []).length ? `\n\nFinanceiro: entradas ${brl(finIn)} · saídas ${brl(finOut)}${prevRealTxt}` : "");
+      ((financeiro ?? []).length ? `\n\nFinanceiro: entradas ${brl(finIn)} · saídas ${brl(finOut)}${prevRealTxt}` : "") +
+      (eventosTxt ? `\n\nÚltimos acontecimentos:\n${eventosTxt}` : "");
 
     return {
       ok: true,
@@ -124,6 +132,9 @@ export const consultarOperacaoTool: AgentTool = {
           valorEstimadoBrlCents: operacao.valorEstimadoBrlCents,
         },
         marcos, anexos, financeiro,
+        eventos: recentes.map((e: any) => ({
+          tipo: e.tipo, autor: e.autor, titulo: e.titulo, criadoEm: e.criadoEm,
+        })),
       },
     };
   },

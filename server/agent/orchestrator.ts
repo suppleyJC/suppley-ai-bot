@@ -17,6 +17,7 @@ import { getToolSchemas, runTool } from "./tools";
 import type { AnexoTurno, ToolContext } from "./tools/types";
 import { checkBudget } from "./guardrails";
 import { getLearningContext } from "../db";
+import * as operacaoService from "../services/operacaoService";
 
 const EXCAMBIA_SYSTEM_PROMPT = `Você é a Excambia, inteligência especialista em comércio exterior da plataforma SUPPLEY.
 Seu papel é conduzir a operação de importação ponta a ponta, conversando de forma clara e objetiva em português.
@@ -35,7 +36,7 @@ FERRAMENTAS DISPONÍVEIS (consulta de operação):
 FERRAMENTAS DISPONÍVEIS (operação e registro):
 - enviar_rfq: envia Solicitação de Cotação (RFQ) para fornecedores de um produto.
 - registrar_cotacao: registra uma cotação (oferta) de fornecedor na operação.
-- registrar_marco_producao: registra marcos do processo (pedido confirmado, produção, embarque, DI, nacionalizado, entregue).
+- registrar_marco_producao: registra um marco da JORNADA completa da operação (item pesquisado, fornecedores identificados, RFQ enviada, cotação recebida, fornecedor selecionado, cálculo feito, GO aprovado, pedido confirmado, produção iniciada, produto embarcado, DI registrada, nacionalizado, entregue). Registre SEMPRE que a pessoa relatar um avanço concreto — o marco aparece no painel na hora e, se for de um estágio à frente, a operação avança de coluna automaticamente. Confirme o avanço de forma natural.
 - registrar_nacionalizacao: marca o produto como nacionalizado (último passo antes da entrega).
 - lancar_financeiro: registra movimentos financeiros (câmbio, pagamentos, impostos, fretes, despesas, receitas).
 - registrar_resultado_operacao: FECHA O CICLO — registra o resultado real (custo realizado × previsto, prazo, avaliação 1–5 do fornecedor) e alimenta o RATING. Use quando a operação for entregue/concluída ou a pessoa relatar como terminou.
@@ -152,7 +153,8 @@ REGRAS IMPORTANTES:
 - Quando a pessoa fornecer um dado faltante (cliente, origem, prazo, regime), os dados são gravados automaticamente na operação — apenas confirme de forma natural que registrou.
 - Câmbio e preços de referência saem de fontes oficiais (BCB) via benchmark_mercado — nunca chute uma cotação de câmbio.
 - Seja concisa. Não repita informação que a pessoa já deu.
-- As ferramentas de operação (RFQ, cotação, marcos, financeiro) gravam eventos na timeline da operação — tudo fica auditável.`;
+- As ferramentas de operação (RFQ, cotação, marcos, financeiro) gravam eventos na timeline da operação — tudo fica auditável.
+- CONVERGÊNCIA CHAT ↔ PAINEL: quando a conversa está vinculada a uma operação, você recebe o ESTADO ATUAL dela (estágio, marcos, documentos, últimos acontecimentos) na seção "Operação vinculada" abaixo — já sincronizado com o painel, incluindo o que a pessoa fez por lá. NÃO chame consultar_operacao para o que já está nessa seção; use-a como verdade do momento. O inverso também vale: o que você registrar (marcos, financeiro, catalogações) aparece no painel na hora — pode afirmar isso com confiança.`;
 
 export interface OrchestratorInput {
   userId: number;
@@ -190,26 +192,42 @@ const MAX_TURNS = 6; // teto de idas-e-voltas com tools por mensagem
  * estrutura. Mantém intactas as mensagens multimodais (array) e com tool_calls.
  */
 /**
- * Injeta a MEMÓRIA persistente do usuário no system prompt (best-effort).
- * Lê excambia_learning_context (preferências, regras, padrões) e anexa os itens
- * mais relevantes. Nunca quebra o chat se a leitura falhar.
+ * Monta o system prompt do turno (best-effort, nunca quebra o chat):
+ *  1. MEMÓRIA persistente do usuário (excambia_learning_context);
+ *  2. SNAPSHOT da operação vinculada — o elo Painel → Chat: estágio, marcos,
+ *     documentos e os últimos eventos da timeline (inclusive ações feitas no
+ *     painel) chegam à Excambia em TODA mensagem, sem depender de tool call.
  */
-async function buildSystemContent(userId: number): Promise<string> {
+async function buildSystemContent(userId: number, operacaoId?: number): Promise<string> {
+  let prompt = EXCAMBIA_SYSTEM_PROMPT;
+
   try {
     const ctx = await getLearningContext(userId); // já ordenado por importância desc
     const top = ctx.filter((c) => c.value?.trim()).slice(0, 20);
-    if (!top.length) return EXCAMBIA_SYSTEM_PROMPT;
-    const linhas = top.map((c) => `- [${c.contextType}] ${c.key}: ${c.value}`).join("\n");
-    return (
-      EXCAMBIA_SYSTEM_PROMPT +
-      `\n\n## Memória do usuário (aprendizados persistentes)\n` +
-      `Use estes aprendizados quando forem relevantes; não os repita de volta sem ` +
-      `necessidade. Se algo mudar ou você descobrir um novo padrão durável, registre ` +
-      `com a ferramenta registrar_memoria.\n${linhas}`
-    );
-  } catch {
-    return EXCAMBIA_SYSTEM_PROMPT;
+    if (top.length) {
+      const linhas = top.map((c) => `- [${c.contextType}] ${c.key}: ${c.value}`).join("\n");
+      prompt +=
+        `\n\n## Memória do usuário (aprendizados persistentes)\n` +
+        `Use estes aprendizados quando forem relevantes; não os repita de volta sem ` +
+        `necessidade. Se algo mudar ou você descobrir um novo padrão durável, registre ` +
+        `com a ferramenta registrar_memoria.\n${linhas}`;
+    }
+  } catch { /* memória é opcional */ }
+
+  if (operacaoId) {
+    try {
+      const snapshot = await operacaoService.getOperacaoContextoChat(userId, operacaoId);
+      if (snapshot) {
+        prompt +=
+          `\n\n## Operação vinculada a esta conversa (estado ATUAL, sincronizado com o painel)\n` +
+          snapshot +
+          `\nEste é o estado de agora — inclui o que a pessoa fez no painel. Não repita a ` +
+          `consulta para o básico; narre a partir daqui e registre os avanços que ela relatar.`;
+      }
+    } catch { /* snapshot é opcional */ }
   }
+
+  return prompt;
 }
 
 const EMPTY_PLACEHOLDER = "(sem conteúdo)";
@@ -238,7 +256,7 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
 
   // monta a conversa com o system prompt da Excambia
   const conversation: Message[] = [
-    { role: "system", content: await buildSystemContent(input.userId) },
+    { role: "system", content: await buildSystemContent(input.userId, input.operacaoId) },
     ...sanitizeMessages(input.messages),
   ];
 
@@ -331,7 +349,7 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
   const toolResults: OrchestratorOutput["toolResults"] = [];
 
   const conversation: Message[] = [
-    { role: "system", content: await buildSystemContent(input.userId) },
+    { role: "system", content: await buildSystemContent(input.userId, input.operacaoId) },
     ...sanitizeMessages(input.messages),
   ];
 

@@ -18,7 +18,7 @@ import OperacaoMarcos from "@/components/OperacaoMarcos";
 import OperacaoTracking from "@/components/OperacaoTracking";
 import OperacaoAnexos from "@/components/OperacaoAnexos";
 import OperacaoFinanceiro from "@/components/OperacaoFinanceiro";
-import { ArrowLeft, CalendarClock, Globe2 } from "lucide-react";
+import { ArrowLeft, CalendarClock, Globe2, MessageCircle } from "lucide-react";
 
 const MODO_LABEL: Record<string, { txt: string; cls: string }> = {
   cotacao:        { txt: "Cotação pronta",  cls: "bg-blue-50 text-blue-700" },
@@ -145,6 +145,13 @@ export default function OperacaoDetail() {
             <span className={`rounded-lg px-3 py-1 text-xs font-bold ${st.cls}`}>
               {st.txt}
             </span>
+            {/* Porta PAINEL → CHAT: abre (ou cria) a conversa vinculada a esta operação */}
+            <button
+              onClick={() => navigate(`/excambia?operacao=${operacao.id}`)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700"
+            >
+              <MessageCircle className="h-3.5 w-3.5" /> Conversar com a Excambia
+            </button>
           </div>
         </div>
 

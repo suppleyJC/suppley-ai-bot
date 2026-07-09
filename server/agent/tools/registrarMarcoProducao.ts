@@ -1,24 +1,41 @@
 /**
  * TOOL: registrar_marco_producao
  *
- * Registra marcos do processo produtivo: pedido confirmado, produção iniciada,
- * embarque do produto, DI registrada, nacionalizado, entregue.
- * Consumes operacaoService.registrarMarco (serviço compartilhado).
- * Cada marco gera um evento na timeline (coesão Painel ↔ Excambia).
+ * Registra marcos da JORNADA COMPLETA da operação — do estudo do item à
+ * entrega: item pesquisado, fornecedores identificados, RFQ enviada, cotação
+ * recebida, fornecedor selecionado, cálculo feito, GO aprovado, pedido
+ * confirmado, produção iniciada, embarque, DI registrada, nacionalizado,
+ * entregue. Consome operacaoService.registrarMarco (o MESMO serviço do
+ * painel — coesão Painel ↔ Excambia garantida pela timeline única).
+ *
+ * CONVERGÊNCIA: um marco "realizado" de estágio à frente avança a operação
+ * automaticamente (o card muda de coluna no painel na hora).
  */
 import { defineSchema, type AgentTool, type ToolContext, type ToolResult } from "./types";
 import * as operacaoService from "../../services/operacaoService";
+import { MARCO_LABEL_PT, STAGE_LABEL_PT } from "../../services/operacaoService";
+
+const TIPOS: operacaoService.TipoMarco[] = [
+  "item_pesquisado", "fornecedores_identificados",
+  "rfq_enviada", "cotacao_recebida", "fornecedor_selecionado",
+  "calculo_feito", "go_aprovado",
+  "pedido_confirmado", "producao_iniciada", "produto_embarcado",
+  "di_registrada", "nacionalizado", "entregue",
+];
 
 const schema = defineSchema(
   "registrar_marco_producao",
-  "Registra um marco importante no processo produtivo (pedido confirmado, produção iniciada, " +
-  "embarque, DI registrada, nacionalizado, entregue). Cada marco aparece na timeline da operação.",
+  "Registra um marco da JORNADA da operação (estudo do item → cotação/RFQ → viabilidade → " +
+  "produção/embarque → nacionalização/entrega). O marco aparece na jornada e na timeline do " +
+  "painel na hora; se pertencer a um estágio à frente, a operação AVANÇA de coluna " +
+  "automaticamente. Use sempre que a pessoa relatar um avanço concreto (ex.: 'o pedido foi " +
+  "confirmado', 'embarcou hoje', 'a DI saiu', 'chegou/entregue').",
   {
     type: "object",
     properties: {
       tipo: {
         type: "string",
-        enum: ["pedido_confirmado", "producao_iniciada", "produto_embarcado", "di_registrada", "nacionalizado", "entregue"],
+        enum: TIPOS,
         description: "Qual marco está sendo registrado",
       },
       descricao: { type: "string", description: "Descrição opcional do marco (ex: 'Pedido #12345 da Acme Inc.')" },
@@ -39,14 +56,13 @@ const schema = defineSchema(
 export const registrarMarcoProducaoTool: AgentTool = {
   name: "registrar_marco_producao",
   schema,
-  estagios: ["execute", "finance"],
   async run(args, ctx: ToolContext): Promise<ToolResult> {
     if (!ctx.operacaoId) {
       return { ok: false, summary: "Esta ferramenta requer uma operação ativa.", error: "sem_operacao" };
     }
 
     const tipo = args.tipo as operacaoService.TipoMarco;
-    if (!tipo) {
+    if (!tipo || !TIPOS.includes(tipo)) {
       return { ok: false, summary: "Tipo de marco é obrigatório.", error: "tipo_requerido" };
     }
 
@@ -77,10 +93,14 @@ export const registrarMarcoProducaoTool: AgentTool = {
         return { ok: false, summary: "Falha ao registrar o marco.", error: "registro_falhado" };
       }
 
-      const tipoLabel = tipo.replace(/_/g, " ");
+      const avancou = (marco as { estagioSincronizado?: string | null }).estagioSincronizado;
       return {
         ok: true,
-        summary: `Marco "${tipoLabel}" registrado com sucesso na timeline da operação.`,
+        summary:
+          `Marco "${MARCO_LABEL_PT[tipo] ?? tipo}" registrado na jornada da operação.` +
+          (avancou
+            ? ` A operação avançou para "${STAGE_LABEL_PT[avancou as operacaoService.Estagio] ?? avancou}" no painel.`
+            : ""),
         data: marco,
       };
     } catch (e: any) {

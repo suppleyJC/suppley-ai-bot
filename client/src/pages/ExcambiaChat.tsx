@@ -11,13 +11,15 @@
  *   <Route path="/excambia" component={ExcambiaChat} />
  */
 import React, { useState, useEffect, useRef } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
 import ParameterExtractionModal from "@/components/excambia/ParameterExtractionModal";
-import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2, Settings2, FileSpreadsheet, ArrowRightCircle, Eye, Download, Clock, FileText, X as XIcon, Route } from "lucide-react";
+import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2, Settings2, FileSpreadsheet, ArrowRightCircle, Eye, Download, Clock, FileText, X as XIcon, Route, ExternalLink } from "lucide-react";
 import { MessageContent } from "@/components/MessageContent";
+import { STAGE_ORDER, STAGE_LABELS } from "@/lib/stageLabels";
+import { getMarcoLabel } from "@/lib/marcoLabels";
 
 const ALLOWED_UPLOAD_TYPES = [
   "application/pdf",
@@ -171,6 +173,33 @@ export default function ExcambiaChat() {
     { id: activeId! }, { enabled: activeId != null },
   );
 
+  // PORTA PAINEL → CHAT: /excambia?operacao=ID abre (ou cria) a conversa
+  // vinculada àquela operação — o card do painel conversa com a Excambia.
+  const search = useSearch();
+  const getOrCreateForOp = trpc.conversas.getOrCreateForOperacao.useMutation();
+  const opParamHandled = useRef<number | null>(null);
+  useEffect(() => {
+    const opId = Number(new URLSearchParams(search).get("operacao"));
+    if (!Number.isFinite(opId) || opId <= 0 || opParamHandled.current === opId) return;
+    opParamHandled.current = opId;
+    getOrCreateForOp.mutate(
+      { operacaoId: opId },
+      {
+        onSuccess: ({ id }) => { setActiveId(id); utils.conversas.list.invalidate(); },
+        onError: () => toast.error("Não encontrei essa operação para abrir no chat."),
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  // CONVERGÊNCIA CHAT → PAINEL: quando a Excambia age numa conversa vinculada
+  // (marco, financeiro, catálogo…), o painel precisa refletir na hora.
+  function refreshPainel(operacaoId?: number) {
+    if (!operacaoId) return;
+    utils.operations.get.invalidate({ id: operacaoId });
+    utils.operations.list.invalidate();
+  }
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Acompanha o fim da conversa — inclusive durante o streaming (a resposta e os
@@ -273,6 +302,7 @@ export default function ExcambiaChat() {
       setStreamingEvents([]);
       await utils.conversas.get.invalidate({ id });
       utils.conversas.list.invalidate();
+      refreshPainel(operacaoId);
     } catch (err: any) {
       console.error("Falha ao enviar mensagem:", err);
       setDraft(text);
@@ -394,6 +424,7 @@ export default function ExcambiaChat() {
       setStreamingEvents([]);
       await utils.conversas.get.invalidate({ id });
       utils.conversas.list.invalidate();
+      refreshPainel(operacaoId);
     } catch (err: any) {
       console.error("Falha ao enviar anexo:", err);
       setStreaming(false);
@@ -448,8 +479,9 @@ export default function ExcambiaChat() {
             </div>
           </div>
         )}
-        {/* topbar fina — sem logo/nome (a marca já está na sidebar); só o câmbio */}
+        {/* topbar fina — contexto da operação vinculada (se houver) + câmbio */}
         <div className="flex h-[54px] flex-shrink-0 items-center gap-2 sm:gap-2.5 px-3 sm:px-6 border-b border-slate-100">
+          {conv?.operacaoId ? <OperacaoContextBar operacaoId={conv.operacaoId} /> : null}
           <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
             <FxRate />
           </div>
@@ -552,6 +584,52 @@ export default function ExcambiaChat() {
         prefilledParams={collectedParams}
       />
     </div>
+  );
+}
+
+/**
+ * OperacaoContextBar — a operação vinculada SEMPRE visível no topo do chat:
+ * código, título, chip de estágio e progresso da jornada (5 etapas), com
+ * atalho para o painel. Dados vivos de operations.get — o que mudar no painel
+ * aparece aqui (e o refreshPainel pós-resposta fecha o ciclo inverso).
+ */
+function OperacaoContextBar({ operacaoId }: { operacaoId: number }) {
+  const [, setLocation] = useLocation();
+  const { data } = trpc.operations.get.useQuery({ id: operacaoId });
+  const op = data?.operacao;
+  if (!op) return null;
+
+  const idx = STAGE_ORDER.indexOf(op.estagioAtual as (typeof STAGE_ORDER)[number]);
+  const encerrada = ["closed", "lost"].includes(op.estagioAtual);
+
+  return (
+    <button
+      onClick={() => setLocation(`/operacao/${op.id}`)}
+      title={`${op.codigo} — ${op.titulo} · abrir no Painel de Operações`}
+      className="group flex min-w-0 items-center gap-2 sm:gap-3 rounded-xl border border-violet-100 bg-violet-50/60 px-2.5 sm:px-3 py-1.5 text-left transition hover:border-violet-300 hover:bg-violet-50"
+    >
+      <Route className="h-4 w-4 flex-shrink-0 text-violet-600" />
+      <span className="hidden sm:inline font-mono text-[11px] font-semibold text-violet-700">{op.codigo}</span>
+      <span className="max-w-[110px] sm:max-w-[220px] truncate text-xs font-medium text-slate-700">{op.titulo}</span>
+      <span className="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-bold text-violet-700 border border-violet-100 whitespace-nowrap">
+        {STAGE_LABELS[op.estagioAtual as keyof typeof STAGE_LABELS] ?? op.estagioAtual}
+      </span>
+      {/* progresso da jornada — 5 pontos, coeso com a esteira do painel */}
+      <span className="hidden md:flex items-center gap-1">
+        {STAGE_ORDER.map((s, i) => (
+          <span
+            key={s}
+            title={STAGE_LABELS[s]}
+            className={`h-1.5 w-1.5 rounded-full ${
+              encerrada || (idx >= 0 && i < idx) ? "bg-teal-500"
+                : i === idx ? "bg-violet-600 ring-2 ring-violet-200"
+                : "bg-slate-300"
+            }`}
+          />
+        ))}
+      </span>
+      <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-slate-300 transition group-hover:text-violet-500" />
+    </button>
   );
 }
 
@@ -864,19 +942,10 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-// --- Jornada da operação no chat (mockup) ---
-const OP_STAGES = [
-  { key: "demand", label: "Demanda" },
-  { key: "source", label: "Fornecedores" },
-  { key: "analyze", label: "Viabilidade" },
-  { key: "execute", label: "Operação" },
-  { key: "finance", label: "Câmbio" },
-];
-const MARCO_LABEL: Record<string, string> = {
-  pedido_confirmado: "Pedido confirmado", producao_iniciada: "Produção iniciada",
-  produto_embarcado: "Produto embarcado", di_registrada: "DI registrada",
-  nacionalizado: "Nacionalizado", entregue: "Entregue",
-};
+// --- Jornada da operação no chat ---
+// Vocabulário ÚNICO com o painel: mesmas etapas (stageLabels) e mesmos 13
+// marcos (marcoLabels) — o card do chat e o Painel contam a mesma história.
+const OP_STAGES = STAGE_ORDER.map((key) => ({ key, label: STAGE_LABELS[key] }));
 
 /** Extrai do toolResults os dados da operação consultada (consultar_operacao). */
 function extractOperacao(toolResults: any): { operacao: any; marcos: any[]; anexos: any[] } | null {
@@ -947,7 +1016,7 @@ function OperationJourneyCard({ toolResults }: { toolResults?: any }) {
                   : cancel ? <XIcon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-rose-400" />
                   : <Clock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />}
                 <span className="text-slate-700">
-                  <span className="font-medium">{MARCO_LABEL[m.tipo] ?? m.tipo}</span>
+                  <span className="font-medium">{getMarcoLabel(m.tipo)}</span>
                   {m.descricao ? <span className="text-slate-500"> — {m.descricao}</span> : null}
                 </span>
               </div>

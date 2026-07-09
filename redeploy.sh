@@ -44,6 +44,7 @@ IDEMPOTENT_MIGRATIONS=(
   "drizzle/0038_supplier_ratings.sql"
   "drizzle/0039_rfq_outreach_quotes.sql"
   "drizzle/0040_proforma_file_key_optional_price.sql"
+  "drizzle/0041_widen_proforma_file_url.sql"
 )
 
 echo "╔════════════════════════════════════════════════════════════╗"
@@ -86,17 +87,49 @@ DB_USER="$(grep -E '^DB_USER=' .env 2>/dev/null | cut -d= -f2-)"; DB_USER="${DB_
 DB_PASSWORD="$(grep -E '^DB_PASSWORD=' .env 2>/dev/null | cut -d= -f2-)"; DB_PASSWORD="${DB_PASSWORD:-changeme}"
 DB_NAME="$(grep -E '^DB_NAME=' .env 2>/dev/null | cut -d= -f2-)"; DB_NAME="${DB_NAME:-suppley_calc}"
 
+MIG_FALHOU=0
 for mig in "${IDEMPOTENT_MIGRATIONS[@]}"; do
   if [ -f "$mig" ]; then
-    if docker exec -i "${DB_CONTAINER}" mysql -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" < "$mig" 2>/dev/null; then
+    # NÃO engolir o stderr: sem o motivo, uma migração que falha passa
+    # despercebida e o app novo sobe contra um banco velho (schema drift).
+    mig_out="$(docker exec -i "${DB_CONTAINER}" mysql -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" < "$mig" 2>&1)"
+    if [ $? -eq 0 ]; then
       ok "  aplicada: $mig"
     else
-      warn "  falhou (verifique manualmente): $mig"
+      MIG_FALHOU=1
+      err "  FALHOU: $mig"
+      err "  motivo: $(echo "$mig_out" | grep -v 'Using a password' | head -3)"
     fi
   else
     warn "  ausente: $mig"
   fi
 done
+echo ""
+
+# Passo 3c — verificação de SCHEMA: colunas críticas que o código atual exige.
+# Se faltar alguma, o deploy é interrompido ANTES de parecer saudável.
+log "Verificando colunas críticas do schema..."
+CRITICAL_COLUMNS=(
+  "proformas fileKey"
+  "operacoes modo"
+)
+SCHEMA_OK=1
+for par in "${CRITICAL_COLUMNS[@]}"; do
+  tbl="${par%% *}"; col="${par##* }"
+  found="$(docker exec -i "${DB_CONTAINER}" mysql -N -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" \
+    -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='${DB_NAME}' AND TABLE_NAME='${tbl}' AND COLUMN_NAME='${col}';" 2>/dev/null | tail -1)"
+  if [ "${found}" = "1" ]; then
+    ok "  ${tbl}.${col} OK"
+  else
+    SCHEMA_OK=0
+    err "  AUSENTE: ${tbl}.${col} — o app vai falhar ao gravar nessa tabela"
+  fi
+done
+if [ "${SCHEMA_OK}" -ne 1 ] || [ "${MIG_FALHOU}" -ne 0 ]; then
+  err "Schema desatualizado ou migração com falha — corrija antes de usar o app."
+  err "Reaplique manualmente, ex.: docker exec -i ${DB_CONTAINER} mysql -u ${DB_USER} -p'<senha>' ${DB_NAME} < drizzle/0040_proforma_file_key_optional_price.sql"
+  exit 1
+fi
 echo ""
 
 # Passo 4 — health check
