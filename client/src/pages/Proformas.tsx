@@ -81,12 +81,50 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   arquivada: { label: "Arquivada", color: "bg-gray-100 text-gray-500" },
 };
 
+/** Item da fila do upload em LOTE (escala: centenas/milhares de cotações). */
+type BatchItem = {
+  name: string;
+  status: "aguardando" | "enviando" | "extraindo" | "salvando" | "ok" | "erro";
+  numero?: string;
+  itens?: number;
+  erro?: string;
+};
+
+/** Formatos aceitos no intake de proformas (mesmo pipeline multi-formato do chat). */
+const PROFORMA_ACCEPT = ".pdf,.xlsx,.xls,.csv,.docx,.txt,image/jpeg,image/png,image/webp";
+
+/** MIME pela extensão — fallback quando o navegador não preenche file.type (csv/xls). */
+function proformaMime(file: File): string {
+  if (file.type) return file.type;
+  const n = file.name.toLowerCase();
+  if (n.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (n.endsWith(".xls")) return "application/vnd.ms-excel";
+  if (n.endsWith(".csv")) return "text/csv";
+  if (n.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (n.endsWith(".txt")) return "text/plain";
+  return "application/pdf";
+}
+
+/** File → base64 puro (em blocos, sem estourar a pilha com arquivos grandes). */
+async function fileToB64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.byteLength; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)));
+  }
+  return btoa(binary);
+}
+
 export default function Proformas() {
   const [draft, setDraft] = useState<Draft | null>(null);
   // id da proforma em edição (null = criando uma nova).
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [loadingEditId, setLoadingEditId] = useState<number | null>(null);
+  // Fila do upload em lote (null = sem lote em andamento/exibido).
+  const [batch, setBatch] = useState<BatchItem[] | null>(null);
+  const [batchRunning, setBatchRunning] = useState(false);
 
   // Ambiente limpo tipo Ativos: busca + filtro por status ("classe" da proforma) + seleção.
   const [search, setSearch] = useState("");
@@ -184,27 +222,34 @@ export default function Proformas() {
   }
 
   // ---- Upload + extração via Excambia ----
+  // 1 arquivo → fluxo com REVISÃO humana (modal). Vários → fila em LOTE:
+  // upload → extração → salvamento automático (status "extraída"), um a um,
+  // com progresso por arquivo. A distribuição para a Base segue por card.
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 16 * 1024 * 1024) {
-      toast.error("Arquivo muito grande. Máximo 16MB.");
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
+
+    const grandes = files.filter((f) => f.size > 16 * 1024 * 1024);
+    if (grandes.length) {
+      toast.error(`Arquivo(s) acima de 16MB: ${grandes.map((f) => f.name).join(", ")}`);
       return;
     }
 
+    if (files.length > 1) {
+      await processBatch(files);
+      return;
+    }
+
+    const file = files[0];
     setIsUploading(true);
     try {
       // 1) upload → fileUrl (reusa endpoint existente)
-      const buffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      let binary = "";
-      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-      const base64 = btoa(binary);
-
+      const base64 = await fileToB64(file);
       const uploaded = await uploadMutation.mutateAsync({
         fileName: file.name,
         fileData: base64,
-        contentType: file.type || "application/pdf",
+        contentType: proformaMime(file),
       });
 
       toast.info("Excambia analisando a proforma...");
@@ -212,7 +257,8 @@ export default function Proformas() {
       // 2) extração IA
       const extracted = await extractMutation.mutateAsync({
         fileUrl: uploaded.fileUrl,
-        mimeType: file.type || "application/pdf",
+        mimeType: proformaMime(file),
+        fileName: file.name,
       });
 
       setEditingId(null);
@@ -249,8 +295,78 @@ export default function Proformas() {
       toast.error(err?.message || "Erro ao processar a proforma");
     } finally {
       setIsUploading(false);
-      e.target.value = "";
     }
+  }
+
+  // ---- LOTE: fila sequencial com progresso (preparado para centenas de arquivos) ----
+  async function processBatch(files: File[]) {
+    setBatchRunning(true);
+    setBatch(files.map((f) => ({ name: f.name, status: "aguardando" })));
+    const marca = (i: number, patch: Partial<BatchItem>) =>
+      setBatch((prev) => prev?.map((b, idx) => (idx === i ? { ...b, ...patch } : b)) ?? prev);
+
+    let ok = 0;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        marca(i, { status: "enviando" });
+        const base64 = await fileToB64(file);
+        const uploaded = await uploadMutation.mutateAsync({
+          fileName: file.name,
+          fileData: base64,
+          contentType: proformaMime(file),
+        });
+
+        marca(i, { status: "extraindo" });
+        const ext = await extractMutation.mutateAsync({
+          fileUrl: uploaded.fileUrl,
+          mimeType: proformaMime(file),
+          fileName: file.name,
+        });
+
+        marca(i, { status: "salvando" });
+        const created = await createMutation.mutateAsync({
+          supplierName: ext.supplierName || file.name.replace(/\.[^.]+$/, ""),
+          supplierCountry: ext.supplierCountry || undefined,
+          supplierEmail: ext.supplierEmail || undefined,
+          supplierPhone: ext.supplierPhone || undefined,
+          supplierSector: (ext as any).supplierSector || undefined,
+          currency: ext.currency || "USD",
+          incoterm: ext.incoterm || "FOB",
+          paymentTerms: ext.paymentTerms || undefined,
+          leadTimeDays: ext.leadTimeDays ?? undefined,
+          moq: ext.moq ?? undefined,
+          quotationDate: ext.quotationDate ?? undefined,
+          fileUrl: uploaded.fileUrl,
+          fileKey: uploaded.fileKey,
+          fileName: file.name,
+          extractionConfidence: ext.confidence,
+          rawExtraction: ext,
+          // TODOS os itens entram — sem preço vira null (sinalizado), nunca descartado.
+          items: (ext.items || []).map((it) => ({
+            productName: it.productName,
+            description: it.description || undefined,
+            ncmCode: it.ncmCode || undefined,
+            quantity: it.quantity,
+            unit: it.unit || "UN",
+            unitPriceCents:
+              it.unitPriceCents != null && it.unitPriceCents > 0 ? Math.round(it.unitPriceCents) : null,
+          })),
+        });
+        ok++;
+        marca(i, { status: "ok", numero: created.numero, itens: ext.items?.length ?? 0 });
+      } catch (err: any) {
+        marca(i, { status: "erro", erro: err?.message || "falha ao processar" });
+      }
+      // A lista vai se populando conforme o lote avança.
+      utils.proforma.list.invalidate();
+    }
+
+    setBatchRunning(false);
+    toast.success(
+      `Lote concluído: ${ok}/${files.length} proforma(s) salvas como "Extraída". ` +
+      `Revise e use "Distribuir" para enviar à Base.`,
+    );
   }
 
   function startManual() {
@@ -276,7 +392,9 @@ export default function Proformas() {
       ncmCode: i.ncmCode || undefined,
       quantity: i.quantity,
       unit: i.unit,
-      unitPriceCents: Math.round(i.unitPrice * 100),
+      // Preço zerado = item cotado SEM preço → null (sinalizado na base;
+      // não entra no histórico de preços como "0").
+      unitPriceCents: i.unitPrice > 0 ? Math.round(i.unitPrice * 100) : null,
     }));
 
     try {
@@ -347,10 +465,11 @@ export default function Proformas() {
       <input
         id="proforma-file"
         type="file"
-        accept=".pdf,image/jpeg,image/png,image/webp"
+        multiple
+        accept={PROFORMA_ACCEPT}
         className="hidden"
         onChange={handleFileUpload}
-        disabled={isUploading}
+        disabled={isUploading || batchRunning}
       />
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -362,9 +481,14 @@ export default function Proformas() {
         </div>
         {!draft && (
           <div className="flex gap-2 flex-shrink-0">
-            <Button onClick={() => document.getElementById("proforma-file")?.click()} disabled={isUploading} className="gap-2">
-              {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {isUploading ? "Processando…" : "Subir proforma"}
+            <Button
+              onClick={() => document.getElementById("proforma-file")?.click()}
+              disabled={isUploading || batchRunning}
+              className="gap-2"
+              title="PDF, planilha (XLSX/XLS/CSV), Word, texto ou imagem — selecione VÁRIOS arquivos para processar em lote"
+            >
+              {isUploading || batchRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {isUploading || batchRunning ? "Processando…" : "Subir proformas"}
             </Button>
             <Button variant="outline" onClick={startManual} className="gap-2">
               <Plus className="h-4 w-4" /> Manual
@@ -372,6 +496,54 @@ export default function Proformas() {
           </div>
         )}
       </div>
+
+      {/* Progresso do LOTE — cada arquivo com seu status, sem travar a tela */}
+      {batch && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Upload className="h-4 w-4" />
+                Lote de proformas ({batch.filter((b) => b.status === "ok").length}/{batch.length} concluídas)
+              </CardTitle>
+              {!batchRunning && (
+                <Button variant="ghost" size="sm" onClick={() => setBatch(null)} className="gap-1">
+                  <X className="h-4 w-4" /> Fechar
+                </Button>
+              )}
+            </div>
+            <CardDescription>
+              Cada arquivo é enviado, lido pela Excambia e salvo como “Extraída”. Depois revise e distribua para a Base.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="max-h-64 overflow-y-auto space-y-1.5">
+            {batch.map((b, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm">
+                {b.status === "ok" ? (
+                  <span className="h-2 w-2 flex-shrink-0 rounded-full bg-green-500" />
+                ) : b.status === "erro" ? (
+                  <span className="h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />
+                ) : b.status === "aguardando" ? (
+                  <span className="h-2 w-2 flex-shrink-0 rounded-full bg-gray-300" />
+                ) : (
+                  <Loader2 className="h-3 w-3 flex-shrink-0 animate-spin text-violet-500" />
+                )}
+                <span className="truncate flex-1">{b.name}</span>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {b.status === "ok"
+                    ? `${b.numero} · ${b.itens} item(ns)`
+                    : b.status === "erro"
+                      ? (b.erro ?? "erro").slice(0, 80)
+                      : b.status === "aguardando" ? "na fila"
+                      : b.status === "enviando" ? "enviando…"
+                      : b.status === "extraindo" ? "Excambia lendo…"
+                      : "salvando…"}
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Revisão / edição do rascunho */}
       {draft && (

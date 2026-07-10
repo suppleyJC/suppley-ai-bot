@@ -158,11 +158,16 @@ uploadQuotation: protectedProcedure
     // Decode base64 to buffer
     const buffer = Buffer.from(fileData, "base64");
     
-    // Generate unique file key
+    // Generate unique file key. O nome entra TRUNCADO (60 chars, extensão
+    // preservada): nomes de cotação são longos e a URL pré-assinada derivada
+    // da chave estourava a coluna fileUrl do banco.
     const timestamp = Date.now();
     const randomSuffix = Math.random().toString(36).substring(2, 8);
-    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
-    const fileKey = `quotations/${ctx.user.id}/${timestamp}-${randomSuffix}-${sanitizedFileName}`;
+    const sanitized = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const dot = sanitized.lastIndexOf(".");
+    const ext = dot > 0 ? sanitized.slice(dot).slice(0, 10) : "";
+    const base = (dot > 0 ? sanitized.slice(0, dot) : sanitized).slice(0, Math.max(10, 60 - ext.length));
+    const fileKey = `quotations/${ctx.user.id}/${timestamp}-${randomSuffix}-${base}${ext}`;
     
     // Upload to S3
     const { key, url } = await storagePut(fileKey, buffer, contentType);

@@ -26,6 +26,8 @@ export const proformaRouter = router({
       z.object({
         fileUrl: z.string().min(1),
         mimeType: z.string(),
+        // Nome original — decide o parser (planilha/docx/texto) pela extensão.
+        fileName: z.string().optional(),
         supplierName: z.string().optional(),
         expectedProducts: z.array(z.string()).optional(),
       })
@@ -35,6 +37,7 @@ export const proformaRouter = router({
         return await proformaService.extractProformaFromFile(input.fileUrl, input.mimeType, {
           supplierName: input.supplierName,
           expectedProducts: input.expectedProducts,
+          fileName: input.fileName,
         });
       } catch (error) {
         throw new TRPCError({

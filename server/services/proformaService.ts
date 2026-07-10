@@ -8,7 +8,7 @@
  */
 import * as db from "../db";
 import { invokeLLM } from "../_core/llm";
-import { pdfBufferToText } from "./pdfToText";
+import { buildAttachmentBlock } from "./attachmentBlock";
 import { suggestNCMWithAI, suggestNCMBatch } from "./ncmService";
 import { suggestNCMSmart } from "./smartNcmService";
 import { inferCategories, findProductByNameAndSupplier } from "./productCategorizationService";
@@ -119,12 +119,15 @@ const EXTRACTION_SCHEMA = {
 } as const;
 
 /**
- * Extrai os dados de uma proforma (PDF/imagem) usando a Excambia (Claude).
+ * Extrai os dados de uma proforma usando a Excambia (Claude).
+ * Formatos: PDF (texto ou escaneado), planilha (XLSX/XLS/CSV), Word (.docx),
+ * texto puro e imagem (JPEG/PNG/WebP) — via buildAttachmentBlock (mesmo
+ * pipeline do chat).
  */
 export async function extractProformaFromFile(
   fileUrl: string,
   mimeType: string,
-  hints?: { supplierName?: string; expectedProducts?: string[] }
+  hints?: { supplierName?: string; expectedProducts?: string[]; fileName?: string }
 ): Promise<ProformaExtraction> {
   const prompt = `Você é um especialista em comércio exterior processando uma PROFORMA INVOICE.
 
@@ -152,27 +155,20 @@ IMPORTANTE:
 ${hints?.supplierName ? `- Fornecedor esperado: ${hints.supplierName}` : ""}
 ${hints?.expectedProducts?.length ? `- Produtos esperados: ${hints.expectedProducts.join(", ")}` : ""}`;
 
-  let buffer: Buffer;
-  try {
-    const fileResponse = await fetch(fileUrl);
-    if (!fileResponse.ok) {
-      throw new Error(`HTTP ${fileResponse.status} ao baixar arquivo`);
-    }
-    buffer = Buffer.from(await fileResponse.arrayBuffer());
-  } catch (downloadError) {
-    throw new Error(`Erro ao baixar arquivo: ${downloadError instanceof Error ? downloadError.message : String(downloadError)}`);
-  }
-
-  // PDF de texto → envia TEXTO PURO (economiza tokens, remove peso visual).
-  // PDF-imagem/escaneado ou imagem → mantém base64 (leitura nativa do Claude).
-  let fileBlock: any;
-  if (mimeType === "application/pdf") {
-    const extraido = await pdfBufferToText(buffer);
-    fileBlock = extraido.ok
-      ? { type: "text", text: `Conteúdo da proforma (PDF, texto extraído):\n\n${extraido.text}` }
-      : { type: "document", source: { type: "base64", media_type: "application/pdf", data: buffer.toString("base64") } };
-  } else {
-    fileBlock = { type: "image", source: { type: "base64", media_type: "image/jpeg", data: buffer.toString("base64") } };
+  // MULTI-FORMATO: o mesmo pipeline do chat (buildAttachmentBlock) lê PDF
+  // (texto ou escaneado), planilha (xlsx/xls/csv), Word (.docx), texto puro e
+  // imagem — com o media_type CORRETO (antes, PNG/WebP iam rotulados de JPEG
+  // e a API recusava). Cotação em qualquer formato entra pela mesma porta.
+  const fileBlock = await buildAttachmentBlock({
+    url: fileUrl,
+    mimeType,
+    name: hints?.fileName ?? "proforma",
+  });
+  if (!fileBlock) {
+    throw new Error(
+      "Não consegui ler o arquivo (download ou extração falhou). Verifique o formato — " +
+      "aceito PDF, planilha (XLSX/XLS/CSV), Word (.docx), texto e imagem (JPEG/PNG/WebP).",
+    );
   }
 
   const result = await invokeLLM({
@@ -280,6 +276,10 @@ export async function createProforma(
   const rawExtraction =
     data.rawExtraction == null || data.rawExtraction === "" ? null : data.rawExtraction;
 
+  // A URL pré-assinada é derivável do fileKey (re-assinada no detalhe) — se
+  // vier maior que a coluna (1024), grava null em vez de derrubar o INSERT.
+  const fileUrl = data.fileUrl && data.fileUrl.length > 1024 ? undefined : data.fileUrl;
+
   let proformaId: number;
   try {
     proformaId = await db.createProforma({
@@ -298,7 +298,7 @@ export async function createProforma(
       moq: data.moq,
       totalFobCents: data.totalFobCents,
       quotationDate: data.quotationDate ? new Date(data.quotationDate) : undefined,
-      fileUrl: data.fileUrl,
+      fileUrl,
       fileKey: data.fileKey,
       fileName: data.fileName,
       documentoId: data.documentoId,
