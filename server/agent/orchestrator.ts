@@ -279,6 +279,9 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
       tool_choice: toolSchemas.length > 0 ? "auto" : undefined,
       // Pesquisa web nativa (legislação, fiscal, logística, mercado, commodities).
       webSearch: true,
+      // Teto de saída alto: catalogar uma cotação grande gera argumentos de
+      // tool com dezenas de itens — com o default (4096) o JSON era cortado.
+      maxTokens: 16000,
     });
 
     const choice = result.choices?.[0]?.message;
@@ -379,6 +382,9 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
       tool_choice: toolSchemas.length > 0 ? "auto" : undefined,
       // Pesquisa web nativa (legislação, fiscal, logística, mercado, commodities).
       webSearch: true,
+      // Teto de saída alto: catalogar uma cotação grande gera argumentos de
+      // tool com dezenas de itens — com o default (4096) o JSON era cortado.
+      maxTokens: 16000,
     });
 
     const choice = result.choices?.[0]?.message;

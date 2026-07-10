@@ -8,7 +8,9 @@
  */
 import ExcelJS from "exceljs";
 
-const MAX_ROWS_PER_SHEET = 500; // proteção: planilhas enormes não estouram o contexto
+// Proteção contra planilhas enormes no contexto — 1500 linhas cobre qualquer
+// cotação real numa passada (o aviso de truncamento segue para o excedente).
+const MAX_ROWS_PER_SHEET = 1500;
 const MAX_COLS = 40;
 
 /** Tipos MIME de planilha que sabemos processar. */

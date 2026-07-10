@@ -16,8 +16,10 @@
  */
 import { PDFParse } from "pdf-parse";
 
-/** Limite de páginas processadas — proteção contra PDFs gigantes no contexto. */
-const MAX_PAGES = 60;
+/** Limite de páginas processadas — proteção contra PDFs gigantes no contexto.
+ *  Alto o bastante para qualquer cotação/proforma real; quando estourar, o
+ *  texto ganha um AVISO explícito (nada de truncar em silêncio). */
+const MAX_PAGES = 150;
 /**
  * Mínimo de caracteres (após limpeza) para considerar a extração aproveitável.
  * Abaixo disso tratamos como PDF-imagem e caímos para o modo base64.
@@ -59,8 +61,13 @@ export async function pdfBufferToText(buffer: Buffer): Promise<PdfTextResult> {
   try {
     parser = new PDFParse({ data: new Uint8Array(buffer) });
     const result = await parser.getText({ last: MAX_PAGES });
-    const text = cleanText(result.text || "");
+    let text = cleanText(result.text || "");
     const pageCount = result.total || result.pages?.length || 0;
+    // Truncamento NUNCA é silencioso: o leitor (humano ou LLM) precisa saber
+    // que faltam páginas para não tratar o parcial como completo.
+    if (pageCount > MAX_PAGES && text) {
+      text += `\n\n[ATENÇÃO: documento com ${pageCount} páginas; texto extraído somente das primeiras ${MAX_PAGES}. O conteúdo acima está INCOMPLETO.]`;
+    }
     // Heurística de PDF-imagem: pouquíssimo texto (ou nenhum) por página.
     const ok = text.length >= MIN_USEFUL_CHARS;
     return { ok, text: ok ? text : "", pageCount };

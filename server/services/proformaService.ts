@@ -146,6 +146,16 @@ TRADUÇÃO E ESTRUTURAÇÃO DOS PRODUTOS (importante):
 - "description": ficha técnica COMPLETA em PT-BR (pode repetir o que está no nome + todo o resto: medidas exatas, material, tubos, placa, pino, acabamento, altura, peso, embalagem). Ex: "Tubo interno 48x2,2x2200mm; Tubo externo 60x2,2x2000mm; Placa de base 120x120x5mm; Galvanizado por imersão a quente; Altura ajustável 2200-4000mm; Peso bruto 13kg". Null se não houver specs.
 - "productNameOriginal": mantenha o nome EXATAMENTE como está no documento, sem traduzir.
 
+FORMATO DO DOCUMENTO (layouts variados — leia com atenção):
+- O conteúdo pode chegar como tabela Markdown (planilha convertida), texto corrido de PDF
+  (colunas podem vir coladas ou separadas por espaços), documento Word ou imagem.
+- Um item pode ocupar VÁRIAS linhas (nome numa, specs noutra, preço noutra) — junte as
+  partes pelo contexto antes de estruturar.
+- COMPLETUDE É OBRIGATÓRIA: liste TODOS os itens do documento, na ordem em que aparecem,
+  um registro por variante. NUNCA resuma ("e outros itens"), NUNCA selecione "os principais",
+  NUNCA pare no meio. Se o documento tem 80 linhas de item, "items" deve ter 80 entradas.
+- Linhas de subtotal/total/frete/observação NÃO são itens — ignore-as no array.
+
 IMPORTANTE:
 - Preços SEMPRE em centavos (multiplique por 100). Ex: USD 12.50 → 1250.
 - "quotationDate": extraia a data da proforma em formato YYYY-MM-DD (ex: 2026-06-25). Se não encontrar data explícita, retorne null.
@@ -182,12 +192,33 @@ ${hints?.expectedProducts?.length ? `- Produtos esperados: ${hints.expectedProdu
       },
     ],
     outputSchema: EXTRACTION_SCHEMA as any,
-    maxTokens: 4096,
+    // Teto ALTO de saída: uma cotação grande (100+ itens, nomes + specs +
+    // NCM) gera dezenas de milhares de tokens de JSON. Com 4096 o retorno
+    // era CORTADO no meio — extração corrompida/itens perdidos.
+    maxTokens: 32000,
   });
+
+  // Truncamento explícito > corrupção silenciosa: se o modelo parou por
+  // limite de tokens, o JSON está incompleto — avisa em vez de perder itens.
+  const finishReason = result.choices[0]?.finish_reason;
+  if (finishReason === "max_tokens") {
+    throw new Error(
+      "O documento tem itens demais para uma única extração (o retorno estourou o limite). " +
+      "Divida o arquivo em partes (ex.: metade dos itens em cada) e envie novamente.",
+    );
+  }
 
   const content = result.choices[0]?.message?.content;
   const text = typeof content === "string" ? content : "";
-  const parsed = JSON.parse(text) as ProformaExtraction;
+  let parsed: ProformaExtraction;
+  try {
+    parsed = JSON.parse(text) as ProformaExtraction;
+  } catch {
+    throw new Error(
+      "A extração voltou num formato inválido (possível corte no meio do documento). " +
+      "Tente novamente; se persistir, divida o arquivo em partes menores.",
+    );
+  }
   // Normaliza
   parsed.items = parsed.items || [];
   parsed.currency = parsed.currency || "USD";
