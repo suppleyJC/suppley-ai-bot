@@ -171,7 +171,7 @@ export default function Proformas() {
   }, [proformas, search, filterStatus]);
 
   const uploadMutation = trpc.calculations.uploadQuotation.useMutation();
-  const extractMutation = trpc.proforma.extract.useMutation();
+  const extractStartMutation = trpc.proforma.extractStart.useMutation();
   const createMutation = trpc.proforma.create.useMutation();
   const updateMutation = trpc.proforma.update.useMutation();
   const distributeMutation = trpc.proforma.distribute.useMutation();
@@ -189,6 +189,26 @@ export default function Proformas() {
     },
     onError: (err) => toast.error(err?.message || "Erro ao excluir proforma"),
   });
+
+  /**
+   * Extração via JOB assíncrono: dispara no servidor e faz polling curto até
+   * concluir. Requisições longas morriam no proxy (nginx 504) com arquivos
+   * grandes — aqui nenhuma chamada dura mais que milissegundos.
+   */
+  async function extrairComPolling(fileUrl: string, mimeType: string, fileName: string) {
+    const { jobId } = await extractStartMutation.mutateAsync({ fileUrl, mimeType, fileName });
+    const inicio = Date.now();
+    const LIMITE_MS = 15 * 60 * 1000;
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 4000));
+      const st = await utils.client.proforma.extractStatus.query({ jobId });
+      if (st.status === "concluida" && st.result) return st.result;
+      if (st.status === "erro") throw new Error(st.error || "Falha na extração do documento");
+      if (Date.now() - inicio > LIMITE_MS) {
+        throw new Error("A extração passou de 15 minutos. Tente novamente ou divida o arquivo.");
+      }
+    }
+  }
 
   async function handleDeleteProforma(id: number, label: string) {
     const ok = window.confirm(
@@ -271,12 +291,8 @@ export default function Proformas() {
 
       toast.info("Excambia analisando a proforma...");
 
-      // 2) extração IA
-      const extracted = await extractMutation.mutateAsync({
-        fileUrl: uploaded.fileUrl,
-        mimeType: proformaMime(file),
-        fileName: file.name,
-      });
+      // 2) extração IA (job + polling — arquivos grandes levam minutos)
+      const extracted = await extrairComPolling(uploaded.fileUrl, proformaMime(file), file.name);
 
       setEditingId(null);
       setDraft({
@@ -335,11 +351,7 @@ export default function Proformas() {
         });
 
         marca(i, { status: "extraindo" });
-        const ext = await extractMutation.mutateAsync({
-          fileUrl: uploaded.fileUrl,
-          mimeType: proformaMime(file),
-          fileName: file.name,
-        });
+        const ext = await extrairComPolling(uploaded.fileUrl, proformaMime(file), file.name);
 
         marca(i, { status: "salvando" });
         const created = await createMutation.mutateAsync({

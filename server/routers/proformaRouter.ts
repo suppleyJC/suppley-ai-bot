@@ -8,6 +8,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import * as proformaService from "../services/proformaService";
 import * as priceHistoryService from "../services/proformaPriceHistoryService";
+import { startExtractionJob, getExtractionJob } from "../services/extractionJobService";
 
 const itemSchema = z.object({
   productName: z.string().min(1),
@@ -45,6 +46,42 @@ export const proformaRouter = router({
           message: `Erro ao extrair proforma: ${error instanceof Error ? error.message : "desconhecido"}`,
         });
       }
+    }),
+
+  // 1b) Extração ASSÍNCRONA (job + polling) — imune a timeout de proxy.
+  // Arquivos grandes levam minutos para extrair; segurar uma requisição
+  // aberta esse tempo todo derruba no nginx (504). O start devolve na hora
+  // e o status é consultado em chamadas curtas.
+  extractStart: protectedProcedure
+    .input(
+      z.object({
+        fileUrl: z.string().min(1),
+        mimeType: z.string(),
+        fileName: z.string().optional(),
+        supplierName: z.string().optional(),
+        expectedProducts: z.array(z.string()).optional(),
+      })
+    )
+    .mutation(({ ctx, input }) => {
+      const jobId = startExtractionJob(ctx.user.id, input.fileUrl, input.mimeType, {
+        supplierName: input.supplierName,
+        expectedProducts: input.expectedProducts,
+        fileName: input.fileName,
+      });
+      return { jobId };
+    }),
+
+  extractStatus: protectedProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(({ ctx, input }) => {
+      const job = getExtractionJob(ctx.user.id, input.jobId);
+      if (!job) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Extração não encontrada (expirou ou o servidor reiniciou). Reenvie o arquivo.",
+        });
+      }
+      return { status: job.status, result: job.result, error: job.error };
     }),
 
   // 2) Cria a proforma (manual ou a partir da extração revisada)
