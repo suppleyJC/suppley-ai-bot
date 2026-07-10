@@ -105,6 +105,23 @@ function proformaMime(file: File): string {
   return "application/pdf";
 }
 
+/**
+ * Erro legível para a fila: quando o proxy (nginx) responde HTML (413/504),
+ * o parse de JSON falha com mensagens crípticas do navegador. Traduz.
+ */
+function erroLegivel(err: unknown): string {
+  const m = err instanceof Error ? err.message : String(err ?? "");
+  const pareceParseDeHtml =
+    m.includes("did not match the expected pattern") || // Safari
+    m.includes("Unexpected token") ||                   // Chrome/Firefox
+    m.includes("JSON");
+  if (pareceParseDeHtml) {
+    return "O servidor interrompeu a requisição (arquivo grande ou extração demorada). " +
+      "Ajuste no nginx: client_max_body_size 25m e proxy_read_timeout 300s.";
+  }
+  return m || "falha ao processar";
+}
+
 /** File → base64 puro (em blocos, sem estourar a pilha com arquivos grandes). */
 async function fileToB64(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -292,7 +309,7 @@ export default function Proformas() {
       });
       toast.success(`Proforma extraída (confiança ${extracted.confidence}%). Revise antes de salvar.`);
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao processar a proforma");
+      toast.error(erroLegivel(err));
     } finally {
       setIsUploading(false);
     }
@@ -356,7 +373,7 @@ export default function Proformas() {
         ok++;
         marca(i, { status: "ok", numero: created.numero, itens: ext.items?.length ?? 0 });
       } catch (err: any) {
-        marca(i, { status: "erro", erro: err?.message || "falha ao processar" });
+        marca(i, { status: "erro", erro: erroLegivel(err) });
       }
       // A lista vai se populando conforme o lote avança.
       utils.proforma.list.invalidate();

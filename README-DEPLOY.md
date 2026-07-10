@@ -110,6 +110,10 @@ server {
     ssl_ciphers HIGH:!aNULL:!MD5;
     add_header Strict-Transport-Security "max-age=31536000" always;
 
+    # Uploads de proforma/anexo: o padrão do nginx é 1MB — arquivos maiores
+    # voltavam como 413 (HTML) e quebravam o parse de JSON no navegador.
+    client_max_body_size 25m;
+
     # Proxy to Docker container
     location / {
         proxy_pass http://localhost:3000;
@@ -121,6 +125,10 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # Extração por IA de arquivos grandes pode levar minutos — o padrão
+        # de 60s derrubava a requisição com 504 no meio da extração.
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
     }
 }
 ```

@@ -37,24 +37,45 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
+/**
+ * Erros que chegam do PROXY (nginx), não da API: o corpo é HTML e o parse de
+ * JSON estourava com o críptico "The string did not match the expected
+ * pattern" (Safari). Traduz o status para uma mensagem acionável.
+ */
+function mensagemHttpProxy(status: number): string {
+  if (status === 413) {
+    return "O arquivo é maior do que o servidor aceita (HTTP 413). " +
+      "Ajuste no nginx: client_max_body_size 25m.";
+  }
+  if (status === 502 || status === 503 || status === 504) {
+    return `O servidor demorou além do tempo limite do proxy (HTTP ${status}). ` +
+      "Ajuste no nginx: proxy_read_timeout 300s. Arquivos grandes podem levar minutos para extrair.";
+  }
+  return `O servidor respondeu com um erro inesperado (HTTP ${status}).`;
+}
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
-      fetch(input, init) {
+      async fetch(input, init) {
         // Add Authorization header if token exists in localStorage (Safari iOS fallback)
         const token = getStoredToken();
         const headers = new Headers(init?.headers);
         if (token) {
           headers.set("Authorization", `Bearer ${token}`);
         }
-        
-        return globalThis.fetch(input, {
+
+        const res = await globalThis.fetch(input, {
           ...(init ?? {}),
           headers,
           credentials: "include",
         });
+        if (!res.ok && !(res.headers.get("content-type") ?? "").includes("json")) {
+          throw new Error(mensagemHttpProxy(res.status));
+        }
+        return res;
       },
     }),
   ],
