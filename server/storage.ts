@@ -70,8 +70,26 @@ export async function storageDelete(relKey: string): Promise<void> {
 // ============================================================
 
 /**
- * Normalize S3 key by removing leading slashes
+ * Normalize S3 key by removing leading slashes.
+ *
+ * ACEITA TAMBÉM UMA URL COMPLETA (pré-assinada ou não): registros legados
+ * gravaram a URL inteira no campo fileKey — re-assinar "https://…" como se
+ * fosse chave devolvia NoSuchKey. Aqui extraímos a chave real do caminho
+ * (descartando query string) e, no estilo path (s3.região.amazonaws.com/
+ * bucket/chave), descartamos também o bucket.
  */
 function normalizeKey(relKey: string): string {
-  return relKey.replace(/^\/+/, "");
+  let key = relKey;
+  if (/^https?:\/\//i.test(key)) {
+    try {
+      const u = new URL(key);
+      let path = decodeURIComponent(u.pathname);
+      if (/^s3[.-]/i.test(u.hostname)) {
+        // path-style: /bucket/chave... → remove o 1º segmento (bucket)
+        path = path.replace(/^\/[^/]+/, "");
+      }
+      key = path;
+    } catch { /* segue com o valor original */ }
+  }
+  return key.replace(/^\/+/, "");
 }

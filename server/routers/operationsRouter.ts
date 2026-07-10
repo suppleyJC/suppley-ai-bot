@@ -82,6 +82,8 @@ export const operationsRouter = router({
       regimeTributario: z.enum(["lucro_real", "lucro_presumido", "simples_nacional"]).optional(),
       planilha: z.object({
         url: z.string(),
+        // Chave permanente no storage — sem ela, o anexo perde o link em ~1h.
+        fileKey: z.string().optional(),
         nome: z.string(),
         formato: z.enum(["excel", "pdf"]).optional(),
       }).optional(),
@@ -114,7 +116,9 @@ export const operationsRouter = router({
             operacaoId,
             tipo: input.planilha.formato === "pdf" ? "pdf" : "outro",
             nome: input.planilha.nome,
-            fileKey: input.planilha.url,
+            // Chave real quando disponível; a URL como fallback é saneada
+            // pelo storage (normalizeKey extrai a chave de uma URL completa).
+            fileKey: input.planilha.fileKey ?? input.planilha.url,
             fileUrl: input.planilha.url,
             contentType: input.planilha.formato === "pdf"
               ? "application/pdf"

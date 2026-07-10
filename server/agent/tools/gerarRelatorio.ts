@@ -187,14 +187,16 @@ export const gerarRelatorioTool: AgentTool = {
 
     // 5) Sobe ao storage e obtém o link
     let url: string;
+    const fileKey = `reports/excambia-calc-${ctx.userId}-${Date.now()}.${ext}`;
     try {
-      const key = `reports/excambia-calc-${ctx.userId}-${Date.now()}.${ext}`;
-      ({ url } = await storagePut(key, buffer, contentType));
+      ({ url } = await storagePut(fileKey, buffer, contentType));
     } catch (e: any) {
       return { ok: false, summary: "Arquivo gerado, mas falhou ao subir para o storage.", error: String(e?.message ?? e) };
     }
 
-    // 6) WORKFLOW AUDITÁVEL: registra como anexo na operação (se houver)
+    // 6) WORKFLOW AUDITÁVEL: registra como anexo na operação (se houver).
+    // fileKey = CHAVE permanente (a URL pré-assinada expira em ~1h — gravar a
+    // URL no lugar da chave quebrava o "abrir anexo" com NoSuchKey).
     if (ctx.operacaoId) {
       try {
         await operacaoService.anexarDocumento({
@@ -202,7 +204,7 @@ export const gerarRelatorioTool: AgentTool = {
           operacaoId: ctx.operacaoId,
           tipo: formato === "pdf" ? "pdf" : "outro",
           nome: `${nome}.${ext}`,
-          fileKey: url,
+          fileKey,
           fileUrl: url,
           contentType,
           autor: "excambia",
@@ -221,7 +223,7 @@ export const gerarRelatorioTool: AgentTool = {
         (custo != null
           ? ` (custo líquido ~ R$ ${Number(custo).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}).`
           : "."),
-      data: { url, formato, fileName: `${nome}.${ext}` },
+      data: { url, fileKey, formato, fileName: `${nome}.${ext}` },
     };
   },
 };

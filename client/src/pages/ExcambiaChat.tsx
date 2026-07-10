@@ -801,7 +801,7 @@ function Message({ role, content, pending, criadaEm, toolResults, conversaId, op
 
 /** Extrai do array de toolResults o cálculo e/ou a planilha gerada. */
 function extractCalc(toolResults: any): {
-  planilha?: { url: string; fileName: string; formato?: string };
+  planilha?: { url: string; fileKey?: string; fileName: string; formato?: string };
   resumo?: { custo?: number; preco?: number; margemPct?: number; consumo?: boolean };
 } | null {
   if (!Array.isArray(toolResults)) return null;
@@ -810,7 +810,7 @@ function extractCalc(toolResults: any): {
   for (const tr of toolResults) {
     if (!tr || tr.ok === false) continue;
     if (tr.name === "gerar_relatorio_calculo" && tr.data?.url) {
-      planilha = { url: tr.data.url, fileName: tr.data.fileName ?? "Planilha.xlsx", formato: tr.data.formato };
+      planilha = { url: tr.data.url, fileKey: tr.data.fileKey, fileName: tr.data.fileName ?? "Planilha.xlsx", formato: tr.data.formato };
     }
     if (tr.name === "montar_calculo" && tr.data?.summary) {
       const sm = tr.data.summary;
@@ -852,7 +852,7 @@ function CalcResultCard({ toolResults, conversaId, operacaoId }: {
         conversaId,
         titulo,
         planilha: calc?.planilha
-          ? { url: calc.planilha.url, nome: calc.planilha.fileName, formato: calc.planilha.formato === "pdf" ? "pdf" : "excel" }
+          ? { url: calc.planilha.url, fileKey: calc.planilha.fileKey, nome: calc.planilha.fileName, formato: calc.planilha.formato === "pdf" ? "pdf" : "excel" }
           : undefined,
         snapshot: calc?.resumo ?? {},
       });
