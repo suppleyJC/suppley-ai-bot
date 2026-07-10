@@ -131,6 +131,20 @@ export const montarCalculoTool: AgentTool = {
             ` 🎯 Preço-alvo R$ ${brl(precoVendaAlvoBrl)}: NÃO fecha no FOB atual — o mínimo com a margem é ` +
             `R$ ${brl(alvoData.precoVendaSugerido)}.${fatorTxt}`;
         }
+        // Números COERENTES por linha: custo posto RECALCULADO no FOB-alvo +
+        // autovalidação do solve. NUNCA apresente o custo do FOB atual ao lado
+        // do FOB-alvo (mistura de linhas gera contradição na tela).
+        if (alvoData.custoNacionalizadoNoAlvo != null) {
+          alvoTxt +=
+            ` No FOB-ALVO, o custo nacionalizado (líquido de créditos) é ~R$ ${brl(alvoData.custoNacionalizadoNoAlvo)}` +
+            (alvoData.reversoConfere === true
+              ? ` — CONFERIDO: recalculando no FOB-alvo, o preço de venda bate com o alvo.`
+              : alvoData.reversoConfere === false
+                ? ` — ATENÇÃO: a conferência no FOB-alvo divergiu do alvo; apresente como aproximação e sugira o cálculo completo.`
+                : ".") +
+            ` IMPORTANTE ao apresentar: use APENAS estes números do motor (não derive custo posto à mão);` +
+            ` se o custo líquido ficar abaixo de FOB×câmbio, explicite que é por causa dos CRÉDITOS tributários do regime (não é erro).`;
+        }
       } catch {
         /* análise de alvo é best-effort; não bloqueia o cálculo */
       }

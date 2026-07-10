@@ -429,6 +429,16 @@ export interface PrecoAlvoAnalise {
   fatorFob: number | null;
   /** Redução necessária no FOB, em % (ou null). */
   reducaoNecessariaPct: number | null;
+  /**
+   * Custo nacionalizado total RECALCULADO NO FOB-ALVO (não no FOB atual!).
+   * É este o "custo posto" a apresentar ao lado do FOB-alvo — misturar o
+   * custo do FOB atual com o FOB-alvo gera números incoerentes na tela.
+   */
+  custoNacionalizadoNoAlvo: number | null;
+  /** Preço de venda que o motor devolve no FOB-alvo (autovalidação do reverso). */
+  precoVendaNoAlvo: number | null;
+  /** true quando |precoVendaNoAlvo − alvo| ≤ 1% — o solve reverso CONFERE. */
+  reversoConfere: boolean | null;
 }
 
 /**
@@ -474,6 +484,28 @@ export async function analisarPrecoAlvo(
     }
   }
 
+  // 3ª amostra: roda o motor NO FOB-ALVO. Duas funções: (a) devolver o custo
+  // posto coerente com o FOB-alvo (o custo do FOB atual NÃO vale para a linha
+  // do alvo); (b) AUTOVALIDAR o solve — o preço de venda no FOB-alvo tem que
+  // bater com o alvo (tolerância 1%), senão o resultado não sai como "certo".
+  let custoNacionalizadoNoAlvo: number | null = null;
+  let precoVendaNoAlvo: number | null = null;
+  let reversoConfere: boolean | null = null;
+  if (fobAlvoTotal != null && fatorFob != null && fatorFob > 0) {
+    try {
+      const inputAlvo: EstimativaInput = {
+        ...input,
+        products: input.products.map((p) => ({ ...p, unitPrice: p.unitPrice * fatorFob! })),
+      };
+      const rAlvo = await calculateEstimativa(inputAlvo);
+      custoNacionalizadoNoAlvo = rAlvo.summary.netCostTotal;
+      precoVendaNoAlvo = rAlvo.summary.salePriceTotal;
+      reversoConfere =
+        precoVendaAlvoBrl > 0 &&
+        Math.abs(precoVendaNoAlvo - precoVendaAlvoBrl) / precoVendaAlvoBrl <= 0.01;
+    } catch { /* validação é best-effort; os campos ficam null */ }
+  }
+
   return {
     precoVendaAlvo: precoVendaAlvoBrl,
     precoVendaSugerido: sp1,
@@ -484,5 +516,8 @@ export async function analisarPrecoAlvo(
     fobAlvoTotal,
     fatorFob,
     reducaoNecessariaPct,
+    custoNacionalizadoNoAlvo,
+    precoVendaNoAlvo,
+    reversoConfere,
   };
 }

@@ -142,8 +142,9 @@ export const precificarReferenciaTool: AgentTool = {
           `Sem preço na nossa base e sem referência estruturada para "${termo}"${ncmAlvo ? ` (NCM ${ncmAlvo})` : ""}. ` +
           `PRÓXIMO PASSO: traga uma FAIXA DE PREÇO INTERNACIONAL de referência pela pesquisa web (marketplaces B2B, relatórios de mercado), ` +
           `apresente como estimativa de mercado COM a fonte, e ofereça a cotação direta (enviar_rfq) para o número real. ` +
-          `Não mencione que a base/Comex não retornou — apenas siga com a estimativa de mercado.`,
-        data: { termo, base: null, externo: externo ?? null },
+          `MÁSCARA DE APRESENTAÇÃO: NUNCA diga que o item "não consta na base"; em tabelas, preencha a coluna ` +
+          `Fornecedor com "Preço de Mercado" e siga normalmente com a estimativa.`,
+        data: { termo, base: null, externo: externo ?? null, fornecedorExibicao: "Preço de Mercado" },
       };
     }
 
@@ -201,10 +202,19 @@ export const precificarReferenciaTool: AgentTool = {
       }
     }
 
+    // MÁSCARA DE FONTE: quando a referência veio SÓ do mercado (sem cotação na
+    // base), o fornecedor a exibir é "Preço de Mercado" — nunca "não consta na base".
+    if (!base && externo?.disponivel) {
+      partes.push(
+        `APRESENTAÇÃO: esta referência vem do mercado (sem cotação própria) — na tabela, preencha ` +
+        `Fornecedor com "Preço de Mercado". NÃO diga que o item não consta na base.`,
+      );
+    }
+
     return {
       ok: true,
       summary: partes.length ? partes.join("\n") : ref.leitura,
-      data: { ...ref, candidatos },
+      data: { ...ref, candidatos, fornecedorExibicao: base ? undefined : "Preço de Mercado" },
     };
   },
 };
