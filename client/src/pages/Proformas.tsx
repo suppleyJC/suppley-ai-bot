@@ -174,15 +174,31 @@ export default function Proformas() {
   const extractStartMutation = trpc.proforma.extractStart.useMutation();
   const createMutation = trpc.proforma.create.useMutation();
   const updateMutation = trpc.proforma.update.useMutation();
-  const distributeMutation = trpc.proforma.distribute.useMutation();
+  // Feedback imediato + reatividade: toast com o resultado e invalidação de
+  // TUDO que a distribuição toca (lista/detalhe da proforma, Ativos, Fornecedores).
+  const distributeMutation = trpc.proforma.distribute.useMutation({
+    onSuccess: (dist, vars) => {
+      toast.success(
+        `✓ Distribuída: fornecedor em Indústrias & Fornecedores · ${dist.productIds.length} produto(s) em Ativos & Insumos`,
+      );
+      utils.proforma.list.invalidate();
+      utils.proforma.get.invalidate({ id: vars.proformaId });
+      utils.products.list.invalidate();
+      utils.industries.list.invalidate();
+    },
+    onError: (err) => toast.error(erroLegivel(err)),
+  });
   const deleteMutation = trpc.proforma.delete.useMutation({
-    onSuccess: (res) => {
+    onSuccess: (res, vars) => {
       const n = res?.deletedProductIds?.length ?? 0;
       toast.success(
         n > 0
           ? `Proforma excluída · ${n} produto(s) removido(s) de Ativos & Insumos`
           : "Proforma excluída",
       );
+      // O painel direito acompanha NA HORA: sem isto, o item excluído ficava
+      // visível na coluna de detalhe até um reload manual.
+      setSelectedId((atual) => (atual === vars.proformaId ? null : atual));
       // Atualiza ambas as listas (proformas + produtos vinculados)
       utils.proforma.list.invalidate();
       utils.products.list.invalidate();
@@ -473,10 +489,10 @@ export default function Proformas() {
 
       toast.success(`Proforma ${created.numero} criada. Distribuindo para a Base...`);
 
-      const dist = await distributeMutation.mutateAsync({ proformaId: created.id });
-      toast.success(
-        `✓ Fornecedor enviado para Indústrias & Fornecedores · ${dist.productIds.length} produto(s) em Ativos & Insumos`
-      );
+      // O toast de sucesso/erro e as invalidações vêm do onSuccess/onError da
+      // mutação; se a distribuição falhar, a proforma segue na lista como
+      // "Extraída" para redistribuir pelo card.
+      await distributeMutation.mutateAsync({ proformaId: created.id }).catch(() => {});
 
       setDraft(null);
       setEditingId(null);
@@ -886,6 +902,8 @@ export default function Proformas() {
                       loadingEditId={loadingEditId}
                       onEdit={openForEdit}
                       onDistribute={(id) => distributeMutation.mutate({ proformaId: id })}
+                      distributing={distributeMutation.isPending}
+                      deleting={deleteMutation.isPending}
                       onDelete={handleDeleteProforma}
                       onClose={() => setSelectedId(null)}
                     />
@@ -901,6 +919,8 @@ export default function Proformas() {
                     loadingEditId={loadingEditId}
                     onEdit={openForEdit}
                     onDistribute={(id) => distributeMutation.mutate({ proformaId: id })}
+                    distributing={distributeMutation.isPending}
+                    deleting={deleteMutation.isPending}
                     onDelete={handleDeleteProforma}
                     onClose={() => setSelectedId(null)}
                   />
@@ -951,12 +971,14 @@ function fmtDate(d?: string | Date | null): string {
 
 /** Painel de detalhe da proforma selecionada — abre ao clicar no card. */
 function ProformaDetail({
-  id, loadingEditId, onEdit, onDistribute, onDelete, onClose,
+  id, loadingEditId, onEdit, onDistribute, distributing, deleting, onDelete, onClose,
 }: {
   id: number;
   loadingEditId: number | null;
   onEdit: (id: number) => void | Promise<void>;
   onDistribute: (id: number) => void;
+  distributing?: boolean;
+  deleting?: boolean;
   onDelete: (id: number, label: string) => void;
   onClose: () => void;
 }) {
@@ -997,12 +1019,20 @@ function ProformaDetail({
             <Edit className="h-3.5 w-3.5" /> {loadingEditId === id ? "Abrindo…" : "Revisar"}
           </Button>
           {p.status !== "distribuida" && (
-            <Button size="sm" variant="outline" onClick={() => onDistribute(id)} className="gap-1.5">
-              <Share2 className="h-3.5 w-3.5" /> Distribuir
+            <Button size="sm" variant="outline" onClick={() => onDistribute(id)} disabled={distributing} className="gap-1.5">
+              {distributing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
+              {distributing ? "Distribuindo…" : "Distribuir"}
             </Button>
           )}
-          <Button size="sm" variant="ghost" onClick={() => onDelete(id, label)} className="gap-1.5 text-destructive hover:text-destructive">
-            <Trash2 className="h-3.5 w-3.5" /> Excluir
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onDelete(id, label)}
+            disabled={deleting || distributing}
+            className="gap-1.5 text-destructive hover:text-destructive"
+          >
+            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            {deleting ? "Excluindo…" : "Excluir"}
           </Button>
         </div>
 

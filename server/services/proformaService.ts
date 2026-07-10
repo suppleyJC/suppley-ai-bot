@@ -537,10 +537,43 @@ export async function distributeProformaToBase(
     }
   }
 
-  // 2) Itens → products (Ativos & Insumos)
-  //    Com dedup (P8) e categorização (P7)
-  const productIds: number[] = [];
-  for (const item of items) {
+  // 2) Itens → products (Ativos & Insumos) — dedup (P8) + categorização (P7).
+  // PERFORMANCE: a sugestão de NCM pode envolver IA e cada item percorria esse
+  // caminho EM SÉRIE — o clique em "Distribuir" levava o tempo SOMADO de todos
+  // os itens. Itens de nomes distintos agora rodam em paralelo (lotes de 4);
+  // itens de MESMO nome ficam no mesmo grupo para não criar produto duplicado.
+  type ItemProforma = (typeof items)[number];
+
+  // Item sem preço na cotação: mantém o vínculo do produto, mas não gera
+  // registro no histórico de preços (não há preço a registrar).
+  const registrarPreco = async (item: ItemProforma, ncm?: string) => {
+    if (item.unitPriceCents == null) return;
+    try {
+      const unitPriceBrlCents = Math.round(item.unitPriceCents * exchangeRate);
+      await registerSupplierPrice({
+        userId,
+        supplierId: industriaId || 0,
+        productName: item.productName,
+        ncmCode: ncm,
+        unitPriceCents: item.unitPriceCents,
+        currency: proforma.currency,
+        unit: item.unit || "UN",
+        unitPriceBrlCents,
+        exchangeRate: Math.round(exchangeRate * 1000000), // armazena como rate * 1000000
+        quantity: item.quantity || 1,
+        incoterm: proforma.incoterm || undefined,
+        quotationDate: proforma.quotationDate || undefined,
+      });
+    } catch (err) {
+      console.error(`[proformaService] Falha ao registrar preço de "${item.productName}":`, err);
+    }
+  };
+
+  /** Processa um item; devolve o productId vinculado (ou null). */
+  const processarItem = async (
+    item: ItemProforma,
+    produtoConhecido: number | null,
+  ): Promise<number | null> => {
     let ncm = item.ncmCode || undefined;
     if (!ncm) {
       try {
@@ -554,15 +587,12 @@ export async function distributeProformaToBase(
     }
 
     // P8: Verificar se produto já existe (mesmo nome + mesmo fornecedor)
-    const existingProduct = await findProductByNameAndSupplier(
-      userId,
-      item.productName,
-      industriaId ?? undefined,
-    );
+    const existingProduct = produtoConhecido
+      ? { id: produtoConhecido }
+      : await findProductByNameAndSupplier(userId, item.productName, industriaId ?? undefined);
 
     if (existingProduct) {
       // Produto já existe: registra em supplierPrices para enriquecer histórico
-      productIds.push(existingProduct.id);
       await db.updateProformaItem(item.id, { productId: existingProduct.id });
 
       // Backfill do país de origem se o card ainda não tiver (herda do fornecedor da proforma).
@@ -579,94 +609,71 @@ export async function distributeProformaToBase(
         }
       }
 
-      // Item sem preço na cotação: mantém o vínculo do produto, mas não gera
-      // registro no histórico de preços (não há preço a registrar).
-      if (item.unitPriceCents != null) {
-        try {
-          const unitPriceBrlCents = Math.round(item.unitPriceCents * exchangeRate);
-          await registerSupplierPrice({
-            userId,
-            supplierId: industriaId || 0,
-            productName: item.productName,
-            ncmCode: ncm,
-            unitPriceCents: item.unitPriceCents,
-            currency: proforma.currency,
-            unit: item.unit || "UN",
-            unitPriceBrlCents,
-            exchangeRate: Math.round(exchangeRate * 1000000), // armazena como rate * 1000000
-            quantity: item.quantity || 1,
-            incoterm: proforma.incoterm || undefined,
-            quotationDate: proforma.quotationDate || undefined,
-          });
-        } catch (err) {
-          console.error(
-            `[proformaService] Falha ao registrar preço para produto existente ${existingProduct.id}:`,
-            err,
-          );
-        }
-      }
-    } else {
-      // Produto novo: cria com categorização inferida (P7)
-      const categories = await inferCategories(
-        item.productName,
-        userId,
-        ncm,
-      );
+      await registrarPreco(item, ncm);
+      return existingProduct.id;
+    }
 
-      const product = await db.createProduct({
-        userId,
-        name: item.productName,
-        description: item.description ?? undefined,
-        ncmCode: ncm || "00000000",
-        unit: item.unit || "UN",
-        supplierId: industriaId ?? undefined,
-        origem: "cotado_nao_importado",
-        // País de origem do card = país do fornecedor da proforma que o originou.
-        paisOrigem: proforma.supplierCountry ?? undefined,
-        ncmStatus: ncm ? "validado" : "sugerido",
-        custoImportadoRefCents: item.unitPriceCents ?? undefined,
-        // P7: Categorização inferida
-        classe: categories.classe,
-        categoria: categories.categoria,
-        subcategoria: categories.subcategoria,
-        criticidade: undefined,
-        tags: undefined,
-        aplicacao: undefined,
-        material: undefined,
-        dimensoes: undefined,
-      });
+    // Produto novo: cria com categorização inferida (P7)
+    const categories = await inferCategories(item.productName, userId, ncm);
 
-      if (product) {
-        productIds.push(product.id);
-        await db.updateProformaItem(item.id, { productId: product.id });
+    const product = await db.createProduct({
+      userId,
+      name: item.productName,
+      description: item.description ?? undefined,
+      ncmCode: ncm || "00000000",
+      unit: item.unit || "UN",
+      supplierId: industriaId ?? undefined,
+      origem: "cotado_nao_importado",
+      // País de origem do card = país do fornecedor da proforma que o originou.
+      paisOrigem: proforma.supplierCountry ?? undefined,
+      ncmStatus: ncm ? "validado" : "sugerido",
+      custoImportadoRefCents: item.unitPriceCents ?? undefined,
+      // P7: Categorização inferida
+      classe: categories.classe,
+      categoria: categories.categoria,
+      subcategoria: categories.subcategoria,
+      criticidade: undefined,
+      tags: undefined,
+      aplicacao: undefined,
+      material: undefined,
+      dimensoes: undefined,
+    });
 
-        // Registra o preço inicial em supplierPrices (só quando o item tem preço)
-        if (item.unitPriceCents != null) {
-          try {
-            const unitPriceBrlCents = Math.round(item.unitPriceCents * exchangeRate);
-            await registerSupplierPrice({
-              userId,
-              supplierId: industriaId || 0,
-              productName: item.productName,
-              ncmCode: ncm,
-              unitPriceCents: item.unitPriceCents,
-              currency: proforma.currency,
-              unit: item.unit || "UN",
-              unitPriceBrlCents,
-              exchangeRate: Math.round(exchangeRate * 1000000),
-              quantity: item.quantity || 1,
-              incoterm: proforma.incoterm || undefined,
-              quotationDate: proforma.quotationDate || undefined,
-            });
-          } catch (err) {
-            console.error(
-              `[proformaService] Falha ao registrar preço para novo produto ${product.id}:`,
-              err,
-            );
+    if (!product) return null;
+    await db.updateProformaItem(item.id, { productId: product.id });
+    await registrarPreco(item, ncm);
+    return product.id;
+  };
+
+  // Agrupa por nome normalizado: dentro do grupo é sequencial (o primeiro cria
+  // ou encontra o produto; os demais reutilizam), entre grupos é paralelo.
+  const grupos = new Map<string, ItemProforma[]>();
+  for (const item of items) {
+    const chave = item.productName.trim().toLowerCase().replace(/\s+/g, " ");
+    const grupo = grupos.get(chave);
+    if (grupo) grupo.push(item);
+    else grupos.set(chave, [item]);
+  }
+
+  const listaGrupos = Array.from(grupos.values());
+  const productIds: number[] = [];
+  const CONCORRENCIA = 4;
+  for (let i = 0; i < listaGrupos.length; i += CONCORRENCIA) {
+    const resultados = await Promise.all(
+      listaGrupos.slice(i, i + CONCORRENCIA).map(async (grupo) => {
+        const ids: number[] = [];
+        let produtoDoGrupo: number | null = null;
+        for (const item of grupo) {
+          const pid = await processarItem(item, produtoDoGrupo);
+          if (pid != null) {
+            produtoDoGrupo = pid;
+            ids.push(pid);
           }
         }
-      }
-    }
+        return ids;
+      }),
+    );
+    for (const ids of resultados) productIds.push(...ids);
   }
 
   // 3) Marca proforma como distribuida com timestamp
