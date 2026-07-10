@@ -59,6 +59,8 @@ interface OperacaoRow {
   prazoDesejado?: string | Date | null;
   origemDesejada?: string | null;
   atualizadaEm?: Date | null;
+  criadaEm?: string | Date | null;
+  criadoPorNome?: string | null;
 }
 
 function toEntity(o: OperacaoRow) {
@@ -76,6 +78,8 @@ function toEntity(o: OperacaoRow) {
     deadline: o.prazoDesejado,
     origin: o.origemDesejada ?? undefined,
     lastUpdated: o.atualizadaEm,
+    createdAt: o.criadaEm ?? undefined,
+    creatorName: o.criadoPorNome ?? undefined,
     avatar: { initials: o.codigo.substring(0, 2).toUpperCase(), color: "violet" },
   };
 }

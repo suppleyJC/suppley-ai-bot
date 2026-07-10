@@ -135,6 +135,12 @@ export default function OperacaoDetail() {
                 .filter(Boolean)
                 .join(" · ") || "—"}
             </p>
+            {/* Auditoria: quem criou a operação (no chat ou no painel), quando e a que horas */}
+            <p className="mt-0.5 text-xs text-slate-400">
+              Criada{(data as any).criadoPorNome ? ` por ${(data as any).criadoPorNome}` : ""}
+              {operacao.criadaEm &&
+                ` em ${new Date(operacao.criadaEm).toLocaleDateString("pt-BR")} às ${new Date(operacao.criadaEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`}
+            </p>
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {modoMeta && (

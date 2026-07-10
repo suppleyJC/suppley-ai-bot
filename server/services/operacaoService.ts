@@ -10,13 +10,14 @@
  *
  * Não chama LLM nem rede — pura orquestração sobre o banco (Drizzle).
  */
-import { and, desc, eq, like, sql } from "drizzle-orm";
+import { and, desc, eq, like, sql, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   operacoes, operacaoEventos, operacaoEstagios, operacaoAnexos, operacaoFinanceiro, operacaoMarcos, demandas,
-  quotations, conversas,
-  type InsertOperacao, type Operacao,
+  quotations, conversas, users,
+  type InsertOperacao, type Operacao, type OperacaoAnexo,
 } from "../../drizzle/schema";
+import { storageGet } from "../storage";
 
 export type Estagio = "demand" | "source" | "analyze" | "execute" | "finance" | "closed" | "lost";
 export type Prioridade = "baixa" | "media" | "alta" | "critica";
@@ -97,6 +98,45 @@ const MARCO_EVENTO: Record<TipoMarco, string> = {
   nacionalizado: "nacionalizado",
   entregue: "entregue",
 };
+
+// ---------------------------------------------------------------------------
+// NÍVEL DE ACESSO: usuário comum só enxerga/atua no que criou; administrador
+// tem visibilidade e acesso TOTAL (o filtro de posse é dispensado).
+// ---------------------------------------------------------------------------
+function posseOperacao(operacaoId: number, userId: number, admin?: boolean): SQL | undefined {
+  return admin
+    ? eq(operacoes.id, operacaoId)
+    : and(eq(operacoes.id, operacaoId), eq(operacoes.userId, userId));
+}
+
+/**
+ * Corrige nomes gravados com escapes JSON literais no legado
+ * ("Acess\\u00f3rios" → "Acessórios").
+ */
+function decodeUnicodeEscapes(s: string): string {
+  return s.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+}
+
+/**
+ * Prepara anexos para a UI: RE-ASSINA a URL de download a partir do fileKey
+ * (a fileUrl gravada no banco é pré-assinada e EXPIRA em ~1h — era por isso
+ * que "abrir anexo do card" caía em AccessDenied/Request has expired).
+ * Best-effort: sem fileKey (legado) ou falha no storage, mantém a URL salva.
+ */
+const ANEXO_URL_TTL = 6 * 3600; // cobre a sessão de trabalho
+async function prepararAnexos<T extends Pick<OperacaoAnexo, "nome" | "fileKey" | "fileUrl">>(
+  anexos: T[],
+): Promise<T[]> {
+  return Promise.all(
+    anexos.map(async (a) => {
+      let fileUrl = a.fileUrl;
+      if (a.fileKey) {
+        try { fileUrl = (await storageGet(a.fileKey, ANEXO_URL_TTL)).url; } catch { /* mantém a salva */ }
+      }
+      return { ...a, nome: decodeUnicodeEscapes(a.nome), fileUrl };
+    }),
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Código sequencial OP-AAAA-NNNN
@@ -223,12 +263,13 @@ export async function updateOperacao(input: {
   trackingNavio?: string | null;
   trackingEta?: Date | null;
   trackingStatus?: string | null;
+  admin?: boolean;
 }): Promise<Operacao | null> {
   const db = await getDb();
   if (!db) return null;
 
   const [op] = await db.select().from(operacoes)
-    .where(and(eq(operacoes.id, input.operacaoId), eq(operacoes.userId, input.userId)))
+    .where(posseOperacao(input.operacaoId, input.userId, input.admin))
     .limit(1);
   if (!op) throw new Error("operação não encontrada");
 
@@ -267,11 +308,18 @@ export async function advanceStage(input: {
   operacaoId: number;
   to?: Estagio;          // se omitido, vai para o próximo
   gateChecklist?: unknown;
+  /** Posse: quando informado, usuário comum só avança a própria operação. */
+  userId?: number;
+  admin?: boolean;
 }): Promise<{ ok: boolean; estagio?: Estagio; message?: string }> {
   const db = await getDb();
   if (!db) return { ok: false, message: "sem conexão" };
 
-  const [op] = await db.select().from(operacoes).where(eq(operacoes.id, input.operacaoId)).limit(1);
+  const [op] = await db.select().from(operacoes)
+    .where(input.userId != null
+      ? posseOperacao(input.operacaoId, input.userId, input.admin)
+      : eq(operacoes.id, input.operacaoId))
+    .limit(1);
   if (!op) return { ok: false, message: "operação não encontrada" };
 
   const current = op.estagioAtual as Estagio;
@@ -307,11 +355,18 @@ export async function advanceStage(input: {
 export async function setStageManual(input: {
   operacaoId: number;
   to: Estagio;
+  /** Posse: quando informado, usuário comum só move a própria operação. */
+  userId?: number;
+  admin?: boolean;
 }): Promise<{ ok: boolean; estagio?: Estagio; message?: string }> {
   const db = await getDb();
   if (!db) return { ok: false, message: "sem conexão" };
 
-  const [op] = await db.select().from(operacoes).where(eq(operacoes.id, input.operacaoId)).limit(1);
+  const [op] = await db.select().from(operacoes)
+    .where(input.userId != null
+      ? posseOperacao(input.operacaoId, input.userId, input.admin)
+      : eq(operacoes.id, input.operacaoId))
+    .limit(1);
   if (!op) return { ok: false, message: "operação não encontrada" };
 
   const current = op.estagioAtual as Estagio;
@@ -391,9 +446,15 @@ export async function decideGoNoGo(input: {
   decidedBy: number;
   motivo?: string;
   valoresSnapshot?: unknown;
+  admin?: boolean;
 }) {
   const db = await getDb();
   if (!db) return;
+  // Posse: usuário comum só decide sobre a própria operação.
+  const [op] = await db.select().from(operacoes)
+    .where(posseOperacao(input.operacaoId, input.decidedBy, input.admin))
+    .limit(1);
+  if (!op) throw new Error("operação não encontrada");
   await db.update(operacoes).set({
     status: input.decision,
     decisaoGoNoGo: {
@@ -436,12 +497,13 @@ export async function anexarDocumento(input: {
   tamanhoBytes?: number;
   descricao?: string;
   autor?: "usuario" | "excambia" | "sistema";
+  admin?: boolean;
 }) {
   const db = await getDb();
   if (!db) return null;
 
   const [op] = await db.select().from(operacoes)
-    .where(and(eq(operacoes.id, input.operacaoId), eq(operacoes.userId, input.userId)))
+    .where(posseOperacao(input.operacaoId, input.userId, input.admin))
     .limit(1);
   if (!op) throw new Error("operação não encontrada");
 
@@ -475,19 +537,21 @@ export async function anexarDocumento(input: {
   return anexo ?? null;
 }
 
-export async function listarAnexos(userId: number, operacaoId: number) {
+export async function listarAnexos(userId: number, operacaoId: number, admin = false) {
   const db = await getDb();
   if (!db) return [];
   const [op] = await db.select().from(operacoes)
-    .where(and(eq(operacoes.id, operacaoId), eq(operacoes.userId, userId)))
+    .where(posseOperacao(operacaoId, userId, admin))
     .limit(1);
   if (!op) return [];
-  return db.select().from(operacaoAnexos)
+  const rows = await db.select().from(operacaoAnexos)
     .where(eq(operacaoAnexos.operacaoId, operacaoId))
     .orderBy(desc(operacaoAnexos.criadoEm));
+  // Link sempre abrível (re-assinado) + nome saneado.
+  return prepararAnexos(rows);
 }
 
-export async function removerAnexo(userId: number, anexoId: number) {
+export async function removerAnexo(userId: number, anexoId: number, admin = false) {
   const db = await getDb();
   if (!db) return { ok: false, message: "sem conexão" };
 
@@ -495,9 +559,9 @@ export async function removerAnexo(userId: number, anexoId: number) {
     .where(eq(operacaoAnexos.id, anexoId)).limit(1);
   if (!anexo) return { ok: false, message: "anexo não encontrado" };
 
-  // Confirma que a operação pertence ao usuário
+  // Confirma que a operação pertence ao usuário (admin passa direto)
   const [op] = await db.select().from(operacoes)
-    .where(and(eq(operacoes.id, anexo.operacaoId), eq(operacoes.userId, userId)))
+    .where(posseOperacao(anexo.operacaoId, userId, admin))
     .limit(1);
   if (!op) return { ok: false, message: "sem permissão" };
 
@@ -532,12 +596,13 @@ export async function lancarFinanceiro(input: {
   dataReferencia?: Date;
   vencimento?: Date;
   autor?: "usuario" | "excambia" | "sistema";
+  admin?: boolean;
 }) {
   const db = await getDb();
   if (!db) return null;
 
   const [op] = await db.select().from(operacoes)
-    .where(and(eq(operacoes.id, input.operacaoId), eq(operacoes.userId, input.userId)))
+    .where(posseOperacao(input.operacaoId, input.userId, input.admin))
     .limit(1);
   if (!op) throw new Error("operação não encontrada");
 
@@ -580,11 +645,11 @@ export async function lancarFinanceiro(input: {
   return lanc ?? null;
 }
 
-export async function listarFinanceiro(userId: number, operacaoId: number) {
+export async function listarFinanceiro(userId: number, operacaoId: number, admin = false) {
   const db = await getDb();
   if (!db) return [];
   const [op] = await db.select().from(operacoes)
-    .where(and(eq(operacoes.id, operacaoId), eq(operacoes.userId, userId)))
+    .where(posseOperacao(operacaoId, userId, admin))
     .limit(1);
   if (!op) return [];
   return db.select().from(operacaoFinanceiro)
@@ -592,7 +657,7 @@ export async function listarFinanceiro(userId: number, operacaoId: number) {
     .orderBy(desc(operacaoFinanceiro.criadoEm));
 }
 
-export async function removerFinanceiro(userId: number, lancamentoId: number) {
+export async function removerFinanceiro(userId: number, lancamentoId: number, admin = false) {
   const db = await getDb();
   if (!db) return { ok: false, message: "sem conexão" };
 
@@ -601,7 +666,7 @@ export async function removerFinanceiro(userId: number, lancamentoId: number) {
   if (!lanc) return { ok: false, message: "lançamento não encontrado" };
 
   const [op] = await db.select().from(operacoes)
-    .where(and(eq(operacoes.id, lanc.operacaoId), eq(operacoes.userId, userId)))
+    .where(posseOperacao(lanc.operacaoId, userId, admin))
     .limit(1);
   if (!op) return { ok: false, message: "sem permissão" };
 
@@ -631,12 +696,13 @@ export async function registrarMarco(input: {
   refTipo?: string;
   refId?: number;
   autor?: "usuario" | "excambia" | "sistema";
+  admin?: boolean;
 }) {
   const db = await getDb();
   if (!db) return null;
 
   const [op] = await db.select().from(operacoes)
-    .where(and(eq(operacoes.id, input.operacaoId), eq(operacoes.userId, input.userId)))
+    .where(posseOperacao(input.operacaoId, input.userId, input.admin))
     .limit(1);
   if (!op) throw new Error("operação não encontrada");
 
@@ -699,11 +765,11 @@ export async function registrarMarco(input: {
   return { ...marco, estagioSincronizado };
 }
 
-export async function listarMarcos(userId: number, operacaoId: number) {
+export async function listarMarcos(userId: number, operacaoId: number, admin = false) {
   const db = await getDb();
   if (!db) return [];
   const [op] = await db.select().from(operacoes)
-    .where(and(eq(operacoes.id, operacaoId), eq(operacoes.userId, userId)))
+    .where(posseOperacao(operacaoId, userId, admin))
     .limit(1);
   if (!op) return [];
   return db.select().from(operacaoMarcos)
@@ -719,12 +785,13 @@ export async function concluirOperacao(input: {
   userId: number;
   operacaoId: number;
   resumo?: string;
+  admin?: boolean;
 }): Promise<Operacao | null> {
   const db = await getDb();
   if (!db) return null;
 
   const [op] = await db.select().from(operacoes)
-    .where(and(eq(operacoes.id, input.operacaoId), eq(operacoes.userId, input.userId)))
+    .where(posseOperacao(input.operacaoId, input.userId, input.admin))
     .limit(1);
   if (!op) throw new Error("operação não encontrada");
 
@@ -751,12 +818,12 @@ export async function concluirOperacao(input: {
 // Remove eventos, estágios, anexos, financeiro e marcos antes da própria
 // operação. Validando posse. Não há "soft delete": a esteira é apagada.
 // ---------------------------------------------------------------------------
-export async function deleteOperacao(userId: number, operacaoId: number) {
+export async function deleteOperacao(userId: number, operacaoId: number, admin = false) {
   const db = await getDb();
   if (!db) return { ok: false, message: "sem conexão" };
 
   const [op] = await db.select().from(operacoes)
-    .where(and(eq(operacoes.id, operacaoId), eq(operacoes.userId, userId)))
+    .where(posseOperacao(operacaoId, userId, admin))
     .limit(1);
   if (!op) return { ok: false, message: "operação não encontrada" };
 
@@ -778,12 +845,12 @@ export async function deleteOperacao(userId: number, operacaoId: number) {
 // cliente, fornecedor, regime, prioridade, origem). Não copia a esteira
 // (eventos, cálculo, cotação, marcos): a cópia começa do zero no estágio demand.
 // ---------------------------------------------------------------------------
-export async function duplicateOperacao(userId: number, operacaoId: number): Promise<Operacao | null> {
+export async function duplicateOperacao(userId: number, operacaoId: number, admin = false): Promise<Operacao | null> {
   const db = await getDb();
   if (!db) return null;
 
   const [src] = await db.select().from(operacoes)
-    .where(and(eq(operacoes.id, operacaoId), eq(operacoes.userId, userId)))
+    .where(posseOperacao(operacaoId, userId, admin))
     .limit(1);
   if (!src) throw new Error("operação não encontrada");
 
@@ -801,13 +868,17 @@ export async function duplicateOperacao(userId: number, operacaoId: number): Pro
 // ---------------------------------------------------------------------------
 // Leituras (consumidas pelo Kanban e pela tela da operação)
 // ---------------------------------------------------------------------------
-export async function listOperacoes(userId: number) {
+export async function listOperacoes(userId: number, admin = false) {
   const db = await getDb();
   if (!db) return [];
-  const rows = await db.select().from(operacoes)
-    .where(eq(operacoes.userId, userId))
+  // Auditoria no card: quem criou + quando. Admin vê as operações de TODOS.
+  const rows = await db
+    .select({ op: operacoes, criadoPorNome: users.name, criadoPorEmail: users.email })
+    .from(operacoes)
+    .leftJoin(users, eq(users.id, operacoes.userId))
+    .where(admin ? undefined : eq(operacoes.userId, userId))
     .orderBy(desc(operacoes.atualizadaEm));
-  return rows.map((o) => ({
+  return rows.map(({ op: o, criadoPorNome, criadoPorEmail }) => ({
     id: o.id, codigo: o.codigo, titulo: o.titulo,
     estagioAtual: o.estagioAtual, status: o.status,
     clienteNome: o.clienteNome, fornecedorNome: o.fornecedorNome,
@@ -815,30 +886,41 @@ export async function listOperacoes(userId: number) {
     prioridade: o.prioridade, prazoDesejado: o.prazoDesejado,
     responsavelId: o.responsavelId, origemDesejada: o.origemDesejada,
     modo: o.modo,
+    criadaEm: o.criadaEm,
+    atualizadaEm: o.atualizadaEm,
+    criadoPorNome: criadoPorNome || criadoPorEmail || null,
   }));
 }
 
-export async function getOperacao(userId: number, id: number) {
+export async function getOperacao(userId: number, id: number, admin = false) {
   const db = await getDb();
   if (!db) return null;
   const [op] = await db.select().from(operacoes)
-    .where(and(eq(operacoes.id, id), eq(operacoes.userId, userId))).limit(1);
+    .where(posseOperacao(id, userId, admin)).limit(1);
   if (!op) return null;
   const eventos = await db.select().from(operacaoEventos)
     .where(eq(operacaoEventos.operacaoId, id))
     .orderBy(desc(operacaoEventos.criadoEm));
   const estagios = await db.select().from(operacaoEstagios)
     .where(eq(operacaoEstagios.operacaoId, id));
-  const anexos = await db.select().from(operacaoAnexos)
+  const anexosRaw = await db.select().from(operacaoAnexos)
     .where(eq(operacaoAnexos.operacaoId, id))
     .orderBy(desc(operacaoAnexos.criadoEm));
+  // Link SEMPRE abrível: re-assina pelo fileKey (a URL salva expira em ~1h).
+  const anexos = await prepararAnexos(anexosRaw);
   const financeiro = await db.select().from(operacaoFinanceiro)
     .where(eq(operacaoFinanceiro.operacaoId, id))
     .orderBy(desc(operacaoFinanceiro.criadoEm));
   const marcos = await db.select().from(operacaoMarcos)
     .where(eq(operacaoMarcos.operacaoId, id))
     .orderBy(operacaoMarcos.dataReferencia);
-  return { operacao: op, eventos, estagios, anexos, financeiro, marcos };
+  // Auditoria: quem criou a operação (nome do usuário; e-mail como fallback).
+  const [dono] = await db.select({ name: users.name, email: users.email })
+    .from(users).where(eq(users.id, op.userId)).limit(1);
+  return {
+    operacao: op, eventos, estagios, anexos, financeiro, marcos,
+    criadoPorNome: dono?.name || dono?.email || null,
+  };
 }
 
 // ---------------------------------------------------------------------------

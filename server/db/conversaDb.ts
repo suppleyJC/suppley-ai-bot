@@ -6,26 +6,40 @@
  * (com operação vinculada = operação; sem = avulsa). Não há coluna `tipo`.
  */
 import { getDb } from "./connection";
-import { conversas, conversaMensagens } from "../../drizzle/schema";
+import { conversas, conversaMensagens, users } from "../../drizzle/schema";
 import { and, eq, desc } from "drizzle-orm";
 import type { InsertConversa, InsertConversaMensagem } from "../../drizzle/schema";
 
 type EstagioConversa =
   | "demand" | "source" | "analyze" | "execute" | "finance" | "closed" | "lost";
 
-export async function listConversas(userId: number) {
+/**
+ * Lista conversas ativas. NÍVEL DE ACESSO: usuário comum só vê as PRÓPRIAS;
+ * admin vê as de TODOS (cada linha traz `donoNome` para identificar o autor).
+ */
+export async function listConversas(userId: number, admin = false) {
   const db = await getDb();
   if (!db) return { operacoes: [], avulsas: [] };
 
   const rows = await db
-    .select()
+    .select({ c: conversas, donoNome: users.name, donoEmail: users.email })
     .from(conversas)
-    .where(and(eq(conversas.userId, userId), eq(conversas.status, "ativa")))
+    .leftJoin(users, eq(users.id, conversas.userId))
+    .where(and(
+      admin ? undefined : eq(conversas.userId, userId),
+      eq(conversas.status, "ativa"),
+    ))
     .orderBy(desc(conversas.fixada), desc(conversas.ultimaMensagemEm));
 
+  const mapped = rows.map(({ c, donoNome, donoEmail }) => ({
+    ...c,
+    // Só expõe o dono quando o admin está vendo a conversa de OUTRA pessoa.
+    donoNome: admin && c.userId !== userId ? (donoNome || donoEmail || `usuário #${c.userId}`) : null,
+  }));
+
   return {
-    operacoes: rows.filter((c) => c.operacaoId != null),
-    avulsas: rows.filter((c) => c.operacaoId == null),
+    operacoes: mapped.filter((c) => c.operacaoId != null),
+    avulsas: mapped.filter((c) => c.operacaoId == null),
   };
 }
 
@@ -48,14 +62,14 @@ export async function listConversasFlat(
     .orderBy(desc(conversas.fixada), desc(conversas.ultimaMensagemEm));
 }
 
-export async function getConversa(id: number, userId: number) {
+export async function getConversa(id: number, userId: number, admin = false) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível");
 
   const [conv] = await db
     .select()
     .from(conversas)
-    .where(and(eq(conversas.id, id), eq(conversas.userId, userId)));
+    .where(admin ? eq(conversas.id, id) : and(eq(conversas.id, id), eq(conversas.userId, userId)));
 
   if (!conv) throw new Error("Conversa não encontrada");
 

@@ -181,6 +181,8 @@ function ConvItem({ c, active, dot, avulsa, onSelect, acoes }: {
         </div>
         <div className="truncate text-[10.5px] text-slate-400">
           {c.operacaoId ? `OP-${String(c.operacaoId).padStart(4, "0")}` : "consulta"}
+          {/* visão de admin: identifica de quem é a conversa */}
+          {c.donoNome ? <span className="text-violet-500"> · {c.donoNome}</span> : null}
         </div>
       </div>
 

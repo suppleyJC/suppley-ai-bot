@@ -13,12 +13,15 @@ import { z } from "zod";
 import * as svc from "../services/operacaoService";
 import * as conversaDb from "../db/conversaDb";
 
+/** Administrador tem visibilidade/acesso TOTAL; usuário comum só ao que criou. */
+const isAdmin = (ctx: { user: { role?: string | null } }) => ctx.user.role === "admin";
+
 export const operationsRouter = router({
-  list: protectedProcedure.query(({ ctx }) => svc.listOperacoes(ctx.user.id)),
+  list: protectedProcedure.query(({ ctx }) => svc.listOperacoes(ctx.user.id, isAdmin(ctx))),
 
   get: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(({ ctx, input }) => svc.getOperacao(ctx.user.id, input.id)),
+    .query(({ ctx, input }) => svc.getOperacao(ctx.user.id, input.id, isAdmin(ctx))),
 
   create: protectedProcedure
     .input(z.object({
@@ -38,7 +41,7 @@ export const operationsRouter = router({
       to: z.enum(["demand", "source", "analyze", "execute", "finance", "closed", "lost"]).optional(),
       gateChecklist: z.unknown().optional(),
     }))
-    .mutation(({ input }) => svc.advanceStage(input)),
+    .mutation(({ ctx, input }) => svc.advanceStage({ ...input, userId: ctx.user.id, admin: isAdmin(ctx) })),
 
   // Move manual entre colunas do Kanban (drag-and-drop) — qualquer direção.
   setStage: protectedProcedure
@@ -46,7 +49,7 @@ export const operationsRouter = router({
       operacaoId: z.number(),
       to: z.enum(["demand", "source", "analyze", "execute", "finance", "closed", "lost"]),
     }))
-    .mutation(({ input }) => svc.setStageManual(input)),
+    .mutation(({ ctx, input }) => svc.setStageManual({ ...input, userId: ctx.user.id, admin: isAdmin(ctx) })),
 
   linkQuotation: protectedProcedure
     .input(z.object({ operacaoId: z.number(), quotationId: z.number() }))
@@ -145,7 +148,7 @@ export const operationsRouter = router({
       valoresSnapshot: z.unknown().optional(),
     }))
     .mutation(({ ctx, input }) =>
-      svc.decideGoNoGo({ ...input, decidedBy: ctx.user.id })),
+      svc.decideGoNoGo({ ...input, decidedBy: ctx.user.id, admin: isAdmin(ctx) })),
 
   addEvento: protectedProcedure
     .input(z.object({
@@ -177,17 +180,17 @@ export const operationsRouter = router({
       trackingEta: z.date().nullable().optional(),
       trackingStatus: z.string().nullable().optional(),
     }))
-    .mutation(({ ctx, input }) => svc.updateOperacao({ userId: ctx.user.id, ...input })),
+    .mutation(({ ctx, input }) => svc.updateOperacao({ userId: ctx.user.id, ...input, admin: isAdmin(ctx) })),
 
   // Duplica a operação (copia só metadados de planejamento, começa em demand)
   duplicate: protectedProcedure
     .input(z.object({ operacaoId: z.number() }))
-    .mutation(({ ctx, input }) => svc.duplicateOperacao(ctx.user.id, input.operacaoId)),
+    .mutation(({ ctx, input }) => svc.duplicateOperacao(ctx.user.id, input.operacaoId, isAdmin(ctx))),
 
   // Exclui a operação e toda a sua esteira
   delete: protectedProcedure
     .input(z.object({ operacaoId: z.number() }))
-    .mutation(({ ctx, input }) => svc.deleteOperacao(ctx.user.id, input.operacaoId)),
+    .mutation(({ ctx, input }) => svc.deleteOperacao(ctx.user.id, input.operacaoId, isAdmin(ctx))),
 
   // ----- Anexos -----
   addAnexo: protectedProcedure
@@ -201,11 +204,11 @@ export const operationsRouter = router({
       tamanhoBytes: z.number().optional(),
       descricao: z.string().optional(),
     }))
-    .mutation(({ ctx, input }) => svc.anexarDocumento({ userId: ctx.user.id, ...input })),
+    .mutation(({ ctx, input }) => svc.anexarDocumento({ userId: ctx.user.id, ...input, admin: isAdmin(ctx) })),
 
   removeAnexo: protectedProcedure
     .input(z.object({ anexoId: z.number() }))
-    .mutation(({ ctx, input }) => svc.removerAnexo(ctx.user.id, input.anexoId)),
+    .mutation(({ ctx, input }) => svc.removerAnexo(ctx.user.id, input.anexoId, isAdmin(ctx))),
 
   // ----- Financeiro -----
   lancarFinanceiro: protectedProcedure
@@ -222,11 +225,11 @@ export const operationsRouter = router({
       dataReferencia: z.date().optional(),
       vencimento: z.date().optional(),
     }))
-    .mutation(({ ctx, input }) => svc.lancarFinanceiro({ userId: ctx.user.id, ...input })),
+    .mutation(({ ctx, input }) => svc.lancarFinanceiro({ userId: ctx.user.id, ...input, admin: isAdmin(ctx) })),
 
   removeFinanceiro: protectedProcedure
     .input(z.object({ lancamentoId: z.number() }))
-    .mutation(({ ctx, input }) => svc.removerFinanceiro(ctx.user.id, input.lancamentoId)),
+    .mutation(({ ctx, input }) => svc.removerFinanceiro(ctx.user.id, input.lancamentoId, isAdmin(ctx))),
 
   // ----- Marcos -----
   registrarMarco: protectedProcedure
@@ -243,5 +246,5 @@ export const operationsRouter = router({
       descricao: z.string().optional(),
       dataReferencia: z.date().optional(),
     }))
-    .mutation(({ ctx, input }) => svc.registrarMarco({ userId: ctx.user.id, ...input })),
+    .mutation(({ ctx, input }) => svc.registrarMarco({ userId: ctx.user.id, ...input, admin: isAdmin(ctx) })),
 });

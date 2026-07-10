@@ -32,6 +32,10 @@ export interface OperationCardEntity {
   origin?: string;
   itemCount?: number;
   lastUpdated?: Date | string | null;
+  /** Auditoria: quando a operação foi criada (data + hora exibidas no card). */
+  createdAt?: Date | string | null;
+  /** Auditoria: nome do usuário que criou a operação (no chat ou no painel). */
+  creatorName?: string;
   avatar?: { initials: string; color: string };
 }
 
@@ -203,6 +207,15 @@ export default function OperationCard({
           </span>
         )}
       </div>
+
+      {/* Auditoria: quem criou a operação, em que dia e a que horas */}
+      {(entity.creatorName || entity.createdAt) && (
+        <p className="mt-1.5 border-t border-slate-50 pt-1.5 text-[10px] text-slate-400 truncate">
+          {entity.creatorName ? `por ${entity.creatorName}` : "criada"}
+          {entity.createdAt &&
+            ` · ${new Date(entity.createdAt).toLocaleDateString("pt-BR")} às ${new Date(entity.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`}
+        </p>
+      )}
     </div>
   );
 }

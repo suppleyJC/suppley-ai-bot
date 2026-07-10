@@ -13,17 +13,20 @@ import { buildAttachmentBlock, attachmentMarker } from "../services/attachmentBl
 import * as operacaoService from "../services/operacaoService";
 import { TRPCError } from "@trpc/server";
 
+/** Administrador tem visibilidade total; usuário comum só vê as próprias conversas. */
+const isAdmin = (ctx: { user: { role?: string | null } }) => ctx.user.role === "admin";
+
 export const conversasRouter = router({
-  /** Lista conversas do usuário (operações e avulsas) */
+  /** Lista conversas (usuário: as próprias; admin: de todos, com donoNome) */
   list: protectedProcedure.query(async ({ ctx }) => {
-    return conversaDb.listConversas(ctx.user.id);
+    return conversaDb.listConversas(ctx.user.id, isAdmin(ctx));
   }),
 
   /** Abre uma conversa com histórico */
   get: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
-      return conversaDb.getConversa(input.id, ctx.user.id);
+      return conversaDb.getConversa(input.id, ctx.user.id, isAdmin(ctx));
     }),
 
   /** Cria nova conversa */
