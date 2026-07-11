@@ -233,6 +233,11 @@ ${hints?.expectedProducts?.length ? `- Produtos esperados: ${hints.expectedProdu
     }
     if (typeof it.unitPriceCents === "number") it.unitPriceCents = Math.round(it.unitPriceCents);
   }
+  // Campos de cabeçalho em colunas INT: cotação por peso vem com MOQ/prazo
+  // fracionado (24,5 t) e o MySQL estrito derruba o INSERT inteiro por isso.
+  if (typeof parsed.moq === "number") parsed.moq = Math.round(parsed.moq);
+  if (typeof parsed.leadTimeDays === "number") parsed.leadTimeDays = Math.round(parsed.leadTimeDays);
+  if (typeof parsed.totalFobCents === "number") parsed.totalFobCents = Math.round(parsed.totalFobCents);
 
   // Classifica a NCM dos itens que vieram sem NCM no documento, usando o motor
   // certificado (busca no banco real de NCMs, não inventa). A NCM é sugestão:
@@ -305,22 +310,20 @@ interface CabecalhoComparavel {
   tipo?: string | null;
   supplierName?: string | null;
   currency?: string | null;
-  incoterm?: string | null;
-  paymentTerms?: string | null;
-  leadTimeDays?: number | null;
-  moq?: number | null;
   quotationDate?: string | Date | null;
 }
 
+/**
+ * SÓ variáveis críticas de negócio entram na chave: fornecedor, moeda e data.
+ * Campos "moles" (paymentTerms, incoterm, leadTime, MOQ) ficam FORA de
+ * propósito — a extração por IA pode redigi-los com pequenas variações a cada
+ * leitura do mesmo arquivo, e isso deixaria a duplicata real passar.
+ */
 export function chaveCabecalho(p: CabecalhoComparavel): string {
   return [
     chaveTexto(p.tipo || "proforma"),
     chaveTexto(p.supplierName),
     (p.currency ?? "USD").trim().toUpperCase(),
-    chaveTexto(p.incoterm || "FOB"),
-    chaveTexto(p.paymentTerms),
-    p.leadTimeDays ?? "",
-    p.moq ?? "",
     chaveDia(p.quotationDate),
   ].join("|");
 }
@@ -403,10 +406,6 @@ export async function createProforma(
     tipo: data.tipo ?? "proforma",
     supplierName: data.supplierName,
     currency: data.currency,
-    incoterm: data.incoterm,
-    paymentTerms: data.paymentTerms,
-    leadTimeDays: data.leadTimeDays,
-    moq: data.moq,
     quotationDate: data.quotationDate,
     items: data.items,
   });
@@ -435,9 +434,11 @@ export async function createProforma(
       currency: data.currency,
       incoterm: data.incoterm ?? "FOB",
       paymentTerms: data.paymentTerms,
-      leadTimeDays: data.leadTimeDays,
-      moq: data.moq,
-      totalFobCents: data.totalFobCents,
+      // Colunas INT: valor fracionado (MOQ 24,5 t em cotação por peso)
+      // derruba o INSERT no MySQL estrito ("Incorrect integer value").
+      leadTimeDays: data.leadTimeDays != null ? Math.round(data.leadTimeDays) : undefined,
+      moq: data.moq != null ? Math.round(data.moq) : undefined,
+      totalFobCents: data.totalFobCents != null ? Math.round(data.totalFobCents) : undefined,
       quotationDate: data.quotationDate ? new Date(data.quotationDate) : undefined,
       fileUrl,
       fileKey: data.fileKey,
@@ -452,7 +453,9 @@ export async function createProforma(
   } catch (e) {
     // Traduz falhas de SCHEMA DRIFT (código novo × banco sem migração) numa
     // mensagem ACIONÁVEL — sem isto o erro do MySQL chega genérico na tela.
-    const msg = String((e as Error)?.message ?? e);
+    // O texto do MySQL pode estar em e.cause (drizzle embrulha em "Failed query").
+    const causa = e instanceof Error && e.cause instanceof Error ? e.cause.message : "";
+    const msg = `${(e as Error)?.message ?? e} ${causa}`;
     if (/unknown column '?fileKey'?/i.test(msg)) {
       throw new Error(
         "O banco de dados está sem a coluna proformas.fileKey — a migração 0040 não foi aplicada. " +
@@ -523,10 +526,6 @@ export async function updateProforma(
       tipo: existing.tipo,
       supplierName: data.supplierName ?? existing.supplierName,
       currency: data.currency ?? existing.currency,
-      incoterm: data.incoterm ?? existing.incoterm,
-      paymentTerms: data.paymentTerms ?? existing.paymentTerms,
-      leadTimeDays: data.leadTimeDays ?? existing.leadTimeDays,
-      moq: data.moq ?? existing.moq,
       quotationDate: data.quotationDate ?? existing.quotationDate,
       items: data.items,
     },
@@ -542,8 +541,8 @@ export async function updateProforma(
     currency: data.currency,
     incoterm: data.incoterm,
     paymentTerms: data.paymentTerms,
-    leadTimeDays: data.leadTimeDays,
-    moq: data.moq,
+    leadTimeDays: data.leadTimeDays != null ? Math.round(data.leadTimeDays) : undefined,
+    moq: data.moq != null ? Math.round(data.moq) : undefined,
     quotationDate: data.quotationDate ? new Date(data.quotationDate) : undefined,
   });
 

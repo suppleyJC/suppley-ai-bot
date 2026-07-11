@@ -51,10 +51,6 @@ export async function getProformasForDuplicateCheck(userId: number): Promise<
     tipo: string;
     supplierName: string | null;
     currency: string;
-    incoterm: string | null;
-    paymentTerms: string | null;
-    leadTimeDays: number | null;
-    moq: number | null;
     quotationDate: Date | null;
   }>
 > {
@@ -67,10 +63,6 @@ export async function getProformasForDuplicateCheck(userId: number): Promise<
       tipo: proformas.tipo,
       supplierName: proformas.supplierName,
       currency: proformas.currency,
-      incoterm: proformas.incoterm,
-      paymentTerms: proformas.paymentTerms,
-      leadTimeDays: proformas.leadTimeDays,
-      moq: proformas.moq,
       quotationDate: proformas.quotationDate,
     })
     .from(proformas)

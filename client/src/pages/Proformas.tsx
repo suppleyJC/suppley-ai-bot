@@ -164,7 +164,8 @@ export default function Proformas() {
     return (proformas ?? []).filter((p) => {
       if (filterStatus !== "all" && p.status !== filterStatus) return false;
       if (!q) return true;
-      const hay = [`PF-${p.numero || p.id}`, p.supplierName, p.supplierCountry, p.status]
+      // numero já vem com prefixo "PF-"; o prefixo manual é só para o fallback pelo id.
+      const hay = [p.numero || `PF-${p.id}`, p.supplierName, p.supplierCountry, p.status]
         .filter(Boolean).join(" ").toLowerCase();
       return hay.includes(q);
     });
@@ -864,7 +865,7 @@ export default function Proformas() {
                           <div className="flex items-start gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <span className="font-semibold text-slate-800">PF-{p.numero || p.id}</span>
+                                <span className="font-semibold text-slate-800">{p.numero || `PF-${p.id}`}</span>
                                 {st && <Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge>}
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
@@ -994,7 +995,7 @@ function ProformaDetail({
   const p = data.proforma as any;
   const items = (data.items ?? []) as any[];
   const st = STATUS_LABEL[p.status];
-  const label = `PF-${p.numero || p.id}`;
+  const label = p.numero || `PF-${p.id}`;
   const sectorLabel = SECTOR_OPTIONS.find((s) => s.value === p.supplierSector)?.label;
   const total = items.reduce((s, it) => s + (it.unitPriceCents || 0) * (it.quantity || 0), 0);
 

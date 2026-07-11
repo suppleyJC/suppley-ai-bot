@@ -10,6 +10,21 @@ import * as proformaService from "../services/proformaService";
 import * as priceHistoryService from "../services/proformaPriceHistoryService";
 import { startExtractionJob, getExtractionJob } from "../services/extractionJobService";
 
+/**
+ * Mensagem mais profunda da cadeia de causas. O drizzle embrulha o erro real
+ * do MySQL em "Failed query: <sql gigante>" — na tela isso trunca e esconde
+ * o motivo (ex.: "Incorrect integer value: '24.5' for column 'moq'").
+ */
+function causaRaiz(error: unknown): string {
+  let atual: unknown = error;
+  let msg = "desconhecido";
+  for (let i = 0; i < 5 && atual instanceof Error; i++) {
+    if (atual.message) msg = atual.message;
+    atual = (atual as { cause?: unknown }).cause;
+  }
+  return msg;
+}
+
 const itemSchema = z.object({
   productName: z.string().min(1),
   description: z.string().optional(),
@@ -48,7 +63,7 @@ export const proformaRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Erro ao extrair proforma: ${error instanceof Error ? error.message : "desconhecido"}`,
+          message: `Erro ao extrair proforma: ${causaRaiz(error)}`,
         });
       }
     }),
@@ -130,7 +145,7 @@ export const proformaRouter = router({
         // senão o save falha com um "erro interno" genérico e indiagnosticável.
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Erro ao salvar proforma: ${error instanceof Error ? error.message : "desconhecido"}`,
+          message: `Erro ao salvar proforma: ${causaRaiz(error)}`,
         });
       }
     }),
@@ -164,7 +179,7 @@ export const proformaRouter = router({
         }
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Erro ao atualizar proforma: ${error instanceof Error ? error.message : "desconhecido"}`,
+          message: `Erro ao atualizar proforma: ${causaRaiz(error)}`,
         });
       }
     }),
@@ -178,7 +193,7 @@ export const proformaRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Erro ao distribuir proforma: ${error instanceof Error ? error.message : "desconhecido"}`,
+          message: `Erro ao distribuir proforma: ${causaRaiz(error)}`,
         });
       }
     }),
@@ -192,7 +207,7 @@ export const proformaRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Erro ao excluir proforma: ${error instanceof Error ? error.message : "desconhecido"}`,
+          message: `Erro ao excluir proforma: ${causaRaiz(error)}`,
         });
       }
     }),

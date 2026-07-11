@@ -12,10 +12,6 @@ const cabecalho = {
   tipo: "proforma",
   supplierName: "Tianjin Metals Co.",
   currency: "USD",
-  incoterm: "FOB",
-  paymentTerms: "30% adiantado, 70% contra BL",
-  leadTimeDays: 45,
-  moq: 100,
   quotationDate: "2026-07-01",
 };
 
@@ -47,16 +43,16 @@ describe("trava de duplicidade — cabeçalho", () => {
     );
   });
 
-  it("defaults equivalem a ausência (incoterm FOB, tipo proforma, moeda USD)", () => {
-    expect(
-      chaveCabecalho({ ...cabecalho, tipo: undefined, incoterm: undefined, currency: "usd" }),
-    ).toBe(chaveCabecalho({ ...cabecalho, tipo: "proforma", incoterm: "FOB", currency: "USD" }));
+  it("defaults equivalem a ausência (tipo proforma, moeda USD)", () => {
+    expect(chaveCabecalho({ ...cabecalho, tipo: undefined, currency: "usd" })).toBe(
+      chaveCabecalho({ ...cabecalho, tipo: "proforma", currency: "USD" }),
+    );
   });
 
-  it("condição comercial diferente libera (não é 100% idêntica)", () => {
-    expect(chaveCabecalho({ ...cabecalho, paymentTerms: "à vista" })).not.toBe(
-      chaveCabecalho(cabecalho),
-    );
+  it("campos moles (paymentTerms/incoterm/MOQ) NÃO entram na chave — variação da IA não abre brecha", () => {
+    // Mesmo fornecedor+data+itens com redação diferente das condições = duplicata do mesmo jeito.
+    const comCamposMoles = { ...cabecalho, paymentTerms: "à vista", incoterm: "CIF", moq: 500 } as never;
+    expect(chaveCabecalho(comCamposMoles)).toBe(chaveCabecalho(cabecalho));
   });
 });
 
