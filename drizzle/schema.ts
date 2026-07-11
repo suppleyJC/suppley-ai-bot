@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, json, decimal, index, unique } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, json, decimal, double, index, unique } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -1028,8 +1028,8 @@ export const supplierPrices = mysqlTable("supplier_prices", {
   unitPriceBrlCents: bigint("unitPriceBrlCents", { mode: "number" }).notNull(),
   exchangeRate: bigint("exchangeRate", { mode: "number" }).notNull(), // Rate * 1000000
   
-  // Quantidade e condições
-  quantity: int("quantity").default(1).notNull(),
+  // Quantidade e condições (DOUBLE: cotações por peso — migração 0042)
+  quantity: double("quantity").default(1).notNull(),
   minOrderQuantity: int("minOrderQuantity"),
   leadTimeDays: int("leadTimeDays"),
   
@@ -1966,7 +1966,8 @@ export const proformaItems = mysqlTable("proforma_items", {
   // Especificações técnicas completas (medidas, material, acabamento, etc.).
   description: text("description"),
   ncmCode: varchar("ncmCode", { length: 10 }),
-  quantity: int("quantity").notNull(),
+  // DOUBLE: cotações por peso vêm fracionadas (24,5 t) — migração 0042.
+  quantity: double("quantity").notNull(),
   unit: varchar("unit", { length: 20 }).default("UN").notNull(),
   // NULL = item catalogado SEM preço na cotação (entra na base sinalizado;
   // antes era descartado e a proforma "perdia" itens silenciosamente).

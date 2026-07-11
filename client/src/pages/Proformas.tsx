@@ -736,7 +736,7 @@ export default function Proformas() {
                     </div>
                     <div className="col-span-2">
                       <Label className="text-xs">Qtd</Label>
-                      <Input type="number" value={item.quantity} onChange={(e) => updateItem(idx, { quantity: Number(e.target.value) })} />
+                      <Input type="number" step="any" min={0} value={item.quantity} onChange={(e) => updateItem(idx, { quantity: Number(e.target.value) })} />
                     </div>
                     <div className="col-span-1">
                       <Label className="text-xs">Un</Label>

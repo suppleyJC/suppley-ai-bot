@@ -225,10 +225,12 @@ ${hints?.expectedProducts?.length ? `- Produtos esperados: ${hints.expectedProdu
   parsed.incoterm = parsed.incoterm || "FOB";
   parsed.supplierSector = normalizeSector(parsed.supplierSector);
   parsed.confidence = typeof parsed.confidence === "number" ? parsed.confidence : 50;
-  // O banco guarda quantity/unitPriceCents como INTEIROS; cotações por peso
-  // (ex.: 24,5 t de vergalhão) vêm fracionadas e derrubavam o save (invalid_type).
+  // Quantidade aceita fração (cotações por peso: 24,5 t — coluna DOUBLE, 0042);
+  // sanea apenas ruído de float e garante positivo. Preço segue em centavos INTEIROS.
   for (const it of parsed.items) {
-    if (typeof it.quantity === "number") it.quantity = Math.max(1, Math.round(it.quantity));
+    if (typeof it.quantity === "number") {
+      it.quantity = Math.max(0.001, Math.round(it.quantity * 1000) / 1000);
+    }
     if (typeof it.unitPriceCents === "number") it.unitPriceCents = Math.round(it.unitPriceCents);
   }
 
@@ -367,7 +369,8 @@ export async function createProforma(
 
   for (const item of data.items) {
     // Item sem preço entra com unitPriceCents NULL (sinalizado; não descartado).
-    const total = item.unitPriceCents != null ? item.unitPriceCents * item.quantity : null;
+    // Round: quantidade fracionada × centavos gera fração de centavo.
+    const total = item.unitPriceCents != null ? Math.round(item.unitPriceCents * item.quantity) : null;
     await db.createProformaItem({
       proformaId,
       productName: item.productName,
@@ -427,7 +430,8 @@ export async function updateProforma(
   await db.deleteProformaItems(proformaId);
   for (const item of data.items) {
     // Item sem preço entra com unitPriceCents NULL (sinalizado; não descartado).
-    const total = item.unitPriceCents != null ? item.unitPriceCents * item.quantity : null;
+    // Round: quantidade fracionada × centavos gera fração de centavo.
+    const total = item.unitPriceCents != null ? Math.round(item.unitPriceCents * item.quantity) : null;
     await db.createProformaItem({
       proformaId,
       productName: item.productName,
