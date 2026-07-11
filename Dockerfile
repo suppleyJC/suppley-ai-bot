@@ -8,15 +8,19 @@ WORKDIR /app
 # Copiar arquivos de dependências
 COPY pnpm-lock.yaml package.json ./
 
-# Instalar pnpm + dependências
+# Instalar pnpm + TODAS as dependências: o build precisa das de dev
+# (vite/esbuild). Antes funcionava com --prod por acidente — o COPY . .
+# trazia o node_modules do host; com o .dockerignore isso acabou.
 RUN npm install -g pnpm && \
-    pnpm install --frozen-lockfile --prod
+    pnpm install --frozen-lockfile
 
 # Copiar código
 COPY . .
 
-# Build (incluindo frontend Vite)
-RUN pnpm build
+# Build (incluindo frontend Vite) e poda das dependências de dev —
+# o runtime copia um node_modules só de produção.
+RUN pnpm build && \
+    pnpm prune --prod
 
 # Stage 2: Runtime (mínimo)
 FROM node:20-alpine
