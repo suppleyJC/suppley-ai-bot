@@ -6,7 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
+import { serveStatic } from "./static";
 import { chatStreamRouter } from "../routes/chatStreamRoute";
 import { rfqInboundRouter } from "../routes/rfqInboundRoute";
 
@@ -51,6 +51,11 @@ async function startServer() {
   );
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
+    // Import dinâmico com caminho NÃO-analisável pelo esbuild: o módulo dev
+    // puxa vite + plugins (devDependencies), que não existem na imagem de
+    // produção — se entrassem no bundle, o app cairia no boot.
+    const moduloDev = ["./vite"].join("");
+    const { setupVite } = await import(moduloDev);
     await setupVite(app, server);
   } else {
     serveStatic(app);
