@@ -274,6 +274,95 @@ async function classificarNcmDosItens(items: ProformaItemInput[]): Promise<void>
 // 2) CRIAÇÃO (manual ou a partir da extração)
 // ============================================================
 
+/**
+ * Registro 100% idêntico a um já existente (mesmo fornecedor, data, itens,
+ * quantidades e preços). O router traduz em HTTP 409 (CONFLICT).
+ */
+export class ProformaDuplicadaError extends Error {
+  constructor(numeroExistente: string) {
+    super(
+      `Registro duplicado: a proforma ${numeroExistente} já contém exatamente estes dados ` +
+        `(mesmo fornecedor, data, itens, quantidades e preços). Para registrar uma atualização, ` +
+        `altere ao menos uma variável — data, quantidade ou preço — ou edite o registro existente.`,
+    );
+    this.name = "ProformaDuplicadaError";
+  }
+}
+
+/** Normalização tolerante a espaços/caixa — mesma regra do agrupamento da distribuição. */
+function chaveTexto(s?: string | null): string {
+  return (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Dia (YYYY-MM-DD) de uma data em string ISO ou Date; "" quando ausente/inválida. */
+function chaveDia(d?: string | Date | null): string {
+  if (!d) return "";
+  const data = d instanceof Date ? d : new Date(d);
+  return Number.isNaN(data.getTime()) ? "" : data.toISOString().slice(0, 10);
+}
+
+interface CabecalhoComparavel {
+  tipo?: string | null;
+  supplierName?: string | null;
+  currency?: string | null;
+  incoterm?: string | null;
+  paymentTerms?: string | null;
+  leadTimeDays?: number | null;
+  moq?: number | null;
+  quotationDate?: string | Date | null;
+}
+
+export function chaveCabecalho(p: CabecalhoComparavel): string {
+  return [
+    chaveTexto(p.tipo || "proforma"),
+    chaveTexto(p.supplierName),
+    (p.currency ?? "USD").trim().toUpperCase(),
+    chaveTexto(p.incoterm || "FOB"),
+    chaveTexto(p.paymentTerms),
+    p.leadTimeDays ?? "",
+    p.moq ?? "",
+    chaveDia(p.quotationDate),
+  ].join("|");
+}
+
+export function chaveItens(
+  itens: Array<{ productName: string; quantity: number; unitPriceCents?: number | null; unit?: string | null }>,
+): string {
+  return itens
+    .map((i) =>
+      [chaveTexto(i.productName), i.quantity, i.unitPriceCents ?? "sem-preco", chaveTexto(i.unit || "UN")].join("|"),
+    )
+    .sort()
+    .join("\n");
+}
+
+/**
+ * TRAVA DE DUPLICIDADE: bloqueia cadastro/edição quando já existe um registro
+ * do usuário com exatamente as mesmas variáveis de negócio. Qualquer alteração
+ * (data, quantidade, preço, item, condição comercial) libera o cadastro —
+ * reajustes do mesmo fornecedor continuam entrando normalmente.
+ */
+async function garantirSemDuplicata(
+  userId: number,
+  dados: CabecalhoComparavel & { items: ProformaItemInput[] },
+  ignorarId?: number,
+): Promise<void> {
+  const alvoCabecalho = chaveCabecalho(dados);
+  const alvoItens = chaveItens(dados.items);
+
+  const existentes = await db.getProformasForDuplicateCheck(userId);
+  for (const p of existentes) {
+    if (ignorarId != null && p.id === ignorarId) continue;
+    if (chaveCabecalho(p) !== alvoCabecalho) continue;
+    // Cabeçalho idêntico: só agora vale o custo de buscar os itens.
+    const itens = await db.getProformaItems(p.id);
+    if (itens.length !== dados.items.length) continue;
+    if (chaveItens(itens) === alvoItens) {
+      throw new ProformaDuplicadaError(p.numero ?? `#${p.id}`);
+    }
+  }
+}
+
 async function generateProformaNumber(userId: number): Promise<string> {
   const count = await db.countProformasByUser(userId);
   const year = new Date().getFullYear();
@@ -309,6 +398,19 @@ export async function createProforma(
     status?: InsertProforma["status"];
   }
 ): Promise<{ id: number; numero: string }> {
+  // Duplicidade absoluta bloqueia ANTES de gerar número/gravar qualquer linha.
+  await garantirSemDuplicata(userId, {
+    tipo: data.tipo ?? "proforma",
+    supplierName: data.supplierName,
+    currency: data.currency,
+    incoterm: data.incoterm,
+    paymentTerms: data.paymentTerms,
+    leadTimeDays: data.leadTimeDays,
+    moq: data.moq,
+    quotationDate: data.quotationDate,
+    items: data.items,
+  });
+
   const numero = await generateProformaNumber(userId);
 
   // Coluna JSON rejeita string vazia ("Invalid JSON text") — normaliza para null.
@@ -411,6 +513,25 @@ export async function updateProforma(
 ): Promise<{ id: number }> {
   const existing = await db.getProformaById(proformaId, userId);
   if (!existing) throw new Error("Proforma não encontrada");
+
+  // Compara o estado FINAL da edição (campo omitido mantém o valor atual)
+  // contra as demais proformas do usuário — editar até ficar idêntica a outra
+  // também é duplicidade. A própria proforma fica fora da checagem.
+  await garantirSemDuplicata(
+    userId,
+    {
+      tipo: existing.tipo,
+      supplierName: data.supplierName ?? existing.supplierName,
+      currency: data.currency ?? existing.currency,
+      incoterm: data.incoterm ?? existing.incoterm,
+      paymentTerms: data.paymentTerms ?? existing.paymentTerms,
+      leadTimeDays: data.leadTimeDays ?? existing.leadTimeDays,
+      moq: data.moq ?? existing.moq,
+      quotationDate: data.quotationDate ?? existing.quotationDate,
+      items: data.items,
+    },
+    proformaId,
+  );
 
   await db.updateProforma(proformaId, userId, {
     supplierName: data.supplierName,

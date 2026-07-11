@@ -39,6 +39,44 @@ export async function getProformasByUser(
   return db.select().from(proformas).where(and(...conditions)).orderBy(desc(proformas.createdAt));
 }
 
+/**
+ * Versão enxuta para a TRAVA DE DUPLICIDADE: só as colunas de comparação.
+ * getProformasByUser traz rawExtraction (JSON grande) — em escala de milhares
+ * de cotações isso pesaria em cada save.
+ */
+export async function getProformasForDuplicateCheck(userId: number): Promise<
+  Array<{
+    id: number;
+    numero: string | null;
+    tipo: string;
+    supplierName: string | null;
+    currency: string;
+    incoterm: string | null;
+    paymentTerms: string | null;
+    leadTimeDays: number | null;
+    moq: number | null;
+    quotationDate: Date | null;
+  }>
+> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: proformas.id,
+      numero: proformas.numero,
+      tipo: proformas.tipo,
+      supplierName: proformas.supplierName,
+      currency: proformas.currency,
+      incoterm: proformas.incoterm,
+      paymentTerms: proformas.paymentTerms,
+      leadTimeDays: proformas.leadTimeDays,
+      moq: proformas.moq,
+      quotationDate: proformas.quotationDate,
+    })
+    .from(proformas)
+    .where(eq(proformas.userId, userId));
+}
+
 export async function getProformaById(id: number, userId: number): Promise<Proforma | null> {
   const db = await getDb();
   if (!db) return null;

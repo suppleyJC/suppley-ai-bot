@@ -122,6 +122,10 @@ export const proformaRouter = router({
       try {
         return await proformaService.createProforma(ctx.user.id, input);
       } catch (error) {
+        // Duplicidade é erro de NEGÓCIO (409), não falha do servidor.
+        if (error instanceof proformaService.ProformaDuplicadaError) {
+          throw new TRPCError({ code: "CONFLICT", message: error.message });
+        }
         // A causa REAL precisa chegar à tela (schema drift, dado inválido…),
         // senão o save falha com um "erro interno" genérico e indiagnosticável.
         throw new TRPCError({
@@ -155,6 +159,9 @@ export const proformaRouter = router({
       try {
         return await proformaService.updateProforma(ctx.user.id, id, rest);
       } catch (error) {
+        if (error instanceof proformaService.ProformaDuplicadaError) {
+          throw new TRPCError({ code: "CONFLICT", message: error.message });
+        }
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: `Erro ao atualizar proforma: ${error instanceof Error ? error.message : "desconhecido"}`,
