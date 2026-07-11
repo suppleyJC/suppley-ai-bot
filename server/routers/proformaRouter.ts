@@ -14,10 +14,16 @@ const itemSchema = z.object({
   productName: z.string().min(1),
   description: z.string().optional(),
   ncmCode: z.string().optional(),
-  quantity: z.number().int().positive(),
+  // A extração pode devolver quantidade fracionada (ex.: 24,5 toneladas) e o
+  // banco guarda int — NORMALIZA em vez de rejeitar o save com invalid_type.
+  quantity: z.number().positive().transform((v) => Math.max(1, Math.round(v))),
   unit: z.string().default("UN"),
   // null = item cotado SEM preço (entra na base sinalizado, fora do histórico)
-  unitPriceCents: z.number().int().nonnegative().nullable(),
+  unitPriceCents: z
+    .number()
+    .nonnegative()
+    .nullable()
+    .transform((v) => (v == null ? null : Math.round(v))),
 });
 
 export const proformaRouter = router({

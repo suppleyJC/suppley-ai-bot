@@ -225,6 +225,12 @@ ${hints?.expectedProducts?.length ? `- Produtos esperados: ${hints.expectedProdu
   parsed.incoterm = parsed.incoterm || "FOB";
   parsed.supplierSector = normalizeSector(parsed.supplierSector);
   parsed.confidence = typeof parsed.confidence === "number" ? parsed.confidence : 50;
+  // O banco guarda quantity/unitPriceCents como INTEIROS; cotações por peso
+  // (ex.: 24,5 t de vergalhão) vêm fracionadas e derrubavam o save (invalid_type).
+  for (const it of parsed.items) {
+    if (typeof it.quantity === "number") it.quantity = Math.max(1, Math.round(it.quantity));
+    if (typeof it.unitPriceCents === "number") it.unitPriceCents = Math.round(it.unitPriceCents);
+  }
 
   // Classifica a NCM dos itens que vieram sem NCM no documento, usando o motor
   // certificado (busca no banco real de NCMs, não inventa). A NCM é sugestão:
