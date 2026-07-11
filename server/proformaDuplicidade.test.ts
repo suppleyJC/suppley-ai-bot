@@ -61,6 +61,17 @@ describe("trava de duplicidade — itens", () => {
     expect(chaveItens([...itens].reverse())).toBe(chaveItens(itens));
   });
 
+  it("nome/unidade redigidos diferente pela IA NÃO liberam — só os números contam", () => {
+    // Releitura do mesmo arquivo: a IA traduz "Deformed Bar" ora como
+    // "Vergalhão nervurado", ora como "Barra nervurada" — é a mesma cotação.
+    const redigidoDiferente = itens.map((i) => ({
+      ...i,
+      productName: `${i.productName} (redação alternativa)`,
+      unit: "ton",
+    }));
+    expect(chaveItens(redigidoDiferente)).toBe(chaveItens(itens));
+  });
+
   it("quantidade diferente libera (inclusive fracionada: 24,5 → 24,6)", () => {
     const alterado = [{ ...itens[0], quantity: 24.6 }, itens[1]];
     expect(chaveItens(alterado)).not.toBe(chaveItens(itens));

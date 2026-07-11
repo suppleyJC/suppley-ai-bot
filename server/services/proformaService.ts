@@ -328,13 +328,18 @@ export function chaveCabecalho(p: CabecalhoComparavel): string {
   ].join("|");
 }
 
+/**
+ * Itens comparados APENAS pelos números (quantidade × preço), lidos do
+ * documento de forma determinística. Nome traduzido e unidade são REDIGIDOS
+ * pela IA e variam a cada leitura do mesmo arquivo — se entrassem na chave,
+ * a duplicata real passaria. Critério do negócio: mudou quantidade ou preço,
+ * não é duplicata; mesmos números todos (com fornecedor+data iguais), é.
+ */
 export function chaveItens(
-  itens: Array<{ productName: string; quantity: number; unitPriceCents?: number | null; unit?: string | null }>,
+  itens: Array<{ quantity: number; unitPriceCents?: number | null }>,
 ): string {
   return itens
-    .map((i) =>
-      [chaveTexto(i.productName), i.quantity, i.unitPriceCents ?? "sem-preco", chaveTexto(i.unit || "UN")].join("|"),
-    )
+    .map((i) => `${i.quantity}|${i.unitPriceCents ?? "sem-preco"}`)
     .sort()
     .join("\n");
 }
@@ -353,16 +358,32 @@ async function garantirSemDuplicata(
   const alvoCabecalho = chaveCabecalho(dados);
   const alvoItens = chaveItens(dados.items);
 
+  // Diagnóstico nos logs do container: quando uma duplicata "passa", este
+  // rastro diz exatamente qual etapa da comparação divergiu.
+  const quaseIguais: string[] = [];
+
   const existentes = await db.getProformasForDuplicateCheck(userId);
   for (const p of existentes) {
     if (ignorarId != null && p.id === ignorarId) continue;
-    if (chaveCabecalho(p) !== alvoCabecalho) continue;
+    if (chaveCabecalho(p) !== alvoCabecalho) {
+      if (chaveTexto(p.supplierName) === chaveTexto(dados.supplierName)) {
+        quaseIguais.push(`${p.numero}: cabeçalho difere (${chaveCabecalho(p)} ≠ ${alvoCabecalho})`);
+      }
+      continue;
+    }
     // Cabeçalho idêntico: só agora vale o custo de buscar os itens.
     const itens = await db.getProformaItems(p.id);
-    if (itens.length !== dados.items.length) continue;
+    if (itens.length !== dados.items.length) {
+      quaseIguais.push(`${p.numero}: nº de itens difere (${itens.length} ≠ ${dados.items.length})`);
+      continue;
+    }
     if (chaveItens(itens) === alvoItens) {
       throw new ProformaDuplicadaError(p.numero ?? `#${p.id}`);
     }
+    quaseIguais.push(`${p.numero}: itens diferem (qtd/preço)`);
+  }
+  if (quaseIguais.length > 0) {
+    console.log(`[Proforma] Duplicidade NÃO detectada; candidatos próximos:\n  ${quaseIguais.join("\n  ")}`);
   }
 }
 
