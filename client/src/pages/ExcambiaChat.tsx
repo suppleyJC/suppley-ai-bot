@@ -18,6 +18,7 @@ import ConversationPanel from "@/components/excambia/ConversationPanel";
 import ParameterExtractionModal from "@/components/excambia/ParameterExtractionModal";
 import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2, Settings2, FileSpreadsheet, ArrowRightCircle, Eye, Download, Clock, FileText, X as XIcon, Route, ExternalLink } from "lucide-react";
 import { MessageContent } from "@/components/MessageContent";
+import ExcambiaOrb from "@/components/ExcambiaOrb";
 import { STAGE_ORDER, STAGE_LABELS } from "@/lib/stageLabels";
 import { getMarcoLabel } from "@/lib/marcoLabels";
 
@@ -104,11 +105,11 @@ function timeLabel(d: string | Date): string {
 function DayDivider({ date }: { date: string | Date }) {
   return (
     <div className="flex items-center gap-3 py-1" aria-label={`Mensagens de ${dayLabel(date)}`}>
-      <span className="h-px flex-1 bg-slate-200/80" />
-      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[11px] font-medium text-slate-400">
+      <span className="h-px flex-1 bg-(--hair)/80" />
+      <span className="rounded-full border border-(--hair) bg-(--exc-card) px-2.5 py-0.5 text-[11px] font-medium text-(--ink-2)">
         {dayLabel(date)}
       </span>
-      <span className="h-px flex-1 bg-slate-200/80" />
+      <span className="h-px flex-1 bg-(--hair)/80" />
     </div>
   );
 }
@@ -128,22 +129,28 @@ const LogoIcon = ({ className }: { className?: string }) => (
   <img src="/suppley-icon.png" alt="Excambia" className={className ?? "h-full w-full object-contain"} />
 );
 
-/**
- * Orbital — o símbolo da Excambia "vivo": anel de gradiente girando + brilho.
- * `glow` adiciona o pulso de luz; `thinking` acelera o giro (enquanto responde).
- */
-function Orbital({
-  className = "",
-  glow = false,
-  thinking = false,
-}: { className?: string; glow?: boolean; thinking?: boolean }) {
+// Data e horário correntes no canto superior esquerdo do palco do chat,
+// no formato "11 JUL 2026 · 22:14 BRT" (mono, caixa alta), a cada minuto.
+const MESES_CURTOS = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+
+function formataAgora(d: Date): string {
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${d.getDate()} ${MESES_CURTOS[d.getMonth()]} ${d.getFullYear()} · ${hh}:${mm} BRT`;
+}
+
+function RelogioAgora() {
+  const [agora, setAgora] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setAgora(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
   return (
     <span
-      className={`excambia-orbital ${glow ? "excambia-orbital--glow" : ""} ${
-        thinking ? "excambia-orbital--thinking" : ""
-      } ${className}`}
+      className="whitespace-nowrap text-[10px] uppercase tracking-[0.12em] text-(--ink-2)"
+      style={{ fontFamily: "var(--exc-font-mono)" }}
     >
-      <LogoIcon className="h-[68%] w-[68%] object-contain" />
+      {formataAgora(agora)}
     </span>
   );
 }
@@ -464,7 +471,7 @@ export default function ExcambiaChat() {
 
       {/* CHAT */}
       <div
-        className="relative flex flex-1 flex-col bg-[#faf9fc] min-h-0 h-full"
+        className="relative flex flex-1 flex-col bg-(--paper) min-h-0 h-full"
         onDragOver={handleDragOver}
         onDragEnter={handleDragOver}
         onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
@@ -472,23 +479,25 @@ export default function ExcambiaChat() {
       >
         {dragOver && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-violet-50/80 backdrop-blur-sm pointer-events-none">
-            <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-violet-400 bg-white/90 px-8 py-6 text-violet-700 shadow-lg">
+            <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-violet-400 bg-(--exc-card)/90 px-8 py-6 text-violet-700 shadow-lg">
               <Paperclip className="h-7 w-7" />
               <p className="text-sm font-semibold">Solte o arquivo aqui</p>
               <p className="text-xs text-violet-400">PDF, imagem ou planilha (XLSX/XLS/CSV) · até 16MB</p>
             </div>
           </div>
         )}
-        {/* topbar fina — contexto da operação vinculada (se houver) + câmbio */}
-        <div className="flex h-[54px] flex-shrink-0 items-center gap-2 sm:gap-2.5 px-3 sm:px-6 border-b border-slate-100">
+        {/* topbar fina — data/hora, contexto da operação vinculada (se houver) + câmbio */}
+        <div className="flex h-[54px] flex-shrink-0 items-center gap-2 sm:gap-2.5 px-3 sm:px-6 border-b border-(--hair)">
+          <RelogioAgora />
           {conv?.operacaoId ? <OperacaoContextBar operacaoId={conv.operacaoId} /> : null}
-          <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
+          <div className="ml-auto flex items-center gap-3 text-xs text-(--ink-2)">
             <FxRate />
           </div>
         </div>
 
-        {/* área de conversa */}
-        <div ref={scrollRef} className="flex flex-1 flex-col items-center overflow-y-auto scrollbar-custom min-h-0">
+        {/* área de conversa — a malha de pontos (.chat-stage) só aparece no
+            estado vazio/home; com mensagens o fundo fica liso (--paper) */}
+        <div ref={scrollRef} className={`flex flex-1 flex-col items-center overflow-y-auto scrollbar-custom min-h-0 ${vazio ? "chat-stage" : ""}`}>
           {vazio ? (
             <Welcome onPick={(t) => setDraft(t)} />
           ) : (
@@ -525,9 +534,9 @@ export default function ExcambiaChat() {
         </div>
 
         {/* composer — fixo no rodapé (não encolhe) */}
-        <div className="flex w-full flex-shrink-0 justify-center bg-gradient-to-t from-[#faf9fc] px-3 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-6 pt-2.5 sm:pt-3.5">
+        <div className="flex w-full flex-shrink-0 justify-center bg-gradient-to-t from-(--paper) px-3 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-6 pt-2.5 sm:pt-3.5">
           <div className="w-full max-w-full sm:max-w-2xl lg:max-w-3xl">
-            <div className="flex items-end gap-2 sm:gap-2.5 rounded-[18px] border border-[#e2def0] bg-white p-2 sm:p-2.5 pl-3 sm:pl-4 shadow-[0_4px_20px_rgba(49,18,96,0.05)] transition-colors focus-within:border-violet-500 focus-within:shadow-[0_4px_24px_rgba(104,42,186,0.12)]">
+            <div className="flex items-end gap-2 sm:gap-2.5 rounded-[18px] border border-(--hair) bg-(--exc-card) p-2 sm:p-2.5 pl-3 sm:pl-4 shadow-[0_4px_20px_rgba(49,18,96,0.05)] transition-colors focus-within:border-violet-500 focus-within:shadow-[0_4px_24px_rgba(104,42,186,0.12)]">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -540,7 +549,7 @@ export default function ExcambiaChat() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading || streaming}
                 title="Anexar documento (PDF/DOCX/TXT), planilha (XLSX/CSV), imagem ou código/dados (JSON/PY)"
-                className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-violet-600 flex-shrink-0 disabled:opacity-50"
+                className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg text-(--ink-2) hover:bg-(--paper) hover:text-violet-600 flex-shrink-0 disabled:opacity-50"
               >
                 {uploading ? (
                   <Loader2 className="h-4 w-4 sm:h-[18px] sm:w-[18px] animate-spin" />
@@ -553,7 +562,7 @@ export default function ExcambiaChat() {
                 onClick={() => setParamModalOpen(true)}
                 disabled={uploading || streaming}
                 title="Extrair parâmetros de cálculo (regime, estado, câmbio, frete)"
-                className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-violet-600 flex-shrink-0 disabled:opacity-50"
+                className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg text-(--ink-2) hover:bg-(--paper) hover:text-violet-600 flex-shrink-0 disabled:opacity-50"
               >
                 <Settings2 className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
               </button>
@@ -561,15 +570,15 @@ export default function ExcambiaChat() {
                 ref={taRef}
                 value={draft} onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                rows={1} placeholder='Ex.: "5.400 escoras galvanizadas da China"…'
-                className="flex-1 resize-none bg-transparent py-1.5 text-base sm:text-[14px] leading-relaxed text-slate-700 outline-none placeholder:text-slate-400 max-h-[200px] overflow-y-auto scrollbar-custom"
+                rows={1} placeholder="Escreva para a Excambia…"
+                className="flex-1 resize-none bg-transparent py-1.5 text-base sm:text-[14px] leading-relaxed text-(--ink) outline-none placeholder:text-(--ink-2) max-h-[200px] overflow-y-auto scrollbar-custom"
               />
               <button onClick={handleSend}
                 className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-[10px] bg-violet-600 text-white hover:bg-violet-700 flex-shrink-0">
                 <SendHorizontal className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
               </button>
             </div>
-            <p className="mt-1.5 sm:mt-2 text-center text-[10px] sm:text-[11px] text-slate-400 px-2">
+            <p className="mt-1.5 sm:mt-2 text-center text-[10px] sm:text-[11px] text-(--ink-2) px-2">
               A Excambia conduz a operação ponta a ponta · cálculo pelo motor certificado
             </p>
           </div>
@@ -610,8 +619,8 @@ function OperacaoContextBar({ operacaoId }: { operacaoId: number }) {
     >
       <Route className="h-4 w-4 flex-shrink-0 text-violet-600" />
       <span className="hidden sm:inline font-mono text-[11px] font-semibold text-violet-700">{op.codigo}</span>
-      <span className="max-w-[110px] sm:max-w-[220px] truncate text-xs font-medium text-slate-700">{op.titulo}</span>
-      <span className="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-bold text-violet-700 border border-violet-100 whitespace-nowrap">
+      <span className="max-w-[110px] sm:max-w-[220px] truncate text-xs font-medium text-(--ink)">{op.titulo}</span>
+      <span className="rounded-md bg-(--exc-card) px-1.5 py-0.5 text-[10px] font-bold text-violet-700 border border-violet-100 whitespace-nowrap">
         {STAGE_LABELS[op.estagioAtual as keyof typeof STAGE_LABELS] ?? op.estagioAtual}
       </span>
       {/* progresso da jornada — 5 pontos, coeso com a esteira do painel */}
@@ -623,12 +632,12 @@ function OperacaoContextBar({ operacaoId }: { operacaoId: number }) {
             className={`h-1.5 w-1.5 rounded-full ${
               encerrada || (idx >= 0 && i < idx) ? "bg-teal-500"
                 : i === idx ? "bg-violet-600 ring-2 ring-violet-200"
-                : "bg-slate-300"
+                : "bg-(--idle)"
             }`}
           />
         ))}
       </span>
-      <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-slate-300 transition group-hover:text-violet-500" />
+      <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-(--idle) transition group-hover:text-violet-500" />
     </button>
   );
 }
@@ -636,12 +645,14 @@ function OperacaoContextBar({ operacaoId }: { operacaoId: number }) {
 function Welcome({ onPick }: { onPick: (t: string) => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-3 sm:px-6 py-8 sm:py-12 text-center min-h-0">
-      <Orbital glow className="h-11 w-11 sm:h-14 sm:w-14 mb-4 sm:mb-5 flex-shrink-0" />
-      <h1 className="mb-2 sm:mb-2.5 text-xl sm:text-2xl md:text-[26px] font-semibold tracking-tight text-slate-800">
+      <span className="mb-4 sm:mb-5 flex-shrink-0">
+        <ExcambiaOrb />
+      </span>
+      <h1 className="mb-2 sm:mb-2.5 text-xl sm:text-2xl md:text-[26px] font-semibold tracking-tight text-(--ink)">
         Olá, Jean. O que vamos{" "}
         <span className="bg-gradient-to-r from-violet-600 to-teal-600 bg-clip-text text-transparent">importar</span> hoje?
       </h1>
-      <p className="mb-6 sm:mb-7 max-w-xs sm:max-w-sm text-sm sm:text-[14px] leading-relaxed text-slate-500">
+      <p className="mb-6 sm:mb-7 max-w-xs sm:max-w-sm text-sm sm:text-[14px] leading-relaxed text-(--ink-2)">
         Descreva o que precisa, suba uma cotação ou abra uma operação na lista ao lado.
       </p>
       <div className="flex w-full max-w-xs sm:max-w-sm flex-col gap-2 sm:gap-2.5">
@@ -657,15 +668,15 @@ function Welcome({ onPick }: { onPick: (t: string) => void }) {
 function Suggestion({ icon, title, sub, onClick }: any) {
   return (
     <button onClick={onClick}
-      className="flex items-center gap-2.5 sm:gap-3.5 rounded-[13px] border border-slate-200 bg-white px-3 sm:px-4 py-2.5 sm:py-3.5 text-left transition hover:-translate-y-px hover:border-violet-200 hover:shadow-[0_4px_14px_rgba(104,42,186,0.06)]">
+      className="flex items-center gap-2.5 sm:gap-3.5 rounded-[13px] border border-(--hair) bg-(--exc-card) px-3 sm:px-4 py-2.5 sm:py-3.5 text-left transition hover:-translate-y-px hover:border-violet-200 hover:shadow-[0_4px_14px_rgba(104,42,186,0.06)]">
       <span className="flex h-8 w-8 sm:h-[33px] sm:w-[33px] flex-shrink-0 items-center justify-center rounded-[9px] bg-violet-50 text-violet-600 [&_svg]:h-4 sm:[&_svg]:h-[18px] [&_svg]:w-4 sm:[&_svg]:w-[18px]">
         {icon}
       </span>
       <span className="flex-1 min-w-0">
-        <span className="block text-xs sm:text-[13px] font-semibold text-slate-800">{title}</span>
-        <span className="text-[10px] sm:text-[11.5px] text-slate-500">{sub}</span>
+        <span className="block text-xs sm:text-[13px] font-semibold text-(--ink)">{title}</span>
+        <span className="text-[10px] sm:text-[11.5px] text-(--ink-2)">{sub}</span>
       </span>
-      <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
+      <ChevronRight className="h-4 w-4 text-(--idle) flex-shrink-0" />
     </button>
   );
 }
@@ -712,7 +723,8 @@ function StreamingActivity({ events }: { events: any[] }) {
 
   return (
     <div className="group flex w-full items-start gap-2 sm:gap-3">
-      <Orbital glow thinking className="h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0" />
+      {/* mesmo tamanho do indicador anterior (32px), ciclo curto de 10s */}
+      <ExcambiaOrb size={32} duration={10} />
       <div className="min-w-0 flex-1 pt-0.5">
         {steps.length === 0 ? (
           <TypingDots />
@@ -725,14 +737,14 @@ function StreamingActivity({ events }: { events: any[] }) {
                 ) : (
                   <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-violet-400" />
                 )}
-                <span className={s.done ? "text-slate-400" : "text-slate-600"}>
+                <span className={s.done ? "text-(--ink-2)" : "text-(--ink)"}>
                   {s.label}
                   {!s.done && <span className="excambia-ellipsis" />}
                 </span>
               </li>
             ))}
             {!current && (
-              <li className="flex items-center gap-2 text-[13px] text-slate-500">
+              <li className="flex items-center gap-2 text-[13px] text-(--ink-2)">
                 <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-violet-400" />
                 <span>Redigindo a resposta<span className="excambia-ellipsis" /></span>
               </li>
@@ -755,7 +767,7 @@ function Message({ role, content, pending, criadaEm, toolResults, conversaId, op
           {content}
         </div>
         {criadaEm && (
-          <span className="pr-1 text-[10px] text-slate-400 opacity-0 transition group-hover:opacity-100">
+          <span className="pr-1 text-[10px] text-(--ink-2) opacity-0 transition group-hover:opacity-100">
             {dayLabel(criadaEm)} · {timeLabel(criadaEm)}
           </span>
         )}
@@ -766,9 +778,9 @@ function Message({ role, content, pending, criadaEm, toolResults, conversaId, op
     return (
       <div className="group flex w-full items-start gap-2 sm:gap-3">
         {pending ? (
-          <Orbital glow thinking className="h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0" />
+          <ExcambiaOrb size={32} duration={10} />
         ) : (
-          <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white border border-slate-200 p-1">
+          <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-(--exc-card) border border-(--hair) p-1">
             <LogoIcon />
           </span>
         )}
@@ -785,7 +797,7 @@ function Message({ role, content, pending, criadaEm, toolResults, conversaId, op
               <div className="flex items-center gap-2">
                 <CopyButton text={content} />
                 {criadaEm && (
-                  <span className="mt-1.5 text-[10px] text-slate-400 opacity-0 transition group-hover:opacity-100">
+                  <span className="mt-1.5 text-[10px] text-(--ink-2) opacity-0 transition group-hover:opacity-100">
                     {dayLabel(criadaEm)} · {timeLabel(criadaEm)}
                   </span>
                 )}
@@ -870,7 +882,7 @@ function CalcResultCard({ toolResults, conversaId, operacaoId }: {
     <div className="mt-3 rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50/70 to-teal-50/40 p-3 sm:p-4">
       <div className="flex items-center gap-2">
         <FileSpreadsheet className="h-4 w-4 text-violet-600" />
-        <span className="text-[13px] font-semibold text-slate-800">Cálculo pronto</span>
+        <span className="text-[13px] font-semibold text-(--ink)">Cálculo pronto</span>
       </div>
 
       {calc.resumo && (
@@ -892,7 +904,7 @@ function CalcResultCard({ toolResults, conversaId, operacaoId }: {
           href={calc.planilha.url}
           target="_blank"
           rel="noreferrer"
-          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-violet-700 hover:bg-violet-50"
+          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-(--exc-card) px-3 py-1.5 text-[12.5px] font-medium text-violet-700 hover:bg-violet-50"
         >
           <Download className="h-3.5 w-3.5" />
           {calc.planilha.fileName}
@@ -919,13 +931,13 @@ function CalcResultCard({ toolResults, conversaId, operacaoId }: {
         )}
         <button
           onClick={() => setDismissed(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-slate-600 hover:bg-slate-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-(--hair) bg-(--exc-card) px-3 py-1.5 text-[12.5px] font-medium text-(--ink) hover:bg-(--paper)"
         >
           <Eye className="h-4 w-4" /> Só visualizar
         </button>
       </div>
       {!operacaoId && (
-        <p className="mt-2 text-[11px] text-slate-400">
+        <p className="mt-2 text-[11px] text-(--ink-2)">
           Enviar cria uma operação e dá sequência ao fluxo de importação. Só visualizar mantém apenas o preço.
         </p>
       )}
@@ -935,9 +947,9 @@ function CalcResultCard({ toolResults, conversaId, operacaoId }: {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-white/70 px-2 py-1.5">
-      <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="text-[13px] font-semibold text-slate-800">{value}</div>
+    <div className="rounded-lg bg-(--exc-card)/70 px-2 py-1.5">
+      <div className="text-[10px] uppercase tracking-wide text-(--ink-2)">{label}</div>
+      <div className="text-[13px] font-semibold text-(--ink)">{value}</div>
     </div>
   );
 }
@@ -972,11 +984,11 @@ function OperationJourneyCard({ toolResults }: { toolResults?: any }) {
   const currentIdx = OP_STAGES.findIndex((s) => s.key === operacao.estagioAtual);
 
   return (
-    <div className="mt-3 rounded-xl border border-violet-200 bg-white p-3 sm:p-4">
+    <div className="mt-3 rounded-xl border border-violet-200 bg-(--exc-card) p-3 sm:p-4">
       {/* Header */}
       <div className="flex items-center gap-2">
         <Route className="h-4 w-4 text-violet-600" />
-        <span className="text-[13px] font-semibold text-slate-800">
+        <span className="text-[13px] font-semibold text-(--ink)">
           {operacao.codigo ?? `OP-${operacao.id}`} · {operacao.titulo}
         </span>
         <span className="ml-auto rounded-md bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-600">
@@ -992,13 +1004,13 @@ function OperationJourneyCard({ toolResults }: { toolResults?: any }) {
           return (
             <div key={s.key} className="flex flex-1 flex-col items-center gap-1">
               <div className="flex w-full items-center">
-                <span className={`h-1.5 flex-1 rounded-full ${i === 0 ? "opacity-0" : done || current ? "bg-violet-400" : "bg-slate-200"}`} />
+                <span className={`h-1.5 flex-1 rounded-full ${i === 0 ? "opacity-0" : done || current ? "bg-violet-400" : "bg-(--hair)"}`} />
                 <span className={`mx-0.5 h-2.5 w-2.5 flex-shrink-0 rounded-full ${
-                  done ? "bg-teal-500" : current ? "bg-violet-600 ring-2 ring-violet-200" : "bg-slate-300"
+                  done ? "bg-teal-500" : current ? "bg-violet-600 ring-2 ring-violet-200" : "bg-(--idle)"
                 }`} />
-                <span className={`h-1.5 flex-1 rounded-full ${i === OP_STAGES.length - 1 ? "opacity-0" : done ? "bg-violet-400" : "bg-slate-200"}`} />
+                <span className={`h-1.5 flex-1 rounded-full ${i === OP_STAGES.length - 1 ? "opacity-0" : done ? "bg-violet-400" : "bg-(--hair)"}`} />
               </div>
-              <span className={`text-[9px] ${current ? "font-semibold text-violet-700" : "text-slate-400"}`}>{s.label}</span>
+              <span className={`text-[9px] ${current ? "font-semibold text-violet-700" : "text-(--ink-2)"}`}>{s.label}</span>
             </div>
           );
         })}
@@ -1014,10 +1026,10 @@ function OperationJourneyCard({ toolResults }: { toolResults?: any }) {
               <div key={i} className="flex items-start gap-2 text-[12.5px]">
                 {ok ? <Check className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-teal-500" />
                   : cancel ? <XIcon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-rose-400" />
-                  : <Clock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />}
-                <span className="text-slate-700">
+                  : <Clock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-(--ink-2)" />}
+                <span className="text-(--ink)">
                   <span className="font-medium">{getMarcoLabel(m.tipo)}</span>
-                  {m.descricao ? <span className="text-slate-500"> — {m.descricao}</span> : null}
+                  {m.descricao ? <span className="text-(--ink-2)"> — {m.descricao}</span> : null}
                 </span>
               </div>
             );
@@ -1028,7 +1040,7 @@ function OperationJourneyCard({ toolResults }: { toolResults?: any }) {
       {/* Documentos */}
       {anexos.length > 0 && (
         <div className="mt-3">
-          <div className="text-[10px] uppercase tracking-wide text-slate-400 mb-1.5">Documentos</div>
+          <div className="text-[10px] uppercase tracking-wide text-(--ink-2) mb-1.5">Documentos</div>
           <div className="flex flex-wrap gap-1.5">
             {anexos.slice(0, 8).map((a: any, i: number) => (
               <a
@@ -1036,7 +1048,7 @@ function OperationJourneyCard({ toolResults }: { toolResults?: any }) {
                 href={a.fileUrl || a.fileKey || "#"}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11.5px] text-slate-600 hover:bg-slate-100"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-(--hair) bg-(--paper) px-2 py-1 text-[11.5px] text-(--ink) hover:bg-(--hair)"
               >
                 <FileText className="h-3 w-3 text-violet-500" />
                 {a.nome}
@@ -1083,7 +1095,7 @@ function CopyButton({ text }: { text: string }) {
         }
       }}
       title="Copiar resposta"
-      className="mt-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-slate-400 opacity-0 transition focus:opacity-100 group-hover:opacity-100 hover:bg-slate-100 hover:text-slate-600"
+      className="mt-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-(--ink-2) opacity-0 transition focus:opacity-100 group-hover:opacity-100 hover:bg-(--hair) hover:text-(--ink)"
     >
       {copied ? <Check className="h-3 w-3 text-teal-600" /> : <Copy className="h-3 w-3" />}
       {copied ? "Copiado" : "Copiar"}
@@ -1096,7 +1108,7 @@ function FxRate() {
   const displayRate = rate?.rate?.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) ?? (isLoading ? '...' : '—');
   return (
     <span className="flex items-center gap-1.5">
-      USD/BRL <b className="font-semibold text-slate-700">{displayRate}</b>
+      USD/BRL <b className="font-semibold text-(--ink)">{displayRate}</b>
       <span className="text-[10px] text-teal-600">● PTAX</span>
     </span>
   );

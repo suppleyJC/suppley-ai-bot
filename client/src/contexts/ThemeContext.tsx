@@ -16,6 +16,21 @@ interface ThemeProviderProps {
   switchable?: boolean;
 }
 
+/** Tema atual do sistema operacional (prefers-color-scheme). */
+function temaDoSistema(): Theme {
+  if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
+    return "dark";
+  }
+  return "light";
+}
+
+/**
+ * Tema AUTOMÁTICO: sem botão/toggle, o app segue o sistema operacional do
+ * usuário (prefers-color-scheme) e reage na hora se o SO mudar. A classe
+ * `.dark` no <html> mantém as variáveis do shadcn e as variantes `dark:` em
+ * sincronia com os tokens da Excambia (que usam o mesmo media query).
+ * `switchable` permanece só para ambientes de demonstração (ComponentShowcase).
+ */
 export function ThemeProvider({
   children,
   defaultTheme = "light",
@@ -26,8 +41,18 @@ export function ThemeProvider({
       const stored = localStorage.getItem("theme");
       return (stored as Theme) || defaultTheme;
     }
-    return defaultTheme;
+    return temaDoSistema();
   });
+
+  // Modo automático: acompanha mudanças do SO em tempo real.
+  useEffect(() => {
+    if (switchable || typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const aplica = () => setTheme(mq.matches ? "dark" : "light");
+    aplica();
+    mq.addEventListener("change", aplica);
+    return () => mq.removeEventListener("change", aplica);
+  }, [switchable]);
 
   useEffect(() => {
     const root = document.documentElement;

@@ -6,6 +6,9 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
+// Tokens da Excambia ANTES dos demais estilos (paleta neutra #FAF9F6 + tema
+// noturno automático via prefers-color-scheme).
+import "./excambia-tokens.css";
 import "./index.css";
 
 const queryClient = new QueryClient();

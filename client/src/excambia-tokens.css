@@ -1,0 +1,57 @@
+/* ============================================================
+   EXCAMBIA / SUPPLEY — Design tokens
+   Regra: tudo que não é púrpura assenta sobre o neutro #FAF9F6.
+   Tema noturno é AUTOMÁTICO (prefers-color-scheme), sem botão.
+
+   Adaptação local: os nomes --card / --font-sans / --font-mono do
+   pacote original colidem com as variáveis do shadcn e do tema
+   Tailwind — aqui viram --exc-card / --exc-font-*, sem mudar valor.
+   ============================================================ */
+
+:root{
+  /* marca (não alterar) */
+  --purpura:      #682ABA;
+  --purpura-hover:#5A23A3;
+  --turquesa:     #28E7C5;
+
+  /* neutros — modo diurno */
+  --paper:    #FAF9F6;   /* fundo geral do sistema */
+  --exc-card: #FFFFFF;   /* superfícies elevadas (cards, input) */
+  --ink:      #1B1523;   /* texto principal */
+  --ink-2:    #6A6374;   /* texto secundário / labels mono */
+  --hair:     #E7E4DC;   /* hairlines e bordas */
+  --dot-bg:   #E9E6DE;   /* malha de pontos do palco (delicada) */
+  --idle:     #D9D5CC;   /* estados inativos */
+
+  /* tipografia (o sistema é unificado em Inter; o mono é do relógio) */
+  --exc-font-sans: 'Inter', system-ui, sans-serif;
+  --exc-font-mono: 'IBM Plex Mono', monospace;
+}
+
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:    #0E0B14;
+    --exc-card: #151020;
+    --ink:      #F3F0F8;
+    --ink-2:    #8E869B;
+    --hair:     #251F30;
+    --dot-bg:   #1E1929;
+    --idle:     #2E2740;
+  }
+}
+
+/* malha de pontos do palco do chat — versão delicada aprovada:
+   ponto de 0.55px a cada 26px, diluída no centro e nas bordas */
+.chat-stage{
+  background-color: var(--paper);
+  background-image: radial-gradient(var(--dot-bg) .55px, transparent .7px);
+  background-size: 26px 26px;
+  position: relative;
+}
+.chat-stage::before{
+  content:'';
+  position:absolute; inset:0; pointer-events:none;
+  background:
+    radial-gradient(62% 58% at 50% 46%, var(--paper) 0%, transparent 80%),
+    linear-gradient(var(--paper), transparent 14%, transparent 86%, var(--paper));
+}
