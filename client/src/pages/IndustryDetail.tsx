@@ -474,7 +474,7 @@ function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { label: string; className: string }> = {
     active: { label: "Ativa", className: "bg-green-500/10 text-green-500 border-green-500/20" },
     prospect: { label: "Prospecto", className: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" },
-    inactive: { label: "Inativa", className: "bg-gray-500/10 text-gray-500 border-gray-500/20" },
+    inactive: { label: "Inativa", className: "bg-gray-500/10 text-muted-foreground border-gray-500/20" },
     blacklisted: { label: "Bloqueada", className: "bg-red-500/10 text-red-500 border-red-500/20" },
   };
   const c = config[status] || config.prospect;

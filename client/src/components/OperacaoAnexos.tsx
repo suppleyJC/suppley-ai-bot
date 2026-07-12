@@ -126,9 +126,9 @@ export default function OperacaoAnexos({
   }
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section className="rounded-2xl border border-border bg-card p-5">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+        <h3 className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
           <Paperclip className="h-3.5 w-3.5" /> Anexos ({anexos.length})
         </h3>
         <input
@@ -149,7 +149,7 @@ export default function OperacaoAnexos({
       </div>
 
       {anexos.length === 0 ? (
-        <p className="py-6 text-center text-xs text-slate-300">
+        <p className="py-6 text-center text-xs text-muted-foreground/60">
           Nenhum anexo ainda. Envie desenhos, PDFs, especificações ou cotações.
         </p>
       ) : (
@@ -159,14 +159,14 @@ export default function OperacaoAnexos({
             return (
               <li
                 key={a.id}
-                className="group flex items-center gap-3 rounded-xl border border-slate-200 p-2.5"
+                className="group flex items-center gap-3 rounded-xl border border-border p-2.5"
               >
                 <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
                   <Icon className="h-4.5 w-4.5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-800">{a.nome}</p>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="truncate text-sm font-semibold text-foreground">{a.nome}</p>
+                  <p className="text-[11px] text-muted-foreground">
                     {TIPO_LABEL[a.tipo] ?? a.tipo}
                     {a.tamanhoBytes ? ` · ${fmtTamanho(a.tamanhoBytes)}` : ""}
                   </p>
@@ -175,7 +175,7 @@ export default function OperacaoAnexos({
                   href={a.fileUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-50 hover:text-violet-700"
+                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-violet-700"
                   title="Abrir"
                 >
                   <ExternalLink className="h-4 w-4" />
@@ -183,7 +183,7 @@ export default function OperacaoAnexos({
                 <button
                   onClick={() => handleRemove(a.id, a.nome)}
                   disabled={removeAnexo.isPending}
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                   title="Remover"
                 >
                   <Trash2 className="h-4 w-4" />

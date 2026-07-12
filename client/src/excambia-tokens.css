@@ -28,16 +28,19 @@
   --exc-font-mono: 'IBM Plex Mono', monospace;
 }
 
-@media (prefers-color-scheme: dark){
-  :root{
-    --paper:    #0E0B14;
-    --exc-card: #151020;
-    --ink:      #F3F0F8;
-    --ink-2:    #8E869B;
-    --hair:     #251F30;
-    --dot-bg:   #1E1929;
-    --idle:     #2E2740;
-  }
+/* Tema escuro dirigido pela classe .dark (o ThemeProvider a liga a partir do
+   prefers-color-scheme). Assim os tokens da Excambia flipam JUNTO com os
+   tokens do shadcn (--background/--foreground) — se um seguisse a media query
+   e o outro a classe, dava para dessincronizar e sumir o texto (paper escuro
+   com tinta clara, ou o contrário). */
+.dark{
+  --paper:    #0E0B14;
+  --exc-card: #151020;
+  --ink:      #F3F0F8;
+  --ink-2:    #8E869B;
+  --hair:     #251F30;
+  --dot-bg:   #1E1929;
+  --idle:     #2E2740;
 }
 
 /* malha de pontos do palco do chat — versão delicada aprovada:

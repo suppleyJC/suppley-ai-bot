@@ -34,7 +34,7 @@ import {
 // ============================================================
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
-  draft: { label: "Rascunho", color: "text-slate-400", bgColor: "bg-slate-500/10" },
+  draft: { label: "Rascunho", color: "text-muted-foreground", bgColor: "bg-slate-500/10" },
   submitted: { label: "Enviada", color: "text-blue-400", bgColor: "bg-blue-500/10" },
   sourcing: { label: "Buscando Fornecedores", color: "text-purple-400", bgColor: "bg-purple-500/10" },
   quotes_sent: { label: "Cotações Enviadas", color: "text-amber-400", bgColor: "bg-amber-500/10" },
@@ -45,7 +45,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
   accepted: { label: "Aceita", color: "text-green-400", bgColor: "bg-green-500/10" },
   rejected: { label: "Rejeitada", color: "text-red-400", bgColor: "bg-red-500/10" },
   converted: { label: "Convertida em Pedido", color: "text-emerald-300", bgColor: "bg-emerald-500/20" },
-  expired: { label: "Expirada", color: "text-slate-500", bgColor: "bg-slate-500/10" },
+  expired: { label: "Expirada", color: "text-muted-foreground", bgColor: "bg-slate-500/10" },
 };
 
 // ============================================================
@@ -176,11 +176,11 @@ export default function RfqDetail() {
               onClick={() => setLocation("/rfq")}
               className="p-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-all"
             >
-              <ArrowLeft className="w-4 h-4 text-slate-300" />
+              <ArrowLeft className="w-4 h-4 text-muted-foreground/60" />
             </button>
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-1">
-                <span className="text-xs font-mono text-slate-500">{rfq.rfqNumber}</span>
+                <span className="text-xs font-mono text-muted-foreground">{rfq.rfqNumber}</span>
                 <span className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full ${statusConf.bgColor} ${statusConf.color}`}>
                   {statusConf.label}
                 </span>
@@ -202,7 +202,7 @@ export default function RfqDetail() {
           <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4">
             <div className="flex items-center gap-2 mb-1">
               <Globe className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs text-slate-400">Países</span>
+              <span className="text-xs text-muted-foreground">Países</span>
             </div>
             <p className="text-sm text-white font-medium">
               {preferredCountries.length > 0 ? preferredCountries.join(", ") : "Qualquer"}
@@ -211,14 +211,14 @@ export default function RfqDetail() {
           <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4">
             <div className="flex items-center gap-2 mb-1">
               <Ship className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs text-slate-400">Incoterm</span>
+              <span className="text-xs text-muted-foreground">Incoterm</span>
             </div>
             <p className="text-sm text-white font-medium">{rfq.preferredIncoterm || "FOB"}</p>
           </div>
           <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4">
             <div className="flex items-center gap-2 mb-1">
               <MapPin className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs text-slate-400">Destino</span>
+              <span className="text-xs text-muted-foreground">Destino</span>
             </div>
             <p className="text-sm text-white font-medium">
               {rfq.destinationPort ? `${rfq.destinationPort} (${rfq.destinationState})` : rfq.destinationState}
@@ -227,7 +227,7 @@ export default function RfqDetail() {
           <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4">
             <div className="flex items-center gap-2 mb-1">
               <Clock className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs text-slate-400">Criada em</span>
+              <span className="text-xs text-muted-foreground">Criada em</span>
             </div>
             <p className="text-sm text-white font-medium">
               {new Date(rfq.createdAt).toLocaleDateString("pt-BR")}
@@ -238,29 +238,29 @@ export default function RfqDetail() {
         {/* Client Info (if for client) */}
         {rfq.requesterType === "client" && rfq.clientName && (
           <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6">
-            <h3 className="text-sm font-medium text-slate-300 mb-3 flex items-center gap-2">
+            <h3 className="text-sm font-medium text-muted-foreground/60 mb-3 flex items-center gap-2">
               <User className="w-4 h-4 text-cyan-400" /> Dados do Cliente
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
-                <span className="text-xs text-slate-500">Nome</span>
+                <span className="text-xs text-muted-foreground">Nome</span>
                 <p className="text-white">{rfq.clientName}</p>
               </div>
               {rfq.clientCompany && (
                 <div>
-                  <span className="text-xs text-slate-500">Empresa</span>
+                  <span className="text-xs text-muted-foreground">Empresa</span>
                   <p className="text-white">{rfq.clientCompany}</p>
                 </div>
               )}
               {rfq.clientEmail && (
                 <div>
-                  <span className="text-xs text-slate-500">Email</span>
+                  <span className="text-xs text-muted-foreground">Email</span>
                   <p className="text-white">{rfq.clientEmail}</p>
                 </div>
               )}
               {rfq.clientCnpj && (
                 <div>
-                  <span className="text-xs text-slate-500">CNPJ</span>
+                  <span className="text-xs text-muted-foreground">CNPJ</span>
                   <p className="text-white">{rfq.clientCnpj}</p>
                 </div>
               )}
@@ -279,14 +279,14 @@ export default function RfqDetail() {
               <div key={item.id} className="bg-slate-900/50 rounded-xl p-4 flex items-center justify-between">
                 <div>
                   <p className="text-white font-medium">{item.productName}</p>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                     <span>{item.quantity?.toLocaleString()} {item.unit}</span>
                     {item.ncmCode && <span className="text-amber-400">NCM: {item.ncmCode}</span>}
                     {item.description && <span className="truncate max-w-[200px]">{item.description}</span>}
                   </div>
                 </div>
                 {item.targetUnitPriceCents && (
-                  <span className="text-sm text-slate-300">
+                  <span className="text-sm text-muted-foreground/60">
                     Alvo: ${(item.targetUnitPriceCents / 100).toFixed(2)}/un
                   </span>
                 )}
@@ -318,7 +318,7 @@ export default function RfqDetail() {
                     <div className="flex items-center gap-3">
                       <Building2 className="w-4 h-4 text-cyan-400" />
                       <span className="text-white font-medium">{quote.supplierName}</span>
-                      <span className="text-xs text-slate-400">{quote.supplierCountry}</span>
+                      <span className="text-xs text-muted-foreground">{quote.supplierCountry}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       {quote.totalFobCents && (
@@ -337,7 +337,7 @@ export default function RfqDetail() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-slate-400">
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
                     <span>{quote.incoterm}</span>
                     {quote.paymentTerms && <span>{quote.paymentTerms}</span>}
                     {quote.leadTimeDays && <span>{quote.leadTimeDays} dias</span>}
@@ -348,9 +348,9 @@ export default function RfqDetail() {
             </div>
           ) : (
             <div className="text-center py-8">
-              <FileText className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-400 text-sm">Nenhuma cotação recebida ainda</p>
-              <p className="text-xs text-slate-500 mt-1">Adicione cotações conforme receber respostas dos fornecedores</p>
+              <FileText className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+              <p className="text-muted-foreground text-sm">Nenhuma cotação recebida ainda</p>
+              <p className="text-xs text-muted-foreground mt-1">Adicione cotações conforme receber respostas dos fornecedores</p>
             </div>
           )}
         </div>
@@ -362,7 +362,7 @@ export default function RfqDetail() {
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-white">Adicionar Cotação de Fornecedor</h3>
                 <button onClick={() => setShowAddQuote(false)} className="p-2 rounded-lg hover:bg-slate-800">
-                  <X className="w-5 h-5 text-slate-400" />
+                  <X className="w-5 h-5 text-muted-foreground" />
                 </button>
               </div>
 
@@ -370,7 +370,7 @@ export default function RfqDetail() {
                 {/* Supplier Info */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">Nome do Fornecedor *</label>
+                    <label className="block text-xs text-muted-foreground mb-1">Nome do Fornecedor *</label>
                     <input
                       value={quoteForm.supplierName}
                       onChange={(e) => setQuoteForm(prev => ({ ...prev, supplierName: e.target.value }))}
@@ -379,7 +379,7 @@ export default function RfqDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">País *</label>
+                    <label className="block text-xs text-muted-foreground mb-1">País *</label>
                     <select
                       value={quoteForm.supplierCountry}
                       onChange={(e) => setQuoteForm(prev => ({ ...prev, supplierCountry: e.target.value }))}
@@ -398,7 +398,7 @@ export default function RfqDetail() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">Email</label>
+                    <label className="block text-xs text-muted-foreground mb-1">Email</label>
                     <input
                       value={quoteForm.supplierEmail}
                       onChange={(e) => setQuoteForm(prev => ({ ...prev, supplierEmail: e.target.value }))}
@@ -407,7 +407,7 @@ export default function RfqDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">Prazo de Entrega (dias)</label>
+                    <label className="block text-xs text-muted-foreground mb-1">Prazo de Entrega (dias)</label>
                     <input
                       type="number"
                       value={quoteForm.leadTimeDays}
@@ -419,7 +419,7 @@ export default function RfqDetail() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">Incoterm</label>
+                    <label className="block text-xs text-muted-foreground mb-1">Incoterm</label>
                     <select
                       value={quoteForm.incoterm}
                       onChange={(e) => setQuoteForm(prev => ({ ...prev, incoterm: e.target.value }))}
@@ -432,7 +432,7 @@ export default function RfqDetail() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">Condições de Pagamento</label>
+                    <label className="block text-xs text-muted-foreground mb-1">Condições de Pagamento</label>
                     <input
                       value={quoteForm.paymentTerms}
                       onChange={(e) => setQuoteForm(prev => ({ ...prev, paymentTerms: e.target.value }))}
@@ -444,7 +444,7 @@ export default function RfqDetail() {
 
                 {/* Items pricing */}
                 <div className="border-t border-slate-700 pt-4">
-                  <h4 className="text-sm font-medium text-slate-300 mb-3">Preços por Item</h4>
+                  <h4 className="text-sm font-medium text-muted-foreground/60 mb-3">Preços por Item</h4>
                   <div className="space-y-3">
                     {quoteForm.items.map((item, index) => {
                       const rfqItem = rfq.items?.find((i: any) => i.id === item.rfqItemId);
@@ -453,7 +453,7 @@ export default function RfqDetail() {
                           <p className="text-sm text-white mb-2">{rfqItem?.productName || `Item ${index + 1}`}</p>
                           <div className="grid grid-cols-3 gap-3">
                             <div>
-                              <label className="block text-xs text-slate-500 mb-1">Preço Unit. (USD)</label>
+                              <label className="block text-xs text-muted-foreground mb-1">Preço Unit. (USD)</label>
                               <input
                                 type="number"
                                 step="0.01"
@@ -468,7 +468,7 @@ export default function RfqDetail() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs text-slate-500 mb-1">Quantidade</label>
+                              <label className="block text-xs text-muted-foreground mb-1">Quantidade</label>
                               <input
                                 type="number"
                                 value={item.quantity}
@@ -481,7 +481,7 @@ export default function RfqDetail() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs text-slate-500 mb-1">Total</label>
+                              <label className="block text-xs text-muted-foreground mb-1">Total</label>
                               <p className="px-3 py-2 text-emerald-400 font-medium text-sm">
                                 ${((item.unitPriceCents || 0) * (item.quantity || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                               </p>
@@ -497,7 +497,7 @@ export default function RfqDetail() {
                 <div className="flex justify-end gap-3 pt-4 border-t border-slate-700">
                   <button
                     onClick={() => setShowAddQuote(false)}
-                    className="px-6 py-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-300 hover:bg-slate-700 transition-all"
+                    className="px-6 py-3 bg-slate-800 border border-slate-700 rounded-xl text-muted-foreground/60 hover:bg-slate-700 transition-all"
                   >
                     Cancelar
                   </button>
@@ -529,7 +529,7 @@ export default function RfqDetail() {
           </a>
           <a
             href="/excambia"
-            className="flex items-center gap-2 px-6 py-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-300 hover:bg-slate-700 transition-all"
+            className="flex items-center gap-2 px-6 py-3 bg-slate-800 border border-slate-700 rounded-xl text-muted-foreground/60 hover:bg-slate-700 transition-all"
           >
             <Sparkles className="w-4 h-4" /> Analisar com Excambia
           </a>
@@ -538,8 +538,8 @@ export default function RfqDetail() {
         {/* Notes */}
         {rfq.notes && (
           <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6">
-            <h3 className="text-sm font-medium text-slate-300 mb-2">Observações</h3>
-            <p className="text-slate-400 text-sm whitespace-pre-wrap">{rfq.notes}</p>
+            <h3 className="text-sm font-medium text-muted-foreground/60 mb-2">Observações</h3>
+            <p className="text-muted-foreground text-sm whitespace-pre-wrap">{rfq.notes}</p>
           </div>
         )}
       </div>

@@ -44,7 +44,7 @@ const TYPE_CLS: Record<string, string> = {
   supplier_info: "bg-teal-50 text-teal-700",
   product_insight: "bg-amber-50 text-amber-700",
   market_trend: "bg-emerald-50 text-emerald-700",
-  calculation_pattern: "bg-slate-100 text-slate-600",
+  calculation_pattern: "bg-muted text-muted-foreground",
   feedback: "bg-rose-50 text-rose-700",
 };
 
@@ -58,7 +58,7 @@ export default function MemoriaExcambia() {
     <div className="mx-auto max-w-4xl p-6">
       <div className="mb-5 flex items-center gap-2.5">
         <Brain className="h-6 w-6 text-violet-600" />
-        <h1 className="text-xl font-bold text-slate-900">Memória da Excambia</h1>
+        <h1 className="text-xl font-bold text-foreground">Memória da Excambia</h1>
       </div>
       <MemoriaExcambiaPanel />
     </div>
@@ -88,7 +88,7 @@ export function MemoriaExcambiaPanel() {
   return (
     <div>
       <div className="mb-4 flex items-start justify-between gap-4">
-        <p className="max-w-2xl text-sm text-slate-500">
+        <p className="max-w-2xl text-sm text-muted-foreground">
           Aprendizados persistentes que a Excambia usa no contexto das conversas
           (preferências, regras, padrões). A IA grava aqui sozinha — e você pode
           ajustar ou remover a qualquer momento.
@@ -104,24 +104,24 @@ export function MemoriaExcambiaPanel() {
         <div className="space-y-6">
           {Array.from(grupos.entries()).map(([tipo, itens]) => (
             <section key={tipo}>
-              <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                {TYPE_LABEL[tipo] ?? tipo} <span className="text-slate-300">({itens.length})</span>
+              <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                {TYPE_LABEL[tipo] ?? tipo} <span className="text-muted-foreground/60">({itens.length})</span>
               </h2>
               <div className="space-y-2">
                 {itens.map((m) => (
-                  <div key={m.id} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5">
+                  <div key={m.id} className="flex items-start gap-3 rounded-xl border border-border bg-card p-3.5">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-slate-800">{m.key}</span>
-                        <Badge className={TYPE_CLS[m.contextType] ?? "bg-slate-100 text-slate-600"}>{TYPE_LABEL[m.contextType] ?? m.contextType}</Badge>
-                        <span className="text-[11px] text-slate-400">importância {m.importance}</span>
+                        <span className="font-semibold text-foreground">{m.key}</span>
+                        <Badge className={TYPE_CLS[m.contextType] ?? "bg-muted text-muted-foreground"}>{TYPE_LABEL[m.contextType] ?? m.contextType}</Badge>
+                        <span className="text-[11px] text-muted-foreground">importância {m.importance}</span>
                         {m.source === "excambia" && <span className="text-[11px] text-violet-400">• registrado pela IA</span>}
                       </div>
-                      <p className="mt-1 break-words text-sm text-slate-600">{m.value}</p>
+                      <p className="mt-1 break-words text-sm text-muted-foreground">{m.value}</p>
                     </div>
                     <div className="flex flex-shrink-0 gap-1">
                       <Button size="icon" variant="ghost" onClick={() => setEditing(m)} aria-label="Editar">
-                        <Pencil className="h-4 w-4 text-slate-500" />
+                        <Pencil className="h-4 w-4 text-muted-foreground" />
                       </Button>
                       <Button size="icon" variant="ghost" onClick={() => setToDelete(m)} aria-label="Excluir">
                         <Trash2 className="h-4 w-4 text-rose-500" />
@@ -192,7 +192,7 @@ function MemoriaDialog({ memoria, onClose, onSaved }: {
         <div className="space-y-3">
           <Field label="Tipo">
             <select value={contextType} onChange={(e) => setContextType(e.target.value as CtxType)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+              className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm">
               {TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
             </select>
           </Field>
@@ -214,11 +214,11 @@ function MemoriaDialog({ memoria, onClose, onSaved }: {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <Label className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</Label>
+      <Label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{label}</Label>
       {children}
     </div>
   );
 }
 function Placeholder({ text }: { text: string }) {
-  return <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">{text}</div>;
+  return <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">{text}</div>;
 }

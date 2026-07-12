@@ -696,7 +696,7 @@ export default function Products() {
                   className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
                     active
                       ? "border-violet-300 bg-violet-50 text-violet-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                      : "border-border bg-card text-muted-foreground hover:border-border hover:bg-muted"
                   }`}
                 >
                   <span className="h-2 w-2 rounded-full" style={{ background: meta.dot }} />
@@ -737,10 +737,10 @@ export default function Products() {
               </p>
             )}
             {!hasFilters ? (
-              <div className="flex-1 flex items-center justify-center rounded-2xl border border-dashed border-slate-200 p-10 text-center">
+              <div className="flex-1 flex items-center justify-center rounded-2xl border border-dashed border-border p-10 text-center">
                 <div>
-                  <Search className="mb-3 h-10 w-10 mx-auto text-slate-300" />
-                  <p className="text-sm text-slate-400">
+                  <Search className="mb-3 h-10 w-10 mx-auto text-muted-foreground/60" />
+                  <p className="text-sm text-muted-foreground">
                     Busque por nome, NCM ou fornecedor — ou filtre por classe/criticidade — para listar os ativos.
                   </p>
                 </div>
@@ -765,13 +765,13 @@ export default function Products() {
                       className={`w-full rounded-xl border p-3 text-left transition-all ${
                         isSel
                           ? "border-violet-400 bg-violet-50/60 ring-1 ring-violet-200"
-                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60"
+                          : "border-border bg-card hover:border-border hover:bg-muted/60"
                       }`}
                     >
                       <div className="flex items-start gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <span className="font-semibold text-slate-800 truncate">{mo.name}</span>
+                            <span className="font-semibold text-foreground truncate">{mo.name}</span>
                             {mo.variants.length > 1 && (
                               <Badge variant="secondary" className="gap-1 text-[10px]">
                                 <Boxes className="h-3 w-3" /> {mo.variants.length} variações
@@ -795,7 +795,7 @@ export default function Products() {
                           <div className="text-right">
                             {mo.price ? (
                               <>
-                                <div className="text-sm font-semibold text-slate-800">
+                                <div className="text-sm font-semibold text-foreground">
                                   {fmtMoney(mo.price.unitPriceCents, mo.price.currency)}
                                 </div>
                                 <div className="text-[11px] text-muted-foreground">{fmtDate(mo.price.quotationDate)}</div>
@@ -804,7 +804,7 @@ export default function Products() {
                               <span className="text-[11px] text-muted-foreground">Sem cotação</span>
                             )}
                           </div>
-                          <ChevronRight className={`h-4 w-4 ${isSel ? "text-violet-500" : "text-slate-300"}`} />
+                          <ChevronRight className={`h-4 w-4 ${isSel ? "text-violet-500" : "text-muted-foreground/60"}`} />
                         </div>
                       </div>
                     </button>
@@ -820,9 +820,9 @@ export default function Products() {
           {/* CAMADA 3 — detalhe lateral (desktop) */}
           <aside className="hidden lg:block w-[380px] flex-shrink-0 overflow-y-auto">
             {detail ?? (
-              <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 p-10 text-center">
-                <Box className="mb-3 h-10 w-10 text-slate-300" />
-                <p className="text-sm text-slate-400">Selecione um item para ver a ficha técnica e os fornecedores.</p>
+              <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-border p-10 text-center">
+                <Box className="mb-3 h-10 w-10 text-muted-foreground/60" />
+                <p className="text-sm text-muted-foreground">Selecione um item para ver a ficha técnica e os fornecedores.</p>
               </div>
             )}
           </aside>
@@ -848,22 +848,22 @@ function ModelDetail({
   const tags = (p.tags as string[] | null) ?? [];
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white">
+    <div className="rounded-2xl border border-border bg-card">
       {/* cabeçalho */}
-      <div className="flex items-start gap-2 border-b border-slate-100 p-4">
+      <div className="flex items-start gap-2 border-b border-border p-4">
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-bold text-slate-900">{model.name}</h2>
+          <h2 className="text-base font-bold text-foreground">{model.name}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="font-mono">{model.ncmCode}</span>
             {model.classe && (
-              <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5">
+              <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5">
                 <Layers className="h-3 w-3" /> {model.classe.trim()}
               </span>
             )}
             {crit && <Badge variant="outline" className={`text-[10px] ${crit.badge}`}>{crit.label}</Badge>}
           </div>
         </div>
-        <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100" title="Fechar">
+        <button onClick={onClose} className="rounded-lg p-1 text-muted-foreground hover:bg-muted" title="Fechar">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -881,9 +881,9 @@ function ModelDetail({
 
         {/* descrição */}
         <div>
-          <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Ficha técnica</p>
-          <p className="text-sm leading-relaxed text-slate-600">
-            {model.description || <span className="text-slate-400">Sem descrição cadastrada.</span>}
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Ficha técnica</p>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {model.description || <span className="text-muted-foreground">Sem descrição cadastrada.</span>}
           </p>
         </div>
 
@@ -897,13 +897,13 @@ function ModelDetail({
         </div>
         {p.aplicacao && (
           <div className="text-sm">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Aplicação</span>
-            <p className="text-slate-600">{p.aplicacao}</p>
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Aplicação</span>
+            <p className="text-muted-foreground">{p.aplicacao}</p>
           </div>
         )}
         {tags.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
-            <TagIcon className="h-3.5 w-3.5 text-slate-400" />
+            <TagIcon className="h-3.5 w-3.5 text-muted-foreground" />
             {tags.map((t) => (
               <Badge key={t} variant="secondary" className="text-[10px]">{t}</Badge>
             ))}
@@ -912,7 +912,7 @@ function ModelDetail({
 
         {/* fornecedores & preços */}
         <div>
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
             Fornecedores e preços
           </p>
           <SupplierPrices productName={model.name} fallbackSupplier={supplierName(p.supplierId)} unit={p.unit} />
@@ -924,11 +924,11 @@ function ModelDetail({
 
 function Spec({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-1.5">
-      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+    <div className="rounded-lg border border-border bg-muted/60 px-2.5 py-1.5">
+      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
         {icon} {label}
       </div>
-      <div className="text-sm font-medium text-slate-700">{value}</div>
+      <div className="text-sm font-medium text-foreground">{value}</div>
     </div>
   );
 }
@@ -961,7 +961,7 @@ function SupplierPrices({
 
   if (rows.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-400">
+      <div className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
         {fallbackSupplier
           ? `Fornecedor cadastrado: ${fallbackSupplier}. Sem cotação no histórico ainda — suba proformas para alimentar os preços.`
           : "Sem cotações no histórico ainda. Suba proformas para ver fornecedores e preços."}
@@ -970,9 +970,9 @@ function SupplierPrices({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200">
+    <div className="overflow-hidden rounded-lg border border-border">
       <table className="w-full text-[13px]">
-        <thead className="bg-slate-50 text-slate-500">
+        <thead className="bg-muted text-muted-foreground">
           <tr>
             <th className="px-3 py-2 text-left font-semibold">Fornecedor</th>
             <th className="px-3 py-2 text-right font-semibold">Último preço</th>
@@ -981,16 +981,16 @@ function SupplierPrices({
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={r.supplier} className="border-t border-slate-100">
+            <tr key={r.supplier} className="border-t border-border">
               <td className="px-3 py-2">
-                <span className="text-slate-700">{r.supplier}</span>
+                <span className="text-foreground">{r.supplier}</span>
                 {i === 0 && rows.length > 1 && (
                   <span className="ml-2 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
                     Mais competitivo
                   </span>
                 )}
               </td>
-              <td className="px-3 py-2 text-right font-medium text-slate-800">
+              <td className="px-3 py-2 text-right font-medium text-foreground">
                 {fmtMoney(r.unitPriceCents, r.currency)}
                 <span className="text-[11px] text-muted-foreground">/{unit}</span>
               </td>
@@ -999,7 +999,7 @@ function SupplierPrices({
           ))}
         </tbody>
       </table>
-      <div className="border-t border-slate-100 px-3 py-2">
+      <div className="border-t border-border px-3 py-2">
         <ProductPriceHistoryDialog productName={productName} />
       </div>
     </div>

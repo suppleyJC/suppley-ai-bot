@@ -76,21 +76,21 @@ function eventoVisual(tipo: string): { Icon: React.ComponentType<any>; tint: str
     rfq_enviada:       { Icon: Users, tint: "text-violet-600 bg-violet-50" },
     cambio_fechado:    { Icon: CircleDollarSign, tint: "text-emerald-600 bg-emerald-50" },
     estagio_avancado:  { Icon: Check, tint: "text-violet-600 bg-violet-50" },
-    anexo_adicionado:  { Icon: Paperclip, tint: "text-slate-600 bg-slate-100" },
-    anexo_removido:    { Icon: Paperclip, tint: "text-slate-400 bg-slate-50" },
+    anexo_adicionado:  { Icon: Paperclip, tint: "text-muted-foreground bg-muted" },
+    anexo_removido:    { Icon: Paperclip, tint: "text-muted-foreground bg-muted" },
     financeiro_lancado:  { Icon: CircleDollarSign, tint: "text-emerald-600 bg-emerald-50" },
-    financeiro_removido: { Icon: CircleDollarSign, tint: "text-slate-400 bg-slate-50" },
+    financeiro_removido: { Icon: CircleDollarSign, tint: "text-muted-foreground bg-muted" },
     pedido_confirmado:   { Icon: ShoppingCart, tint: "text-violet-600 bg-violet-50" },
     producao_iniciada:   { Icon: Factory, tint: "text-orange-600 bg-orange-50" },
     produto_embarcado:   { Icon: Truck, tint: "text-blue-600 bg-blue-50" },
     di_registrada:       { Icon: FileCheck, tint: "text-amber-600 bg-amber-50" },
     nacionalizado:       { Icon: Zap, tint: "text-teal-600 bg-teal-50" },
     entregue:            { Icon: PackageCheck, tint: "text-emerald-600 bg-emerald-50" },
-    nota_interna:      { Icon: StickyNote, tint: "text-slate-500 bg-slate-100" },
+    nota_interna:      { Icon: StickyNote, tint: "text-muted-foreground bg-muted" },
     alerta_ia:         { Icon: Sparkles, tint: "text-teal-600 bg-teal-50" },
     mensagem:          { Icon: Sparkles, tint: "text-teal-600 bg-teal-50" },
   };
-  return map[tipo] ?? { Icon: Clock, tint: "text-slate-500 bg-slate-100" };
+  return map[tipo] ?? { Icon: Clock, tint: "text-muted-foreground bg-muted" };
 }
 
 /* ---------- etiqueta de ORIGEM (quem gerou o evento) ---------- */
@@ -128,8 +128,8 @@ export default function OperacaoTimeline({
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
       {/* ESTEIRA VERTICAL */}
-      <aside className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h3 className="mb-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+      <aside className="rounded-2xl border border-border bg-card p-5">
+        <h3 className="mb-4 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
           Esteira da operação
         </h3>
         <ol className="relative">
@@ -141,23 +141,23 @@ export default function OperacaoTimeline({
             return (
               <li key={s.key} className="relative flex gap-3 pb-5 last:pb-0">
                 {i < ESTEIRA.length - 1 && (
-                  <span className="absolute left-[15px] top-8 -bottom-0 w-px bg-slate-200" />
+                  <span className="absolute left-[15px] top-8 -bottom-0 w-px bg-muted" />
                 )}
                 <span
                   className={[
                     "z-10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full",
                     done ? "bg-teal-500 text-white"
                       : current ? "bg-violet-600 text-white"
-                      : "bg-slate-200 text-slate-400",
+                      : "bg-muted text-muted-foreground",
                   ].join(" ")}
                 >
                   {done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
                 </span>
                 <div className="pt-1">
-                  <p className={`text-sm font-semibold ${current ? "text-violet-700" : done ? "text-slate-700" : "text-slate-400"}`}>
+                  <p className={`text-sm font-semibold ${current ? "text-violet-700" : done ? "text-foreground" : "text-muted-foreground"}`}>
                     {s.label}
                   </p>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-muted-foreground">
                     {done ? "concluído" : current ? "em andamento" : "pendente"}
                   </p>
                 </div>
@@ -167,13 +167,13 @@ export default function OperacaoTimeline({
         </ol>
 
         {/* snapshot de valores */}
-        <div className="mt-5 space-y-1.5 border-t border-slate-100 pt-4 text-sm">
+        <div className="mt-5 space-y-1.5 border-t border-border pt-4 text-sm">
           <div className="flex justify-between">
-            <span className="text-slate-500">Custo líquido</span>
+            <span className="text-muted-foreground">Custo líquido</span>
             <span className="font-semibold">{fmtBRL(operacao.valorEstimadoBrlCents)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Margem</span>
+            <span className="text-muted-foreground">Margem</span>
             <span className="font-semibold text-violet-700">
               {operacao.margemEstimadaBp != null ? `${(operacao.margemEstimadaBp / 100).toFixed(1)}%` : "—"}
             </span>
@@ -196,7 +196,7 @@ export default function OperacaoTimeline({
                 </button>
                 <button
                   onClick={() => onDecideGoNoGo("no_go")}
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-50"
+                  className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
                 >
                   NO-GO
                 </button>
@@ -213,7 +213,7 @@ export default function OperacaoTimeline({
             {onAddNote && (
               <button
                 onClick={onAddNote}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
               >
                 + Nota
               </button>
@@ -222,7 +222,7 @@ export default function OperacaoTimeline({
         )}
 
         {eventos.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">
+          <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">
             Nenhum evento ainda. Conforme a operação avança, os marcos aparecem aqui.
           </div>
         ) : (
@@ -232,16 +232,16 @@ export default function OperacaoTimeline({
               const last = i === eventos.length - 1;
               return (
                 <li key={ev.id} className="relative flex gap-4 pb-5 last:pb-0">
-                  {!last && <span className="absolute left-[19px] top-10 -bottom-0 w-px bg-slate-200" />}
+                  {!last && <span className="absolute left-[19px] top-10 -bottom-0 w-px bg-muted" />}
                   <span className={`z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${tint}`}>
                     <Icon className="h-5 w-5" />
                   </span>
-                  <div className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white p-3.5">
+                  <div className="min-w-0 flex-1 rounded-xl border border-border bg-card p-3.5">
                     <div className="flex items-start justify-between gap-3">
-                      <p className="text-sm font-semibold text-slate-800">
+                      <p className="text-sm font-semibold text-foreground">
                         {ev.titulo ?? ev.tipo.replace(/_/g, " ")}
                       </p>
-                      <span className="whitespace-nowrap text-xs text-slate-400">{fmtData(ev.criadoEm)}</span>
+                      <span className="whitespace-nowrap text-xs text-muted-foreground">{fmtData(ev.criadoEm)}</span>
                     </div>
                     <div className="mt-2">{origemBadge(ev.autor)}</div>
                   </div>

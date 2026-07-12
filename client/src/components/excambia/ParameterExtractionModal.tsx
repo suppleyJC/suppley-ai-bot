@@ -81,15 +81,15 @@ export default function ParameterExtractionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-xl">
+      <div className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-xl">
         {/* header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <h2 className="text-lg font-semibold text-foreground">
             Parâmetros de Cálculo
           </h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-muted-foreground"
           >
             <X className="h-5 w-5" />
           </button>
@@ -98,15 +98,15 @@ export default function ParameterExtractionModal({
         {/* conteúdo */}
         <div className="max-h-[70vh] overflow-y-auto px-6 py-4 space-y-4">
           {/* REGIME TRIBUTÁRIO */}
-          <div className="rounded-lg border border-slate-150 bg-slate-50 p-4">
+          <div className="rounded-lg border border-slate-150 bg-muted p-4">
             <button
               onClick={() =>
                 setExpanded(expanded === "regime" ? "" : "regime")
               }
-              className="w-full flex items-center justify-between text-left font-semibold text-slate-900 hover:text-violet-600"
+              className="w-full flex items-center justify-between text-left font-semibold text-foreground hover:text-violet-600"
             >
               Regime Tributário
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted-foreground">
                 {regime === "lucro_real"
                   ? "Lucro Real"
                   : regime === "lucro_presumido"
@@ -135,7 +135,7 @@ export default function ParameterExtractionModal({
                 ].map((option) => (
                   <label
                     key={option.value}
-                    className="flex cursor-pointer items-start gap-3 rounded-lg p-2 hover:bg-slate-100"
+                    className="flex cursor-pointer items-start gap-3 rounded-lg p-2 hover:bg-muted"
                   >
                     <input
                       type="radio"
@@ -146,10 +146,10 @@ export default function ParameterExtractionModal({
                       className="mt-1"
                     />
                     <div>
-                      <div className="font-medium text-slate-900">
+                      <div className="font-medium text-foreground">
                         {option.label}
                       </div>
-                      <div className="text-xs text-slate-500">{option.desc}</div>
+                      <div className="text-xs text-muted-foreground">{option.desc}</div>
                     </div>
                   </label>
                 ))}
@@ -158,15 +158,15 @@ export default function ParameterExtractionModal({
           </div>
 
           {/* ESTADO DE DESTINO */}
-          <div className="rounded-lg border border-slate-150 bg-slate-50 p-4">
+          <div className="rounded-lg border border-slate-150 bg-muted p-4">
             <button
               onClick={() =>
                 setExpanded(expanded === "estado" ? "" : "estado")
               }
-              className="w-full flex items-center justify-between text-left font-semibold text-slate-900 hover:text-violet-600"
+              className="w-full flex items-center justify-between text-left font-semibold text-foreground hover:text-violet-600"
             >
               Estado de Destino
-              <span className="text-xs text-slate-500">{estado}</span>
+              <span className="text-xs text-muted-foreground">{estado}</span>
             </button>
             {expanded === "estado" && (
               <div className="mt-3 space-y-2">
@@ -176,9 +176,9 @@ export default function ParameterExtractionModal({
                   onChange={(e) => setEstado(e.target.value.toUpperCase())}
                   placeholder="Ex.: SC, SP, MG"
                   maxLength={2}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900 placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:border-violet-500 focus:outline-none"
                 />
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   {isSc
                     ? "✓ SC tem benefício TTD 409 (ICMS antecipado)"
                     : "Outros estados pagam ICMS de importação integral"}
@@ -189,15 +189,15 @@ export default function ParameterExtractionModal({
 
           {/* TTD PHASE (só se SC e não Simples) */}
           {showTtd && (
-            <div className="rounded-lg border border-slate-150 bg-slate-50 p-4">
+            <div className="rounded-lg border border-slate-150 bg-muted p-4">
               <button
                 onClick={() =>
                   setExpanded(expanded === "ttd" ? "" : "ttd")
                 }
-                className="w-full flex items-center justify-between text-left font-semibold text-slate-900 hover:text-violet-600"
+                className="w-full flex items-center justify-between text-left font-semibold text-foreground hover:text-violet-600"
               >
                 Fase TTD 409
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-muted-foreground">
                   {ttdPhase === "primeiros_36m"
                     ? "Primeiros 36m"
                     : "Após 36m"}
@@ -219,7 +219,7 @@ export default function ParameterExtractionModal({
                   ].map((option) => (
                     <label
                       key={option.value}
-                      className="flex cursor-pointer items-start gap-3 rounded-lg p-2 hover:bg-slate-100"
+                      className="flex cursor-pointer items-start gap-3 rounded-lg p-2 hover:bg-muted"
                     >
                       <input
                         type="radio"
@@ -230,10 +230,10 @@ export default function ParameterExtractionModal({
                         className="mt-1"
                       />
                       <div>
-                        <div className="font-medium text-slate-900">
+                        <div className="font-medium text-foreground">
                           {option.label}
                         </div>
-                        <div className="text-xs text-slate-500">{option.desc}</div>
+                        <div className="text-xs text-muted-foreground">{option.desc}</div>
                       </div>
                     </label>
                   ))}
@@ -243,21 +243,21 @@ export default function ParameterExtractionModal({
           )}
 
           {/* CÂMBIO */}
-          <div className="rounded-lg border border-slate-150 bg-slate-50 p-4">
+          <div className="rounded-lg border border-slate-150 bg-muted p-4">
             <button
               onClick={() =>
                 setExpanded(expanded === "cambio" ? "" : "cambio")
               }
-              className="w-full flex items-center justify-between text-left font-semibold text-slate-900 hover:text-violet-600"
+              className="w-full flex items-center justify-between text-left font-semibold text-foreground hover:text-violet-600"
             >
               Câmbio
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted-foreground">
                 {cambio === "ptax_oficial" ? "PTAX Oficial" : "Taxa Fixa"}
               </span>
             </button>
             {expanded === "cambio" && (
               <div className="mt-3 space-y-3">
-                <label className="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-slate-100">
+                <label className="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-muted">
                   <input
                     type="radio"
                     name="cambio"
@@ -266,15 +266,15 @@ export default function ParameterExtractionModal({
                     onChange={(e) => setCambio(e.target.value)}
                   />
                   <div>
-                    <div className="font-medium text-slate-900">
+                    <div className="font-medium text-foreground">
                       PTAX Oficial (BCB)
                     </div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-muted-foreground">
                       Taxa do Banco Central
                     </div>
                   </div>
                 </label>
-                <label className="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-slate-100">
+                <label className="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-muted">
                   <input
                     type="radio"
                     name="cambio"
@@ -283,7 +283,7 @@ export default function ParameterExtractionModal({
                     onChange={(e) => setCambio(e.target.value)}
                   />
                   <div className="flex-1">
-                    <div className="font-medium text-slate-900">Taxa Fixa</div>
+                    <div className="font-medium text-foreground">Taxa Fixa</div>
                     {cambio === "taxa_fixa" && (
                       <input
                         type="number"
@@ -291,7 +291,7 @@ export default function ParameterExtractionModal({
                         value={taxaFixa}
                         onChange={(e) => setTaxaFixa(e.target.value)}
                         placeholder="Ex.: 5.35"
-                        className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+                        className="mt-2 w-full rounded-lg border border-border px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground focus:border-violet-500 focus:outline-none"
                       />
                     )}
                   </div>
@@ -301,15 +301,15 @@ export default function ParameterExtractionModal({
           </div>
 
           {/* MODAL LOGÍSTICO */}
-          <div className="rounded-lg border border-slate-150 bg-slate-50 p-4">
+          <div className="rounded-lg border border-slate-150 bg-muted p-4">
             <button
               onClick={() =>
                 setExpanded(expanded === "modal" ? "" : "modal")
               }
-              className="w-full flex items-center justify-between text-left font-semibold text-slate-900 hover:text-violet-600"
+              className="w-full flex items-center justify-between text-left font-semibold text-foreground hover:text-violet-600"
             >
               Modal Logístico
-              <span className="text-xs text-slate-500 capitalize">{modal}</span>
+              <span className="text-xs text-muted-foreground capitalize">{modal}</span>
             </button>
             {expanded === "modal" && (
               <div className="mt-3 space-y-2">
@@ -321,7 +321,7 @@ export default function ParameterExtractionModal({
                 ].map((option) => (
                   <label
                     key={option.value}
-                    className="flex cursor-pointer items-start gap-3 rounded-lg p-2 hover:bg-slate-100"
+                    className="flex cursor-pointer items-start gap-3 rounded-lg p-2 hover:bg-muted"
                   >
                     <input
                       type="radio"
@@ -332,10 +332,10 @@ export default function ParameterExtractionModal({
                       className="mt-1"
                     />
                     <div>
-                      <div className="font-medium text-slate-900">
+                      <div className="font-medium text-foreground">
                         {option.label}
                       </div>
-                      <div className="text-xs text-slate-500">{option.desc}</div>
+                      <div className="text-xs text-muted-foreground">{option.desc}</div>
                     </div>
                   </label>
                 ))}
@@ -344,15 +344,15 @@ export default function ParameterExtractionModal({
           </div>
 
           {/* FRETE */}
-          <div className="rounded-lg border border-slate-150 bg-slate-50 p-4">
+          <div className="rounded-lg border border-slate-150 bg-muted p-4">
             <button
               onClick={() =>
                 setExpanded(expanded === "frete" ? "" : "frete")
               }
-              className="w-full flex items-center justify-between text-left font-semibold text-slate-900 hover:text-violet-600"
+              className="w-full flex items-center justify-between text-left font-semibold text-foreground hover:text-violet-600"
             >
               Frete Internacional
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted-foreground">
                 {frete ? `USD ${frete}` : "Opcional"}
               </span>
             </button>
@@ -364,22 +364,22 @@ export default function ParameterExtractionModal({
                   value={frete}
                   onChange={(e) => setFrete(e.target.value)}
                   placeholder="Frete em USD"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-violet-500 focus:outline-none"
                 />
               </div>
             )}
           </div>
 
           {/* SEGURO */}
-          <div className="rounded-lg border border-slate-150 bg-slate-50 p-4">
+          <div className="rounded-lg border border-slate-150 bg-muted p-4">
             <button
               onClick={() =>
                 setExpanded(expanded === "seguro" ? "" : "seguro")
               }
-              className="w-full flex items-center justify-between text-left font-semibold text-slate-900 hover:text-violet-600"
+              className="w-full flex items-center justify-between text-left font-semibold text-foreground hover:text-violet-600"
             >
               Seguro
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted-foreground">
                 {seguro ? `USD ${seguro}` : "Opcional"}
               </span>
             </button>
@@ -391,7 +391,7 @@ export default function ParameterExtractionModal({
                   value={seguro}
                   onChange={(e) => setSeguro(e.target.value)}
                   placeholder="Seguro em USD"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-violet-500 focus:outline-none"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-violet-500 focus:outline-none"
                 />
               </div>
             )}
@@ -399,10 +399,10 @@ export default function ParameterExtractionModal({
         </div>
 
         {/* footer */}
-        <div className="flex gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4">
+        <div className="flex gap-3 border-t border-border bg-muted px-6 py-4">
           <button
             onClick={onClose}
-            className="flex-1 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+            className="flex-1 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted"
           >
             Cancelar
           </button>

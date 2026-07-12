@@ -28,13 +28,13 @@ export function UsoIaPanel() {
         <Stat label="Custo médio / chamada" value={usd(data.avgCostPerCallUsd)} />
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 p-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+      <div className="rounded-2xl border border-border bg-card">
+        <div className="border-b border-border p-3 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
           Por modelo
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
+            <thead className="bg-muted text-left text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-2.5">Modelo</th>
                 <th className="px-4 py-2.5">Chamadas</th>
@@ -46,8 +46,8 @@ export function UsoIaPanel() {
             </thead>
             <tbody>
               {data.byModel.map((m) => (
-                <tr key={m.model} className="border-t border-slate-100">
-                  <td className="px-4 py-2.5 font-mono text-[12px] text-slate-700">{m.model}</td>
+                <tr key={m.model} className="border-t border-border">
+                  <td className="px-4 py-2.5 font-mono text-[12px] text-foreground">{m.model}</td>
                   <td className="px-4 py-2.5">{num(m.calls)}</td>
                   <td className="px-4 py-2.5">{num(m.promptTokens)}</td>
                   <td className="px-4 py-2.5">{num(m.completionTokens)}</td>
@@ -75,16 +75,16 @@ export function UsoIaPanel() {
 
 function Stat({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
-    <div className={`rounded-xl border bg-white p-3 ${strong ? "border-violet-200 ring-1 ring-violet-100" : "border-slate-200"}`}>
-      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="mt-1 text-lg font-bold text-slate-900">{value}</p>
+    <div className={`rounded-xl border bg-card p-3 ${strong ? "border-violet-200 ring-1 ring-violet-100" : "border-border"}`}>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-lg font-bold text-foreground">{value}</p>
     </div>
   );
 }
 function Placeholder({ text }: { text: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">
-      <Activity className="mx-auto mb-2 h-6 w-6 text-slate-300" />
+    <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">
+      <Activity className="mx-auto mb-2 h-6 w-6 text-muted-foreground/60" />
       {text}
     </div>
   );

@@ -49,7 +49,7 @@ function ChangeBadge({ percent }: { percent: number | null }) {
   const Icon = flat ? Minus : up ? TrendingUp : TrendingDown;
   // Para custo de compra: subir é ruim (vermelho), cair é bom (verde).
   const color = flat
-    ? "bg-gray-100 text-gray-700"
+    ? "bg-muted text-foreground"
     : up
       ? "bg-red-100 text-red-700"
       : "bg-green-100 text-green-700";

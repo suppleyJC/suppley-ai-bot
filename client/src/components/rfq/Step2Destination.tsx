@@ -21,7 +21,7 @@ export function Step2Destination({
     <div className="space-y-6">
       {/* Países de origem */}
       <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6">
-        <label className="block text-sm font-medium text-slate-300 mb-3">
+        <label className="block text-sm font-medium text-muted-foreground/60 mb-3">
           <Globe className="w-4 h-4 inline mr-2 text-emerald-400" />
           Países de Origem Preferidos
         </label>
@@ -50,7 +50,7 @@ export function Step2Destination({
                 className="sr-only"
               />
               <span>{country.flag}</span>
-              <span className="text-slate-300">{country.name}</span>
+              <span className="text-muted-foreground/60">{country.name}</span>
             </label>
           ))}
         </div>
@@ -58,7 +58,7 @@ export function Step2Destination({
 
       {/* Incoterm */}
       <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6">
-        <label className="block text-sm font-medium text-slate-300 mb-3">
+        <label className="block text-sm font-medium text-muted-foreground/60 mb-3">
           <Ship className="w-4 h-4 inline mr-2 text-emerald-400" />
           Incoterm Preferido
         </label>
@@ -89,7 +89,7 @@ export function Step2Destination({
       {/* Estado + Porto */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6">
-          <label className="block text-sm font-medium text-slate-300 mb-2">
+          <label className="block text-sm font-medium text-muted-foreground/60 mb-2">
             <MapPin className="w-4 h-4 inline mr-2 text-emerald-400" />
             Estado de Destino
           </label>
@@ -99,13 +99,13 @@ export function Step2Destination({
           >
             {STATES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <p className="text-xs text-slate-500 mt-2">
+          <p className="text-xs text-muted-foreground mt-2">
             A Excambia vai calcular o melhor porto automaticamente
           </p>
         </div>
 
         <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6">
-          <label className="block text-sm font-medium text-slate-300 mb-2">
+          <label className="block text-sm font-medium text-muted-foreground/60 mb-2">
             <Ship className="w-4 h-4 inline mr-2 text-emerald-400" />
             Porto Preferido (opcional)
           </label>
@@ -121,7 +121,7 @@ export function Step2Destination({
 
       {/* Urgência */}
       <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6">
-        <label className="block text-sm font-medium text-slate-300 mb-3">
+        <label className="block text-sm font-medium text-muted-foreground/60 mb-3">
           <Clock className="w-4 h-4 inline mr-2 text-emerald-400" />
           Urgência
         </label>
@@ -148,7 +148,7 @@ export function Step2Destination({
                 className="sr-only"
               />
               <span className="text-white font-semibold">{option.label}</span>
-              <span className="text-xs text-slate-400 mt-1">{option.desc}</span>
+              <span className="text-xs text-muted-foreground mt-1">{option.desc}</span>
             </label>
           ))}
         </div>
@@ -156,7 +156,7 @@ export function Step2Destination({
 
       {/* Orçamento */}
       <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6">
-        <label className="block text-sm font-medium text-slate-300 mb-2">
+        <label className="block text-sm font-medium text-muted-foreground/60 mb-2">
           <DollarSign className="w-4 h-4 inline mr-2 text-emerald-400" />
           Orçamento Máximo (opcional)
         </label>

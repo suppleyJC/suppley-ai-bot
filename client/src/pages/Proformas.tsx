@@ -74,11 +74,11 @@ const emptyDraft: Draft = {
 };
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  rascunho: { label: "Rascunho", color: "bg-gray-100 text-gray-700" },
+  rascunho: { label: "Rascunho", color: "bg-muted text-foreground" },
   extraida: { label: "Extraída (revisar)", color: "bg-amber-100 text-amber-800" },
   revisada: { label: "Revisada", color: "bg-blue-100 text-blue-800" },
   distribuida: { label: "Distribuída", color: "bg-green-100 text-green-800" },
-  arquivada: { label: "Arquivada", color: "bg-gray-100 text-gray-500" },
+  arquivada: { label: "Arquivada", color: "bg-muted text-muted-foreground" },
 };
 
 /** Item da fila do upload em LOTE (escala: centenas/milhares de cotações). */
@@ -711,7 +711,7 @@ export default function Proformas() {
               </div>
               <div className="space-y-3">
                 {draft.items.map((item, idx) => (
-                  <div key={idx} className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+                  <div key={idx} className="space-y-2 rounded-lg border border-border p-2.5">
                     <div className="grid grid-cols-12 gap-2 items-end">
                     <div className="col-span-4">
                       <Label className="text-xs">Produto (nome curto)</Label>
@@ -831,10 +831,10 @@ export default function Proformas() {
                   </p>
                 )}
                 {!hasFilters ? (
-                  <div className="flex-1 flex items-center justify-center rounded-2xl border border-dashed border-slate-200 p-10 text-center">
+                  <div className="flex-1 flex items-center justify-center rounded-2xl border border-dashed border-border p-10 text-center">
                     <div>
-                      <Search className="mb-3 h-10 w-10 mx-auto text-slate-300" />
-                      <p className="text-sm text-slate-400">
+                      <Search className="mb-3 h-10 w-10 mx-auto text-muted-foreground/60" />
+                      <p className="text-sm text-muted-foreground">
                         Busque por número/fornecedor — ou filtre por status — para listar as proformas.
                       </p>
                     </div>
@@ -859,13 +859,13 @@ export default function Proformas() {
                           className={`w-full rounded-xl border p-3 text-left transition-all ${
                             isSel
                               ? "border-violet-400 bg-violet-50/60 ring-1 ring-violet-200"
-                              : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60"
+                              : "border-border bg-card hover:border-border hover:bg-muted/60"
                           }`}
                         >
                           <div className="flex items-start gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <span className="font-semibold text-slate-800">{p.numero || `PF-${p.id}`}</span>
+                                <span className="font-semibold text-foreground">{p.numero || `PF-${p.id}`}</span>
                                 {st && <Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge>}
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
@@ -880,13 +880,13 @@ export default function Proformas() {
                             <div className="flex items-center gap-2 shrink-0">
                               <div className="text-right">
                                 {p.totalFobCents != null ? (
-                                  <div className="text-sm font-semibold text-slate-800">{fmtCents(p.totalFobCents, p.currency)}</div>
+                                  <div className="text-sm font-semibold text-foreground">{fmtCents(p.totalFobCents, p.currency)}</div>
                                 ) : (
                                   <span className="text-[11px] text-muted-foreground">sem total</span>
                                 )}
                                 <div className="text-[11px] text-muted-foreground">{fmtDate(p.quotationDate ?? p.updatedAt)}</div>
                               </div>
-                              <ChevronRight className={`h-4 w-4 ${isSel ? "text-violet-500" : "text-slate-300"}`} />
+                              <ChevronRight className={`h-4 w-4 ${isSel ? "text-violet-500" : "text-muted-foreground/60"}`} />
                             </div>
                           </div>
                         </button>
@@ -926,9 +926,9 @@ export default function Proformas() {
                     onClose={() => setSelectedId(null)}
                   />
                 ) : (
-                  <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 p-10 text-center">
-                    <FileText className="mb-3 h-10 w-10 text-slate-300" />
-                    <p className="text-sm text-slate-400">Selecione uma proforma para ver fornecedor, itens e condições.</p>
+                  <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-border p-10 text-center">
+                    <FileText className="mb-3 h-10 w-10 text-muted-foreground/60" />
+                    <p className="text-sm text-muted-foreground">Selecione uma proforma para ver fornecedor, itens e condições.</p>
                   </div>
                 )}
               </aside>
@@ -986,10 +986,10 @@ function ProformaDetail({
   const { data, isLoading } = trpc.proforma.get.useQuery({ id });
 
   if (isLoading) {
-    return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-muted-foreground">Carregando…</div>;
+    return <div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">Carregando…</div>;
   }
   if (!data) {
-    return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-muted-foreground">Proforma não encontrada.</div>;
+    return <div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">Proforma não encontrada.</div>;
   }
 
   const p = data.proforma as any;
@@ -1000,16 +1000,16 @@ function ProformaDetail({
   const total = items.reduce((s, it) => s + (it.unitPriceCents || 0) * (it.quantity || 0), 0);
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white">
-      <div className="flex items-start gap-2 border-b border-slate-100 p-4">
+    <div className="rounded-2xl border border-border bg-card">
+      <div className="flex items-start gap-2 border-b border-border p-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-base font-bold text-slate-900">{label}</h2>
+            <h2 className="text-base font-bold text-foreground">{label}</h2>
             {st && <Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge>}
           </div>
-          <p className="mt-0.5 text-sm text-slate-600 truncate">{p.supplierName || "Fornecedor não informado"}</p>
+          <p className="mt-0.5 text-sm text-muted-foreground truncate">{p.supplierName || "Fornecedor não informado"}</p>
         </div>
-        <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100" title="Fechar">
+        <button onClick={onClose} className="rounded-lg p-1 text-muted-foreground hover:bg-muted" title="Fechar">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -1045,7 +1045,7 @@ function ProformaDetail({
         </div>
 
         <div>
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Condições comerciais</p>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Condições comerciais</p>
           <div className="grid grid-cols-2 gap-2">
             <Spec label="Data" value={fmtDate(p.quotationDate)} icon={<CalendarDays className="h-3 w-3" />} />
             <Spec label="Moeda" value={p.currency || "—"} />
@@ -1057,18 +1057,18 @@ function ProformaDetail({
         </div>
 
         <div>
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Itens ({items.length})</p>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Itens ({items.length})</p>
           <div className="space-y-1.5">
             {items.map((it, i) => (
-              <div key={i} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
+              <div key={i} className="rounded-lg border border-border bg-muted/60 px-3 py-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-700 truncate">{it.productName}</p>
+                    <p className="text-sm font-medium text-foreground truncate">{it.productName}</p>
                     <p className="text-[11px] text-muted-foreground">
                       {it.quantity} {it.unit || "UN"}{it.ncmCode ? ` · NCM ${it.ncmCode}` : ""}
                     </p>
                   </div>
-                  <div className="text-right text-sm font-semibold text-slate-800 shrink-0">
+                  <div className="text-right text-sm font-semibold text-foreground shrink-0">
                     {fmtCents(it.unitPriceCents, p.currency)}
                   </div>
                 </div>
@@ -1076,9 +1076,9 @@ function ProformaDetail({
             ))}
           </div>
           {total > 0 && (
-            <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 text-sm">
+            <div className="mt-2 flex justify-between border-t border-border pt-2 text-sm">
               <span className="text-muted-foreground">Total FOB</span>
-              <span className="font-semibold text-slate-800">{fmtCents(total, p.currency)}</span>
+              <span className="font-semibold text-foreground">{fmtCents(total, p.currency)}</span>
             </div>
           )}
         </div>
@@ -1095,11 +1095,11 @@ function ProformaDetail({
 
 function Spec({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-1.5">
-      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+    <div className="rounded-lg border border-border bg-muted/60 px-2.5 py-1.5">
+      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
         {icon} {label}
       </div>
-      <div className="text-sm font-medium text-slate-700 truncate">{value}</div>
+      <div className="text-sm font-medium text-foreground truncate">{value}</div>
     </div>
   );
 }

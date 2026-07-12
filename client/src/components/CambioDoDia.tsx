@@ -50,18 +50,18 @@ function CotacaoLinha({ from, label, symbol, flag }: (typeof PARES)[number]) {
   );
 
   return (
-    <div className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
+    <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
       <div className="flex items-center gap-2">
         <span className="text-lg" aria-hidden>{flag}</span>
         <div className="leading-tight">
-          <p className="text-sm font-semibold text-slate-700">{label}</p>
-          <p className="text-[11px] text-slate-400">{symbol} → R$</p>
+          <p className="text-sm font-semibold text-foreground">{label}</p>
+          <p className="text-[11px] text-muted-foreground">{symbol} → R$</p>
         </div>
       </div>
       {isLoading ? (
         <Skeleton className="h-5 w-20" />
       ) : (
-        <span className="font-mono text-sm font-bold text-slate-900">
+        <span className="font-mono text-sm font-bold text-foreground">
           {data ? fmtBRL(data.rate) : "—"}
         </span>
       )}
@@ -105,7 +105,7 @@ export default function CambioDoDia() {
           <Badge variant="outline" className="text-[10px] font-medium">
             {fonte}
           </Badge>
-          <span className="flex items-center gap-1 text-[11px] text-slate-400">
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Clock className="h-3 w-3" />
             {fmtHora(ref?.timestamp)}
           </span>

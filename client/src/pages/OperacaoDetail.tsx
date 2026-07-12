@@ -31,7 +31,7 @@ const STATUS_LABEL: Record<string, { txt: string; cls: string }> = {
   go:        { txt: "GO",        cls: "bg-teal-50 text-teal-700" },
   no_go:     { txt: "NO-GO",     cls: "bg-red-50 text-red-700" },
   concluida: { txt: "Concluída", cls: "bg-teal-50 text-teal-700" },
-  perdida:   { txt: "Perdida",   cls: "bg-slate-100 text-slate-500" },
+  perdida:   { txt: "Perdida",   cls: "bg-muted text-muted-foreground" },
   pausada:   { txt: "Pausada",   cls: "bg-amber-50 text-amber-700" },
 };
 
@@ -59,10 +59,10 @@ export default function OperacaoDetail() {
   const update = trpc.operations.update.useMutation({ onSuccess: invalidate });
 
   if (!Number.isFinite(id)) {
-    return <div className="p-8 text-sm text-slate-500">Operação inválida.</div>;
+    return <div className="p-8 text-sm text-muted-foreground">Operação inválida.</div>;
   }
   if (isLoading) {
-    return <div className="p-8 text-sm text-slate-400">Carregando operação…</div>;
+    return <div className="p-8 text-sm text-muted-foreground">Carregando operação…</div>;
   }
   if (error || !data?.operacao) {
     return (
@@ -76,7 +76,7 @@ export default function OperacaoDetail() {
   const marcos = (data as any).marcos ?? [];
   const anexos = (data as any).anexos ?? [];
   const financeiro = (data as any).financeiro ?? [];
-  const st = STATUS_LABEL[operacao.status] ?? { txt: operacao.status, cls: "bg-slate-100 text-slate-500" };
+  const st = STATUS_LABEL[operacao.status] ?? { txt: operacao.status, cls: "bg-muted text-muted-foreground" };
   const op = operacao as typeof operacao & {
     prioridade?: "baixa" | "media" | "alta" | "critica" | null;
     prazoDesejado?: string | Date | null;
@@ -119,24 +119,24 @@ export default function OperacaoDetail() {
     <div className="mx-auto max-w-5xl p-6">
       <button
         onClick={() => navigate("/operacoes")}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-violet-700"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-violet-700"
       >
         <ArrowLeft className="h-4 w-4" /> Voltar ao Painel
       </button>
 
       {/* cabeçalho */}
-      <header className="mb-6 rounded-2xl border border-slate-200 bg-white p-5">
+      <header className="mb-6 rounded-2xl border border-border bg-card p-5">
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-0">
-            <p className="font-mono text-xs text-slate-400">{operacao.codigo}</p>
-            <h1 className="text-xl font-bold text-slate-900">{operacao.titulo}</h1>
-            <p className="text-sm text-slate-500">
+            <p className="font-mono text-xs text-muted-foreground">{operacao.codigo}</p>
+            <h1 className="text-xl font-bold text-foreground">{operacao.titulo}</h1>
+            <p className="text-sm text-muted-foreground">
               {[operacao.clienteNome, operacao.fornecedorNome, operacao.origemPais]
                 .filter(Boolean)
                 .join(" · ") || "—"}
             </p>
             {/* Auditoria: quem criou a operação (no chat ou no painel), quando e a que horas */}
-            <p className="mt-0.5 text-xs text-slate-400">
+            <p className="mt-0.5 text-xs text-muted-foreground">
               Criada{(data as any).criadoPorNome ? ` por ${(data as any).criadoPorNome}` : ""}
               {operacao.criadaEm &&
                 ` em ${new Date(operacao.criadaEm).toLocaleDateString("pt-BR")} às ${new Date(operacao.criadaEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`}
@@ -162,16 +162,16 @@ export default function OperacaoDetail() {
         </div>
 
         {/* metadados editáveis: prioridade, prazo, origem desejada */}
-        <div className="mt-4 grid grid-cols-1 gap-3 border-t border-slate-100 pt-4 sm:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-3 border-t border-border pt-4 sm:grid-cols-3">
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Prioridade</span>
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Prioridade</span>
             <div className="flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full ${prio.dot}`} />
               <select
                 value={op.prioridade ?? "media"}
                 onChange={handleChangePrioridade}
                 disabled={update.isPending}
-                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-60"
+                className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground disabled:opacity-60"
               >
                 {PRIORITY_ORDER.map((p) => (
                   <option key={p} value={p}>{getPriorityMeta(p).label}</option>
@@ -181,7 +181,7 @@ export default function OperacaoDetail() {
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
               <CalendarClock className="mr-1 inline h-3 w-3" /> Prazo desejado
             </span>
             <input
@@ -189,12 +189,12 @@ export default function OperacaoDetail() {
               value={op.prazoDesejado ? new Date(op.prazoDesejado).toISOString().slice(0, 10) : ""}
               onChange={handleChangePrazo}
               disabled={update.isPending}
-              className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-medium text-slate-700 disabled:opacity-60"
+              className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground disabled:opacity-60"
             />
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
               <Globe2 className="mr-1 inline h-3 w-3" /> Origem
             </span>
             <input
@@ -203,7 +203,7 @@ export default function OperacaoDetail() {
               onBlur={handleBlurOrigem}
               disabled={update.isPending}
               placeholder="Ex.: China, Índia, Coreia do Sul…"
-              className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-medium text-slate-700 placeholder:font-normal placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
+              className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground placeholder:font-normal placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
             />
           </label>
         </div>

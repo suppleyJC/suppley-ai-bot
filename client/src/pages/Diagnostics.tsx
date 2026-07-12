@@ -34,16 +34,16 @@ export default function Diagnostics() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white p-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">
+        <h1 className="text-4xl font-bold text-foreground mb-2">
           🔍 Diagnóstico do Sistema
         </h1>
-        <p className="text-gray-600 mb-8">
+        <p className="text-muted-foreground mb-8">
           Verifique o estado da base de dados e alíquotas NCM
         </p>
 
         {/* Status Card */}
-        <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">
+        <div className="bg-card rounded-lg shadow-lg p-8 mb-8">
+          <h2 className="text-2xl font-bold text-foreground mb-6">
             Base de Dados NCM
           </h2>
 
@@ -81,7 +81,7 @@ export default function Diagnostics() {
               {/* Total NCMs */}
               {diagnosis.total > 0 && (
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <p className="text-sm text-gray-600">Total de NCMs Carregados</p>
+                  <p className="text-sm text-muted-foreground">Total de NCMs Carregados</p>
                   <p className="text-3xl font-bold text-blue-600">
                     {diagnosis.total.toLocaleString()}
                   </p>
@@ -98,31 +98,31 @@ export default function Diagnostics() {
               {/* NCM 73084000 Specific Check */}
               {diagnosis.ncm73084000 ? (
                 <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                  <p className="font-semibold text-gray-800 mb-3">
+                  <p className="font-semibold text-foreground mb-3">
                     ✅ NCM 7308.40.00 (Escoras de Aço) Encontrado
                   </p>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="text-gray-600">Alíquota II (TEC)</p>
+                      <p className="text-muted-foreground">Alíquota II (TEC)</p>
                       <p className="text-lg font-bold text-green-700">
                         {diagnosis.ncm73084000.iiRate / 100}%
                       </p>
                     </div>
                     <div>
-                      <p className="text-gray-600">Alíquota IPI (TIPI)</p>
+                      <p className="text-muted-foreground">Alíquota IPI (TIPI)</p>
                       <p className="text-lg font-bold text-green-700">
                         {diagnosis.ncm73084000.ipiRate / 100}%
                       </p>
                     </div>
                     <div className="col-span-2">
-                      <p className="text-gray-600">Descrição</p>
-                      <p className="text-sm text-gray-700">
+                      <p className="text-muted-foreground">Descrição</p>
+                      <p className="text-sm text-foreground">
                         {diagnosis.ncm73084000.description}...
                       </p>
                     </div>
                     <div className="col-span-2">
-                      <p className="text-gray-600">Fonte</p>
-                      <p className="text-sm text-gray-700">
+                      <p className="text-muted-foreground">Fonte</p>
+                      <p className="text-sm text-foreground">
                         {diagnosis.ncm73084000.notes}
                       </p>
                     </div>
@@ -133,7 +133,7 @@ export default function Diagnostics() {
                 </div>
               ) : (
                 <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                  <p className="font-semibold text-gray-800 mb-3">
+                  <p className="font-semibold text-foreground mb-3">
                     ⚠️ NCM 7308.40.00 Não Encontrado
                   </p>
                   <p className="text-orange-700">
@@ -150,7 +150,7 @@ export default function Diagnostics() {
             </div>
           ) : (
             <div className="text-center py-8">
-              <p className="text-gray-600">
+              <p className="text-muted-foreground">
                 Clique no botão abaixo para diagnosticar o banco de dados
               </p>
             </div>
@@ -177,16 +177,16 @@ export default function Diagnostics() {
         </div>
 
         {/* Instructions */}
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">
+        <div className="bg-card rounded-lg shadow-lg p-8">
+          <h3 className="text-xl font-bold text-foreground mb-4">
             O que fazer se o diagnóstico falhar?
           </h3>
-          <ol className="space-y-4 text-gray-700">
+          <ol className="space-y-4 text-foreground">
             <li className="flex gap-4">
               <span className="font-bold text-blue-600 flex-shrink-0">1.</span>
               <span>
                 Se <strong>total &lt; 1000</strong>: Execute o script de carga
-                no servidor com <code className="bg-gray-100 px-2 py-1 rounded">
+                no servidor com <code className="bg-muted px-2 py-1 rounded">
                   bash scripts/load-ncm.sh
                 </code>
               </span>
@@ -202,7 +202,7 @@ export default function Diagnostics() {
               <span className="font-bold text-blue-600 flex-shrink-0">3.</span>
               <span>
                 Reinicie o container:{" "}
-                <code className="bg-gray-100 px-2 py-1 rounded">
+                <code className="bg-muted px-2 py-1 rounded">
                   docker restart suppley_app
                 </code>
               </span>
@@ -215,7 +215,7 @@ export default function Diagnostics() {
               </span>
             </li>
           </ol>
-          <p className="text-sm text-gray-600 mt-6">
+          <p className="text-sm text-muted-foreground mt-6">
             📖 Para mais detalhes, consulte{" "}
             <strong>DIAGNOSTIC_NCM.md</strong> na raiz do projeto.
           </p>

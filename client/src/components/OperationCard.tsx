@@ -73,7 +73,7 @@ export default function OperationCard({
 
   return (
     <div
-      className={`group w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-3 text-left transition-all hover:border-violet-300 hover:shadow-sm ${className}`}
+      className={`group w-full cursor-pointer rounded-xl border border-border bg-card p-3 text-left transition-all hover:border-violet-300 hover:shadow-sm ${className}`}
       onClick={onClick}
       onKeyDown={(e) => {
         if ((e.key === "Enter" || e.key === " ") && onClick) onClick();
@@ -85,12 +85,12 @@ export default function OperationCard({
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
           {entity.code && (
-            <p className="font-mono text-[10px] text-slate-400 truncate">
+            <p className="font-mono text-[10px] text-muted-foreground truncate">
               {entity.code}
             </p>
           )}
-          <h3 className="text-sm font-semibold text-slate-900 line-clamp-2 leading-tight">
-            {entity.code && <span className="text-slate-500">{entity.code} — </span>}
+          <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">
+            {entity.code && <span className="text-muted-foreground">{entity.code} — </span>}
             {entity.title}
           </h3>
         </div>
@@ -108,7 +108,7 @@ export default function OperationCard({
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
-                  className="rounded-md p-0.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100 data-[state=open]:opacity-100"
+                  className="rounded-md p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-muted-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
                   aria-label="Ações"
                 >
                   <MoreVertical className="h-4 w-4" />
@@ -140,7 +140,7 @@ export default function OperationCard({
 
       {/* Subtítulo: cliente/fornecedor */}
       {(entity.clientName || entity.supplierName) && (
-        <p className="text-xs text-slate-500 truncate mb-2">
+        <p className="text-xs text-muted-foreground truncate mb-2">
           {[entity.clientName, entity.supplierName]
             .filter(Boolean)
             .join(" · ")}
@@ -149,33 +149,33 @@ export default function OperationCard({
 
       {/* Detalhes: valores, estágio, etc. (apenas em modo não-compact) */}
       {!compact && (
-        <div className="grid grid-cols-2 gap-2 text-xs mb-2 py-2 border-y border-slate-100">
+        <div className="grid grid-cols-2 gap-2 text-xs mb-2 py-2 border-y border-border">
           {entity.estimatedValue !== undefined && (
             <div>
-              <span className="text-slate-500 block">Valor</span>
-              <p className="font-semibold text-slate-900">
+              <span className="text-muted-foreground block">Valor</span>
+              <p className="font-semibold text-foreground">
                 {formatCurrency(entity.estimatedValue)}
               </p>
             </div>
           )}
           {entity.margin !== undefined && (
             <div>
-              <span className="text-slate-500 block">Margem</span>
-              <p className="font-semibold text-slate-900">
+              <span className="text-muted-foreground block">Margem</span>
+              <p className="font-semibold text-foreground">
                 {(entity.margin / 100).toFixed(1)}%
               </p>
             </div>
           )}
           {entity.itemCount !== undefined && (
             <div>
-              <span className="text-slate-500 block">Itens</span>
-              <p className="font-semibold text-slate-900">{entity.itemCount}</p>
+              <span className="text-muted-foreground block">Itens</span>
+              <p className="font-semibold text-foreground">{entity.itemCount}</p>
             </div>
           )}
           {entity.deadline && (
             <div>
-              <span className="text-slate-500 block">Prazo</span>
-              <p className="font-semibold text-slate-900">
+              <span className="text-muted-foreground block">Prazo</span>
+              <p className="font-semibold text-foreground">
                 {formatDate(entity.deadline)}
               </p>
             </div>
@@ -202,7 +202,7 @@ export default function OperationCard({
           </Badge>
         )}
         {lastUpdate && (
-          <span className="text-slate-400 ml-auto">
+          <span className="text-muted-foreground ml-auto">
             {formatTimeAgo(lastUpdate)}
           </span>
         )}
@@ -210,7 +210,7 @@ export default function OperationCard({
 
       {/* Auditoria: quem criou a operação, em que dia e a que horas */}
       {(entity.creatorName || entity.createdAt) && (
-        <p className="mt-1.5 border-t border-slate-50 pt-1.5 text-[10px] text-slate-400 truncate">
+        <p className="mt-1.5 border-t border-slate-50 pt-1.5 text-[10px] text-muted-foreground truncate">
           {entity.creatorName ? `por ${entity.creatorName}` : "criada"}
           {entity.createdAt &&
             ` · ${new Date(entity.createdAt).toLocaleDateString("pt-BR")} às ${new Date(entity.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`}

@@ -139,8 +139,8 @@ function VerdictDisplay({ verdict, score }: { verdict: string; score: number }) 
       gradient: "from-blue-500 to-indigo-600",
     },
   }[verdict] || {
-    label: verdict, sublabel: "", color: "bg-gray-500", textColor: "text-gray-700",
-    bgColor: "bg-gray-50", borderColor: "border-gray-300", icon: AlertTriangle,
+    label: verdict, sublabel: "", color: "bg-gray-500", textColor: "text-foreground",
+    bgColor: "bg-muted", borderColor: "border-border", icon: AlertTriangle,
     gradient: "from-gray-500 to-gray-600",
   };
   
@@ -151,7 +151,7 @@ function VerdictDisplay({ verdict, score }: { verdict: string; score: number }) 
       {/* Score Circle */}
       <div className="relative">
         <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="6" className="text-gray-200 dark:text-gray-700" />
+          <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="6" className="text-muted-foreground/60 dark:text-gray-700" />
           <circle 
             cx="50" cy="50" r="42" fill="none" strokeWidth="6" strokeLinecap="round"
             stroke="url(#scoreGradient)"
@@ -165,8 +165,8 @@ function VerdictDisplay({ verdict, score }: { verdict: string; score: number }) 
           </defs>
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold text-gray-900 dark:text-white">{score}</span>
-          <span className="text-[10px] text-gray-500">/ 100</span>
+          <span className="text-2xl font-bold text-foreground dark:text-white">{score}</span>
+          <span className="text-[10px] text-muted-foreground">/ 100</span>
         </div>
       </div>
       
@@ -178,7 +178,7 @@ function VerdictDisplay({ verdict, score }: { verdict: string; score: number }) 
             {config.label}
           </span>
         </div>
-        <p className="text-sm text-gray-600 dark:text-gray-400">{config.sublabel}</p>
+        <p className="text-sm text-muted-foreground dark:text-gray-400">{config.sublabel}</p>
       </div>
     </div>
   );
@@ -199,14 +199,14 @@ function ScoreBreakdown({ scores }: { scores: Scores }) {
   
   return (
     <div className="space-y-3">
-      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+      <h4 className="text-sm font-semibold text-foreground dark:text-gray-300 flex items-center gap-2">
         <Brain className="h-4 w-4" />
         Análise Detalhada
       </h4>
       {items.map((item) => (
         <div key={item.label} className="flex items-center gap-3">
-          <item.icon className="h-4 w-4 text-gray-500" />
-          <span className="text-sm text-gray-600 dark:text-gray-400 w-24">{item.label}</span>
+          <item.icon className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground dark:text-gray-400 w-24">{item.label}</span>
           <div className="flex-1">
             <Progress value={item.score} className="h-2" />
           </div>
@@ -242,7 +242,7 @@ function ActionsList({ actions }: { actions: ActionItem[] }) {
   
   return (
     <div className="space-y-3">
-      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+      <h4 className="text-sm font-semibold text-foreground dark:text-gray-300 flex items-center gap-2">
         <Zap className="h-4 w-4" />
         Ações Recomendadas
       </h4>
@@ -251,9 +251,9 @@ function ActionsList({ actions }: { actions: ActionItem[] }) {
         const Icon = categoryIcons[action.category] || Zap;
         
         return (
-          <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+          <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted dark:bg-gray-800/50 border border-border dark:border-gray-700">
             <div className="flex-shrink-0 mt-0.5">
-              <Icon className="h-4 w-4 text-gray-500" />
+              <Icon className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
@@ -261,11 +261,11 @@ function ActionsList({ actions }: { actions: ActionItem[] }) {
                   {config.label}
                 </Badge>
                 {action.deadline && (
-                  <span className="text-[10px] text-gray-400">{action.deadline}</span>
+                  <span className="text-[10px] text-muted-foreground">{action.deadline}</span>
                 )}
               </div>
-              <p className="text-sm text-gray-700 dark:text-gray-300">{action.action}</p>
-              <p className="text-xs text-gray-500 mt-1">{action.expectedImpact}</p>
+              <p className="text-sm text-foreground dark:text-gray-300">{action.action}</p>
+              <p className="text-xs text-muted-foreground mt-1">{action.expectedImpact}</p>
             </div>
           </div>
         );
@@ -301,7 +301,7 @@ function RiskPanel({
         onClick={() => setExpanded(!expanded)}
         className="flex items-center justify-between w-full text-left"
       >
-        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+        <h4 className="text-sm font-semibold text-foreground dark:text-gray-300 flex items-center gap-2">
           <Shield className="h-4 w-4" />
           Análise de Riscos
           <Badge variant="outline" className={`ml-2 ${riskColor}`}>
@@ -314,13 +314,13 @@ function RiskPanel({
       {expanded && (
         <div className="space-y-3 animate-in slide-in-from-top-2">
           {riskFactors.map((factor, i) => (
-            <div key={i} className="flex items-start gap-2 p-2 rounded bg-gray-50 dark:bg-gray-800/50">
+            <div key={i} className="flex items-start gap-2 p-2 rounded bg-muted dark:bg-gray-800/50">
               <AlertTriangle className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
                 factor.level === "high" ? "text-red-500" : factor.level === "medium" ? "text-amber-500" : "text-blue-500"
               }`} />
               <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{factor.name}</p>
-                <p className="text-xs text-gray-500">{factor.description}</p>
+                <p className="text-sm font-medium text-foreground dark:text-gray-300">{factor.name}</p>
+                <p className="text-xs text-muted-foreground">{factor.description}</p>
               </div>
             </div>
           ))}
@@ -328,9 +328,9 @@ function RiskPanel({
           {mitigations.length > 0 && (
             <>
               <Separator />
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Mitigações</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mitigações</p>
               {mitigations.map((m, i) => (
-                <div key={i} className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <div key={i} className="flex items-start gap-2 text-sm text-muted-foreground dark:text-gray-400">
                   <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 text-emerald-500 flex-shrink-0" />
                   <span>{m}</span>
                 </div>
@@ -376,9 +376,9 @@ export default function IntelligenceReportPanel({
         </CardHeader>
         <CardContent>
           <div className="animate-pulse space-y-4">
-            <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded-xl" />
-            <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded-lg" />
-            <div className="h-48 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+            <div className="h-32 bg-muted dark:bg-gray-700 rounded-xl" />
+            <div className="h-24 bg-muted dark:bg-gray-700 rounded-lg" />
+            <div className="h-48 bg-muted dark:bg-gray-700 rounded-lg" />
           </div>
         </CardContent>
       </Card>
@@ -394,7 +394,7 @@ export default function IntelligenceReportPanel({
               <Sparkles className="h-5 w-5 text-purple-400" />
               Relatório de Inteligência Excambia
             </CardTitle>
-            <CardDescription className="text-gray-400 mt-1">
+            <CardDescription className="text-muted-foreground mt-1">
               Análise agêntica completa da oportunidade de importação
             </CardDescription>
           </div>
@@ -411,8 +411,8 @@ export default function IntelligenceReportPanel({
         <VerdictDisplay verdict={verdict} score={confidenceScore} />
         
         {/* Summary */}
-        <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-700">
-          <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line leading-relaxed">
+        <div className="p-4 bg-muted dark:bg-gray-800/50 rounded-lg border border-border dark:border-gray-700">
+          <p className="text-sm text-foreground dark:text-gray-300 whitespace-pre-line leading-relaxed">
             {summary}
           </p>
         </div>
@@ -470,7 +470,7 @@ export default function IntelligenceReportPanel({
           <>
             <Separator />
             <div className="space-y-2">
-              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-foreground dark:text-gray-300 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
                 Alertas de Preço ({anomalies.length})
               </h4>

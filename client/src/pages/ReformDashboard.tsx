@@ -68,7 +68,7 @@ function ReformTimelineVisual() {
       <CardContent>
         <div className="relative">
           {/* Vertical line */}
-          <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700" />
+          <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-muted dark:bg-gray-700" />
           
           <div className="space-y-6">
             {REFORM_PHASES.map((phase, i) => {
@@ -83,11 +83,11 @@ function ReformTimelineVisual() {
                     isCurrent 
                       ? "border-purple-500 bg-purple-100 dark:bg-purple-900/30" 
                       : isPast 
-                        ? "border-gray-300 bg-gray-100 dark:bg-gray-800" 
-                        : "border-gray-200 bg-white dark:bg-gray-900"
+                        ? "border-border bg-muted dark:bg-gray-800" 
+                        : "border-border bg-card dark:bg-gray-900"
                   }`}>
                     <span className={`text-sm font-bold ${
-                      isCurrent ? "text-purple-700" : isPast ? "text-gray-500" : "text-gray-400"
+                      isCurrent ? "text-purple-700" : isPast ? "text-muted-foreground" : "text-muted-foreground"
                     }`}>
                       {phase.year.toString().slice(2)}
                     </span>
@@ -99,7 +99,7 @@ function ReformTimelineVisual() {
                   {/* Content */}
                   <div className={`flex-1 pb-2 ${isFuture ? "opacity-70" : ""}`}>
                     <div className="flex items-center gap-2 mb-1">
-                      <h4 className={`font-semibold ${isCurrent ? "text-purple-700 dark:text-purple-300" : "text-gray-800 dark:text-gray-200"}`}>
+                      <h4 className={`font-semibold ${isCurrent ? "text-purple-700 dark:text-purple-300" : "text-foreground dark:text-gray-200"}`}>
                         {phase.year} — {phase.title}
                       </h4>
                       {isCurrent && (
@@ -109,7 +109,7 @@ function ReformTimelineVisual() {
                         <Badge variant="outline" className="text-yellow-600 border-yellow-300 text-[10px]">TESTE</Badge>
                       )}
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{phase.description}</p>
+                    <p className="text-sm text-muted-foreground dark:text-gray-400">{phase.description}</p>
                   </div>
                 </div>
               );
@@ -275,16 +275,16 @@ function KeyChanges() {
                 ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-900/10"
                 : change.impact === "negative"
                   ? "border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-900/10"
-                  : "border-gray-200 bg-gray-50/50 dark:border-gray-700 dark:bg-gray-800/50"
+                  : "border-border bg-muted/50 dark:border-gray-700 dark:bg-gray-800/50"
             }`}>
               <div className="flex items-start gap-3">
                 <change.icon className={`h-5 w-5 mt-0.5 ${
                   change.impact === "positive" ? "text-emerald-600" :
-                  change.impact === "negative" ? "text-red-600" : "text-gray-500"
+                  change.impact === "negative" ? "text-red-600" : "text-muted-foreground"
                 }`} />
                 <div>
-                  <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-200 mb-1">{change.title}</h4>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">{change.description}</p>
+                  <h4 className="font-semibold text-sm text-foreground dark:text-gray-200 mb-1">{change.title}</h4>
+                  <p className="text-xs text-muted-foreground dark:text-gray-400 leading-relaxed">{change.description}</p>
                 </div>
               </div>
             </div>
@@ -305,11 +305,11 @@ export default function ReformDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-foreground dark:text-white flex items-center gap-3">
             <Shield className="h-7 w-7 text-purple-600" />
             Reforma Tributária
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Simulação exclusiva Excambia — Entenda como a reforma afeta suas importações
           </p>
         </div>

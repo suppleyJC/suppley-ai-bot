@@ -125,11 +125,13 @@
   --chart-3: oklch(0.55 0.18 295);
   --chart-4: oklch(0.45 0.22 295);
   --chart-5: oklch(0.25 0.15 290);
-  --sidebar: oklch(0.18 0.10 290);
-  --sidebar-foreground: oklch(0.94 0.01 290);
-  --sidebar-accent: oklch(0.25 0.08 290);
+  /* A barra lateral é ROXA da marca em qualquer tema — não vira navy no
+     escuro (mesmos valores do modo claro). */
+  --sidebar: oklch(0.541 0.281 293.009);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.60 0.24 293);
   --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(0.28 0.06 290);
+  --sidebar-border: oklch(0.62 0.20 293);
   --sidebar-ring: oklch(0.82 0.15 175);
 }
 

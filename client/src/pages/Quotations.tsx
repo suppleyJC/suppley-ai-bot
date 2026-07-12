@@ -55,7 +55,7 @@ function formatCurrency(cents: number): string {
 }
 
 const statusConfig: Record<string, { label: string; color: string; bgColor: string; icon: React.ElementType }> = {
-  draft: { label: "Rascunho", color: "text-gray-600", bgColor: "bg-gray-100", icon: FileText },
+  draft: { label: "Rascunho", color: "text-muted-foreground", bgColor: "bg-muted", icon: FileText },
   analyzing: { label: "Analisando", color: "text-blue-600", bgColor: "bg-blue-50", icon: Calculator },
   viable: { label: "Viável", color: "text-emerald-600", bgColor: "bg-emerald-50", icon: CheckCircle2 },
   not_viable: { label: "Inviável", color: "text-red-600", bgColor: "bg-red-50", icon: FileText },
@@ -66,7 +66,7 @@ const statusConfig: Record<string, { label: string; color: string; bgColor: stri
   customs: { label: "Desembaraço", color: "text-orange-600", bgColor: "bg-orange-50", icon: FileCheck },
   nationalized: { label: "Nacionalizado", color: "text-teal-600", bgColor: "bg-teal-50", icon: CheckCircle2 },
   completed: { label: "Concluído", color: "text-emerald-700", bgColor: "bg-emerald-100", icon: CheckCircle2 },
-  cancelled: { label: "Cancelado", color: "text-gray-500", bgColor: "bg-gray-100", icon: FileText },
+  cancelled: { label: "Cancelado", color: "text-muted-foreground", bgColor: "bg-muted", icon: FileText },
 };
 
 const statusTabs = [
@@ -457,7 +457,7 @@ export default function Quotations() {
                                 </div>
                                 <Badge 
                                   variant="secondary" 
-                                  className={`${statusConfig[quotation.status]?.bgColor || "bg-gray-100"} ${statusConfig[quotation.status]?.color || "text-gray-600"} border-0 text-xs`}
+                                  className={`${statusConfig[quotation.status]?.bgColor || "bg-muted"} ${statusConfig[quotation.status]?.color || "text-muted-foreground"} border-0 text-xs`}
                                 >
                                   {statusConfig[quotation.status]?.label || quotation.status}
                                 </Badge>

@@ -190,7 +190,7 @@ export function ProductList({
                   value={taxRegime || "lucro_presumido"}
                   onValueChange={onTaxRegimeChange}
                 >
-                  <SelectTrigger className="w-[220px] bg-white dark:bg-gray-900">
+                  <SelectTrigger className="w-[220px] bg-card dark:bg-gray-900">
                     <SelectValue placeholder="Selecione o regime" />
                   </SelectTrigger>
                   <SelectContent>
@@ -211,7 +211,7 @@ export function ProductList({
                     value={String(simplesFaixa || 1)}
                     onValueChange={(v) => onSimplesFaixaChange(parseInt(v))}
                   >
-                    <SelectTrigger className="w-[280px] bg-white dark:bg-gray-900">
+                    <SelectTrigger className="w-[280px] bg-card dark:bg-gray-900">
                       <SelectValue placeholder="Selecione a faixa" />
                     </SelectTrigger>
                     <SelectContent>

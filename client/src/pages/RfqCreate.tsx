@@ -166,7 +166,7 @@ export default function RfqCreate() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-white">Nova Solicitação de Cotação</h1>
-              <p className="text-sm text-slate-400">A Excambia vai encontrar os melhores fornecedores e preços para você</p>
+              <p className="text-sm text-muted-foreground">A Excambia vai encontrar os melhores fornecedores e preços para você</p>
             </div>
           </div>
         </div>
@@ -192,10 +192,10 @@ export default function RfqCreate() {
                     {isCompleted ? (
                       <CheckCircle className="w-5 h-5 text-emerald-400" />
                     ) : (
-                      <Icon className={`w-5 h-5 ${isActive ? "text-white" : "text-slate-500"}`} />
+                      <Icon className={`w-5 h-5 ${isActive ? "text-white" : "text-muted-foreground"}`} />
                     )}
                   </div>
-                  <span className={`text-xs mt-2 font-medium ${isActive ? "text-emerald-400" : "text-slate-500"}`}>
+                  <span className={`text-xs mt-2 font-medium ${isActive ? "text-emerald-400" : "text-muted-foreground"}`}>
                     {step.title}
                   </span>
                 </div>
@@ -248,7 +248,7 @@ export default function RfqCreate() {
               <button
                 type="button"
                 onClick={prevStep}
-                className="flex items-center gap-2 px-6 py-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-300 hover:bg-slate-700 transition-all"
+                className="flex items-center gap-2 px-6 py-3 bg-slate-800 border border-slate-700 rounded-xl text-muted-foreground/60 hover:bg-slate-700 transition-all"
               >
                 <ChevronLeft className="w-4 h-4" /> Voltar
               </button>

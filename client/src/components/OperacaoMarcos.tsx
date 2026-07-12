@@ -30,7 +30,7 @@ const TODOS_TIPOS = TODOS_MARCOS;
 const STATUS_META: Record<StatusMarco, { txt: string; cls: string }> = {
   planejado:  { txt: "Planejado",  cls: "bg-amber-50 text-amber-700" },
   realizado:  { txt: "Realizado",  cls: "bg-teal-50 text-teal-700" },
-  cancelado:  { txt: "Cancelado",  cls: "bg-slate-100 text-slate-400" },
+  cancelado:  { txt: "Cancelado",  cls: "bg-muted text-muted-foreground" },
 };
 
 function fmtData(d?: string | Date | null) {
@@ -83,9 +83,9 @@ export default function OperacaoMarcos({
   const totalRealizados = TODOS_TIPOS.filter((t) => realizados.has(t)).length;
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section className="rounded-2xl border border-border bg-card p-5">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+        <h3 className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
           <PackageCheck className="h-3.5 w-3.5" /> Jornada · marcos ({totalRealizados}/{TODOS_TIPOS.length})
         </h3>
         <button
@@ -103,7 +103,7 @@ export default function OperacaoMarcos({
             <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-violet-500">
               {STAGE_LABELS[grupo.estagio]}
             </p>
-            <div className="space-y-2 border-l border-slate-100 pl-3">
+            <div className="space-y-2 border-l border-border pl-3">
               {grupo.tipos.map((t) => {
                 const meta = TIPO_META[t];
                 const Icon = meta.Icon;
@@ -115,18 +115,18 @@ export default function OperacaoMarcos({
                       className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border-2 ${
                         realizado
                           ? "border-teal-500 bg-teal-500 text-white"
-                          : "border-slate-200 bg-white text-slate-400"
+                          : "border-border bg-card text-muted-foreground"
                       }`}
                     >
                       {realizado ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-3.5 w-3.5" />}
                     </span>
                     <div className="min-w-0 flex-1 pt-0.5">
-                      <p className={`text-sm font-semibold ${realizado ? "text-slate-800" : "text-slate-400"}`}>
+                      <p className={`text-sm font-semibold ${realizado ? "text-foreground" : "text-muted-foreground"}`}>
                         {meta.label}
                       </p>
                       {marcado && (
                         <>
-                          <p className="text-[11px] text-slate-500">
+                          <p className="text-[11px] text-muted-foreground">
                             {fmtData(marcado.dataReferencia)}
                             {marcado.descricao ? ` · ${marcado.descricao}` : ""}
                           </p>
@@ -148,13 +148,13 @@ export default function OperacaoMarcos({
 
       {/* formulário */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+        <form onSubmit={handleSubmit} className="mt-4 space-y-3 rounded-xl border border-border bg-muted/60 p-3">
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Marco</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Marco</span>
               <select
                 value={tipo} onChange={(e) => setTipo(e.target.value as TipoMarco)}
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+                className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
               >
                 {JORNADA.map((g) => (
                   <optgroup key={g.estagio} label={STAGE_LABELS[g.estagio]}>
@@ -166,10 +166,10 @@ export default function OperacaoMarcos({
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Status</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Status</span>
               <select
                 value={status} onChange={(e) => setStatus(e.target.value as StatusMarco)}
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+                className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
               >
                 <option value="planejado">Planejado</option>
                 <option value="realizado">Realizado</option>
@@ -178,19 +178,19 @@ export default function OperacaoMarcos({
             </label>
           </div>
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Data</span>
+            <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Data</span>
             <input
               type="date" value={data} onChange={(e) => setData(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+              className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
               required
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Descrição (opcional)</span>
+            <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Descrição (opcional)</span>
             <input
               type="text" value={descricao} onChange={(e) => setDescricao(e.target.value)}
               placeholder="Ex.: Confirmado com Fabricante XYZ"
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+              className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
             />
           </label>
           <div className="flex gap-2">
@@ -202,7 +202,7 @@ export default function OperacaoMarcos({
             </button>
             <button
               type="button" onClick={resetForm}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+              className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted"
             >
               Cancelar
             </button>

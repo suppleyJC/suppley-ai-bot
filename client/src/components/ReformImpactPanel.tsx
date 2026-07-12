@@ -75,7 +75,7 @@ function ReformTimeline({ timeline, currentYear }: { timeline: YearlyImpact[]; c
   
   return (
     <div className="space-y-3">
-      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+      <h4 className="text-sm font-semibold text-foreground dark:text-gray-300 flex items-center gap-2">
         <Calendar className="h-4 w-4" />
         Timeline da Reforma (2025-2033)
       </h4>
@@ -88,7 +88,7 @@ function ReformTimeline({ timeline, currentYear }: { timeline: YearlyImpact[]; c
             ? "text-emerald-600" 
             : year.comparedToCurrentPercent > 1 
               ? "text-red-600" 
-              : "text-gray-500";
+              : "text-muted-foreground";
           
           return (
             <div 
@@ -101,14 +101,14 @@ function ReformTimeline({ timeline, currentYear }: { timeline: YearlyImpact[]; c
                     : ""
               }`}
             >
-              <div className="w-12 text-sm font-mono font-semibold text-gray-600 dark:text-gray-400">
+              <div className="w-12 text-sm font-mono font-semibold text-muted-foreground dark:text-gray-400">
                 {year.year}
                 {isCurrentYear && (
                   <span className="block text-[10px] text-purple-600 font-normal">ATUAL</span>
                 )}
               </div>
               
-              <div className="flex-1 h-6 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden relative">
+              <div className="flex-1 h-6 bg-muted dark:bg-gray-800 rounded-full overflow-hidden relative">
                 <div 
                   className={`h-full rounded-full transition-all duration-500 ${
                     year.comparedToCurrentPercent < -1 
@@ -119,7 +119,7 @@ function ReformTimeline({ timeline, currentYear }: { timeline: YearlyImpact[]; c
                   }`}
                   style={{ width: `${barWidth}%` }}
                 />
-                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-300">
+                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-foreground dark:text-gray-300">
                   {formatCurrency(year.totalTaxCents)}
                 </span>
               </div>
@@ -153,13 +153,13 @@ function RegimeComparison({ comparison, cifValueCents }: { comparison: ReformCom
     ? "text-emerald-600" 
     : comparison.impact === "more_expensive" 
       ? "text-red-600" 
-      : "text-gray-500";
+      : "text-muted-foreground";
   
   const impactBg = comparison.impact === "cheaper" 
     ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-700" 
     : comparison.impact === "more_expensive" 
       ? "bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-700" 
-      : "bg-gray-50 border-gray-200 dark:bg-gray-800 dark:border-gray-700";
+      : "bg-muted border-border dark:bg-gray-800 dark:border-gray-700";
   
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -169,11 +169,11 @@ function RegimeComparison({ comparison, cifValueCents }: { comparison: ReformCom
           <div className="text-xs text-blue-600 font-semibold uppercase tracking-wider mb-1">
             Regime Atual
           </div>
-          <div className="text-xs text-gray-500 mb-2">PIS + COFINS + IPI + ICMS</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white">
+          <div className="text-xs text-muted-foreground mb-2">PIS + COFINS + IPI + ICMS</div>
+          <div className="text-2xl font-bold text-foreground dark:text-white">
             {formatCurrency(comparison.currentTotalCents)}
           </div>
-          <div className="text-xs text-gray-500 mt-1">
+          <div className="text-xs text-muted-foreground mt-1">
             Taxa efetiva: {cifValueCents > 0 ? formatPercent(Math.round((comparison.currentTotalCents / cifValueCents) * 10000)) : "0%"}
           </div>
         </CardContent>
@@ -189,7 +189,7 @@ function RegimeComparison({ comparison, cifValueCents }: { comparison: ReformCom
         <div className={`text-sm ${impactColor}`}>
           {comparison.differencePercent > 0 ? "+" : ""}{comparison.differencePercent.toFixed(1)}%
         </div>
-        <div className="text-xs text-gray-500 mt-1">
+        <div className="text-xs text-muted-foreground mt-1">
           {comparison.impact === "cheaper" 
             ? "Economia com reforma" 
             : comparison.impact === "more_expensive" 
@@ -205,11 +205,11 @@ function RegimeComparison({ comparison, cifValueCents }: { comparison: ReformCom
           <div className="text-xs text-purple-600 font-semibold uppercase tracking-wider mb-1">
             Novo Regime (2033)
           </div>
-          <div className="text-xs text-gray-500 mb-2">CBS + IBS (sem cálculo por dentro)</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white">
+          <div className="text-xs text-muted-foreground mb-2">CBS + IBS (sem cálculo por dentro)</div>
+          <div className="text-2xl font-bold text-foreground dark:text-white">
             {formatCurrency(comparison.newTotalCents)}
           </div>
-          <div className="text-xs text-gray-500 mt-1">
+          <div className="text-xs text-muted-foreground mt-1">
             Taxa efetiva: {cifValueCents > 0 ? formatPercent(Math.round((comparison.newTotalCents / cifValueCents) * 10000)) : "0%"}
           </div>
         </CardContent>
@@ -232,7 +232,7 @@ function InsightsList({ insights }: { insights: string[] }) {
   
   return (
     <div className="space-y-2">
-      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+      <h4 className="text-sm font-semibold text-foreground dark:text-gray-300 flex items-center gap-2">
         <Zap className="h-4 w-4" />
         Insights da Reforma
       </h4>
@@ -282,8 +282,8 @@ export default function ReformImpactPanel({
         </CardHeader>
         <CardContent>
           <div className="animate-pulse space-y-4">
-            <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded-lg" />
-            <div className="h-48 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+            <div className="h-24 bg-muted dark:bg-gray-700 rounded-lg" />
+            <div className="h-48 bg-muted dark:bg-gray-700 rounded-lg" />
           </div>
         </CardContent>
       </Card>
@@ -310,7 +310,7 @@ export default function ReformImpactPanel({
                 ? "border-emerald-500 text-emerald-700 bg-emerald-50" 
                 : comparison.impact === "more_expensive" 
                   ? "border-red-500 text-red-700 bg-red-50" 
-                  : "border-gray-500 text-gray-700 bg-gray-50"
+                  : "border-gray-500 text-foreground bg-muted"
             }
           >
             {comparison.impact === "cheaper" 

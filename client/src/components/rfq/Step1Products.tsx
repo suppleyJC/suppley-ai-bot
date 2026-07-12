@@ -27,7 +27,7 @@ export function Step1Products({
     <div className="space-y-6">
       {/* Título da RFQ */}
       <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6">
-        <label className="block text-sm font-medium text-slate-300 mb-2">
+        <label className="block text-sm font-medium text-muted-foreground/60 mb-2">
           Título da Cotação
         </label>
         <input
@@ -42,7 +42,7 @@ export function Step1Products({
 
       {/* Finalidade */}
       <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6">
-        <label className="block text-sm font-medium text-slate-300 mb-3">
+        <label className="block text-sm font-medium text-muted-foreground/60 mb-3">
           Finalidade da Importação
         </label>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -69,7 +69,7 @@ export function Step1Products({
                 className="sr-only"
               />
               <span className="text-2xl mb-2">{option.icon}</span>
-              <span className="text-sm text-slate-300">{option.label}</span>
+              <span className="text-sm text-muted-foreground/60">{option.label}</span>
             </label>
           ))}
         </div>
@@ -109,7 +109,7 @@ export function Step1Products({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Nome do Produto */}
               <div className="md:col-span-2">
-                <label className="block text-xs text-slate-400 mb-1">Nome do Produto *</label>
+                <label className="block text-xs text-muted-foreground mb-1">Nome do Produto *</label>
                 <div className="relative">
                   <input
                     {...form.register(`items.${index}.productName`)}
@@ -130,7 +130,7 @@ export function Step1Products({
 
               {/* NCM */}
               <div>
-                <label className="block text-xs text-slate-400 mb-1">
+                <label className="block text-xs text-muted-foreground mb-1">
                   NCM
                   {watchItems[index]?.ncmConfidence && (
                     <span className="ml-2 text-emerald-400">
@@ -148,7 +148,7 @@ export function Step1Products({
               {/* Quantidade + Unidade */}
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs text-slate-400 mb-1">Quantidade *</label>
+                  <label className="block text-xs text-muted-foreground mb-1">Quantidade *</label>
                   <input
                     type="number"
                     {...form.register(`items.${index}.quantity`, { valueAsNumber: true })}
@@ -157,7 +157,7 @@ export function Step1Products({
                   />
                 </div>
                 <div className="w-28">
-                  <label className="block text-xs text-slate-400 mb-1">Unidade</label>
+                  <label className="block text-xs text-muted-foreground mb-1">Unidade</label>
                   <select
                     {...form.register(`items.${index}.unit`)}
                     className="w-full bg-slate-900/50 border border-slate-600 rounded-xl px-3 py-3 text-white focus:border-emerald-500 transition-all"
@@ -169,7 +169,7 @@ export function Step1Products({
 
               {/* Descrição */}
               <div className="md:col-span-2">
-                <label className="block text-xs text-slate-400 mb-1">Descrição / Especificações</label>
+                <label className="block text-xs text-muted-foreground mb-1">Descrição / Especificações</label>
                 <textarea
                   {...form.register(`items.${index}.description`)}
                   placeholder="Material, dimensões, acabamento, norma técnica..."
@@ -180,7 +180,7 @@ export function Step1Products({
 
               {/* Preço alvo */}
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Preço Alvo (USD/un)</label>
+                <label className="block text-xs text-muted-foreground mb-1">Preço Alvo (USD/un)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -192,7 +192,7 @@ export function Step1Products({
 
               {/* Peso */}
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Peso por unidade (kg)</label>
+                <label className="block text-xs text-muted-foreground mb-1">Peso por unidade (kg)</label>
                 <input
                   type="number"
                   step="0.001"
@@ -210,7 +210,7 @@ export function Step1Products({
                     {...form.register(`items.${index}.sampleRequired`)}
                     className="w-5 h-5 rounded border-slate-600 bg-slate-900/50 text-emerald-500 focus:ring-emerald-500"
                   />
-                  <span className="text-sm text-slate-300">Solicitar amostra antes do pedido</span>
+                  <span className="text-sm text-muted-foreground/60">Solicitar amostra antes do pedido</span>
                 </label>
               </div>
             </div>

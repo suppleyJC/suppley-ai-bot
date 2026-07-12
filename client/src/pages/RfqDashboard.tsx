@@ -35,7 +35,7 @@ import {
 // ============================================================
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: any }> = {
-  draft: { label: "Rascunho", color: "text-slate-400", bgColor: "bg-slate-500/10", icon: FileText },
+  draft: { label: "Rascunho", color: "text-muted-foreground", bgColor: "bg-slate-500/10", icon: FileText },
   submitted: { label: "Enviada", color: "text-blue-400", bgColor: "bg-blue-500/10", icon: Send },
   sourcing: { label: "Buscando", color: "text-purple-400", bgColor: "bg-purple-500/10", icon: Search },
   quotes_sent: { label: "Cotações Enviadas", color: "text-amber-400", bgColor: "bg-amber-500/10", icon: Globe },
@@ -46,7 +46,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
   accepted: { label: "Aceita", color: "text-green-400", bgColor: "bg-green-500/10", icon: CheckCircle },
   rejected: { label: "Rejeitada", color: "text-red-400", bgColor: "bg-red-500/10", icon: XCircle },
   converted: { label: "Convertida", color: "text-emerald-300", bgColor: "bg-emerald-500/20", icon: TrendingUp },
-  expired: { label: "Expirada", color: "text-slate-500", bgColor: "bg-slate-500/10", icon: Clock },
+  expired: { label: "Expirada", color: "text-muted-foreground", bgColor: "bg-slate-500/10", icon: Clock },
 };
 
 const VERDICT_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
@@ -94,7 +94,7 @@ export default function RfqDashboard() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">Solicitações de Cotação</h1>
-                <p className="text-sm text-slate-400">Gerencie suas RFQs e acompanhe o pipeline</p>
+                <p className="text-sm text-muted-foreground">Gerencie suas RFQs e acompanhe o pipeline</p>
               </div>
             </div>
             <a
@@ -115,7 +115,7 @@ export default function RfqDashboard() {
               <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
                 <FileText className="w-4 h-4 text-blue-400" />
               </div>
-              <span className="text-xs text-slate-400">Total RFQs</span>
+              <span className="text-xs text-muted-foreground">Total RFQs</span>
             </div>
             <p className="text-3xl font-bold text-white">
               {isLoadingStats ? <Loader2 className="w-5 h-5 animate-spin" /> : stats?.totalRfqs || 0}
@@ -126,7 +126,7 @@ export default function RfqDashboard() {
               <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
                 <Zap className="w-4 h-4 text-amber-400" />
               </div>
-              <span className="text-xs text-slate-400">Ativas</span>
+              <span className="text-xs text-muted-foreground">Ativas</span>
             </div>
             <p className="text-3xl font-bold text-white">
               {isLoadingStats ? <Loader2 className="w-5 h-5 animate-spin" /> : stats?.activeRfqs || 0}
@@ -137,7 +137,7 @@ export default function RfqDashboard() {
               <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
                 <CheckCircle className="w-4 h-4 text-emerald-400" />
               </div>
-              <span className="text-xs text-slate-400">Convertidas</span>
+              <span className="text-xs text-muted-foreground">Convertidas</span>
             </div>
             <p className="text-3xl font-bold text-white">
               {isLoadingStats ? <Loader2 className="w-5 h-5 animate-spin" /> : stats?.convertedRfqs || 0}
@@ -148,7 +148,7 @@ export default function RfqDashboard() {
               <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-purple-400" />
               </div>
-              <span className="text-xs text-slate-400">Score Médio</span>
+              <span className="text-xs text-muted-foreground">Score Médio</span>
             </div>
             <p className="text-3xl font-bold text-white">
               {isLoadingStats ? <Loader2 className="w-5 h-5 animate-spin" /> : stats?.averageScore || 0}
@@ -159,7 +159,7 @@ export default function RfqDashboard() {
         {/* Search & Filters */}
         <div className="flex flex-col md:flex-row gap-4 mb-6">
           <div className="flex-1 relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
               value={searchQuery}
@@ -186,7 +186,7 @@ export default function RfqDashboard() {
         {isLoadingList && (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
-            <span className="ml-3 text-slate-400">Carregando RFQs...</span>
+            <span className="ml-3 text-muted-foreground">Carregando RFQs...</span>
           </div>
         )}
 
@@ -209,7 +209,7 @@ export default function RfqDashboard() {
                     <div className="flex-1">
                       {/* Header */}
                       <div className="flex items-center gap-3 mb-2">
-                        <span className="text-xs font-mono text-slate-500">{rfq.rfqNumber}</span>
+                        <span className="text-xs font-mono text-muted-foreground">{rfq.rfqNumber}</span>
                         <span className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full ${statusConf.bgColor} ${statusConf.color}`}>
                           <StatusIcon className="w-3 h-3" />
                           {statusConf.label}
@@ -232,7 +232,7 @@ export default function RfqDashboard() {
                       </h3>
 
                       {/* Meta */}
-                      <div className="flex items-center gap-4 text-sm text-slate-400 flex-wrap">
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
                           <Globe className="w-3.5 h-3.5" />
                           {preferredCountries.length > 0
@@ -256,7 +256,7 @@ export default function RfqDashboard() {
                             {rfq.clientName}
                           </span>
                         )}
-                        <span className="flex items-center gap-1 text-xs text-slate-500">
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Clock className="w-3 h-3" />
                           {new Date(rfq.createdAt).toLocaleDateString("pt-BR")}
                         </span>
@@ -269,7 +269,7 @@ export default function RfqDashboard() {
                         <div className="text-center">
                           <div className="relative w-16 h-16">
                             <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
-                              <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-700" />
+                              <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" strokeWidth="4" className="text-foreground" />
                               <circle
                                 cx="32" cy="32" r="28" fill="none" strokeWidth="4"
                                 strokeDasharray={`${(rfq.excambiaScore / 100) * 175.9} 175.9`}
@@ -288,7 +288,7 @@ export default function RfqDashboard() {
                           {verdictConf.label}
                         </span>
                       )}
-                      <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-emerald-400 transition-colors" />
+                      <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-emerald-400 transition-colors" />
                     </div>
                   </div>
 
@@ -314,8 +314,8 @@ export default function RfqDashboard() {
                       })}
                     </div>
                     <div className="flex justify-between mt-1">
-                      <span className="text-[10px] text-slate-500">Enviada</span>
-                      <span className="text-[10px] text-slate-500">Pronta</span>
+                      <span className="text-[10px] text-muted-foreground">Enviada</span>
+                      <span className="text-[10px] text-muted-foreground">Pronta</span>
                     </div>
                   </div>
                 </a>
@@ -324,13 +324,13 @@ export default function RfqDashboard() {
 
             {filteredRfqs.length === 0 && !isLoadingList && (
               <div className="text-center py-16">
-                <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                <p className="text-slate-400 mb-2">
+                <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground mb-2">
                   {searchQuery || statusFilter !== "all" 
                     ? "Nenhuma RFQ encontrada com esses filtros" 
                     : "Nenhuma RFQ criada ainda"}
                 </p>
-                <p className="text-sm text-slate-500 mb-6">
+                <p className="text-sm text-muted-foreground mb-6">
                   Crie sua primeira solicitação de cotação para começar
                 </p>
                 <a

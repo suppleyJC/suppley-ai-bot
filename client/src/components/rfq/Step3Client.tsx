@@ -15,7 +15,7 @@ export function Step3Client({ form, watchRequesterType }: Step3ClientProps) {
   return (
     <div className="space-y-6">
       <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6">
-        <label className="block text-sm font-medium text-slate-300 mb-3">
+        <label className="block text-sm font-medium text-muted-foreground/60 mb-3">
           Quem está solicitando?
         </label>
         <div className="grid grid-cols-2 gap-4">
@@ -29,7 +29,7 @@ export function Step3Client({ form, watchRequesterType }: Step3ClientProps) {
             <input type="radio" value="self" {...form.register("requesterType")} className="sr-only" />
             <Building2 className="w-8 h-8 text-emerald-400 mb-2" />
             <span className="text-white font-semibold">Minha Empresa</span>
-            <span className="text-xs text-slate-400 mt-1">Importação própria</span>
+            <span className="text-xs text-muted-foreground mt-1">Importação própria</span>
           </label>
           <label className={`
             flex flex-col items-center p-6 rounded-xl border cursor-pointer transition-all
@@ -41,17 +41,17 @@ export function Step3Client({ form, watchRequesterType }: Step3ClientProps) {
             <input type="radio" value="client" {...form.register("requesterType")} className="sr-only" />
             <User className="w-8 h-8 text-cyan-400 mb-2" />
             <span className="text-white font-semibold">Para um Cliente</span>
-            <span className="text-xs text-slate-400 mt-1">Cotação para terceiro</span>
+            <span className="text-xs text-muted-foreground mt-1">Cotação para terceiro</span>
           </label>
         </div>
       </div>
 
       {watchRequesterType === "client" && (
         <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6 space-y-4">
-          <h3 className="text-sm font-medium text-slate-300">Dados do Cliente</h3>
+          <h3 className="text-sm font-medium text-muted-foreground/60">Dados do Cliente</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Nome *</label>
+              <label className="block text-xs text-muted-foreground mb-1">Nome *</label>
               <input
                 {...form.register("clientName")}
                 placeholder="Nome do cliente"
@@ -59,7 +59,7 @@ export function Step3Client({ form, watchRequesterType }: Step3ClientProps) {
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Empresa</label>
+              <label className="block text-xs text-muted-foreground mb-1">Empresa</label>
               <input
                 {...form.register("clientCompany")}
                 placeholder="Nome da empresa"
@@ -67,7 +67,7 @@ export function Step3Client({ form, watchRequesterType }: Step3ClientProps) {
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Email</label>
+              <label className="block text-xs text-muted-foreground mb-1">Email</label>
               <input
                 type="email"
                 {...form.register("clientEmail")}
@@ -76,7 +76,7 @@ export function Step3Client({ form, watchRequesterType }: Step3ClientProps) {
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Telefone</label>
+              <label className="block text-xs text-muted-foreground mb-1">Telefone</label>
               <input
                 {...form.register("clientPhone")}
                 placeholder="(00) 00000-0000"
@@ -84,7 +84,7 @@ export function Step3Client({ form, watchRequesterType }: Step3ClientProps) {
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">CNPJ</label>
+              <label className="block text-xs text-muted-foreground mb-1">CNPJ</label>
               <input
                 {...form.register("clientCnpj")}
                 placeholder="00.000.000/0000-00"
@@ -92,7 +92,7 @@ export function Step3Client({ form, watchRequesterType }: Step3ClientProps) {
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Estado (UF)</label>
+              <label className="block text-xs text-muted-foreground mb-1">Estado (UF)</label>
               <select
                 {...form.register("clientState")}
                 className="w-full bg-slate-900/50 border border-slate-600 rounded-xl px-4 py-3 text-white focus:border-emerald-500 transition-all"
@@ -107,7 +107,7 @@ export function Step3Client({ form, watchRequesterType }: Step3ClientProps) {
 
       {/* Notas */}
       <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6">
-        <label className="block text-sm font-medium text-slate-300 mb-2">
+        <label className="block text-sm font-medium text-muted-foreground/60 mb-2">
           Observações Adicionais
         </label>
         <textarea

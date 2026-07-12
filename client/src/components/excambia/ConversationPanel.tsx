@@ -171,7 +171,7 @@ function ConvItem({ c, active, dot, avulsa, onSelect, acoes }: {
 }) {
   return (
     <div onClick={onSelect}
-      className={`group relative flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-2.5 ${active ? "bg-violet-50" : "hover:bg-(--paper)"}`}>
+      className={`group relative flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-2.5 ${active ? "bg-violet-500/12 ring-1 ring-violet-500/25" : "hover:bg-violet-500/8"}`}>
       {c.fixada
         ? <Pin className="h-3 w-3 flex-shrink-0 text-violet-500" fill="currentColor" />
         : <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: dot }} />}

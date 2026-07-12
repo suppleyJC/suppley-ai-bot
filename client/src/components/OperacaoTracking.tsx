@@ -50,21 +50,21 @@ export default function OperacaoTracking({
     placeholder: string,
   ) => (
     <label className="flex flex-col gap-1">
-      <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</span>
+      <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</span>
       <input
         type="text"
         defaultValue={current}
         onBlur={(e) => saveText(fieldName, e.target.value, current)}
         disabled={update.isPending}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-medium text-slate-700 placeholder:font-normal placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
+        className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground placeholder:font-normal placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
       />
     </label>
   );
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
-      <h3 className="mb-4 inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+    <section className="rounded-2xl border border-border bg-card p-5">
+      <h3 className="mb-4 inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
         <Ship className="h-3.5 w-3.5" /> Rastreio do embarque
       </h3>
 
@@ -75,7 +75,7 @@ export default function OperacaoTracking({
         {field("Navio", "trackingNavio", operacao.trackingNavio ?? "", "Ex.: Ever Given")}
 
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
             <Anchor className="mr-1 inline h-3 w-3" /> ETA (chegada prevista)
           </span>
           <input
@@ -83,14 +83,14 @@ export default function OperacaoTracking({
             defaultValue={operacao.trackingEta ? new Date(operacao.trackingEta).toISOString().slice(0, 10) : ""}
             onBlur={(e) => saveEta(e.target.value)}
             disabled={update.isPending}
-            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
+            className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
           />
         </label>
 
         {field("Status", "trackingStatus", operacao.trackingStatus ?? "", "Ex.: Em trânsito, atracado…")}
       </div>
 
-      <p className="mt-3 inline-flex items-start gap-1.5 text-[11px] text-slate-400">
+      <p className="mt-3 inline-flex items-start gap-1.5 text-[11px] text-muted-foreground">
         <Info className="mt-0.5 h-3 w-3 flex-shrink-0" />
         Rastreio automático por contêiner/BL será habilitado quando a API de tracking for conectada.
       </p>

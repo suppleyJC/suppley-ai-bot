@@ -46,9 +46,9 @@ export function ParametrosPanel() {
       <header className="mb-6">
         <div className="flex items-center gap-2.5">
           <SlidersHorizontal className="h-6 w-6 text-violet-600" />
-          <h1 className="text-xl font-bold text-slate-900">Parâmetros de cálculo</h1>
+          <h1 className="text-xl font-bold text-foreground">Parâmetros de cálculo</h1>
         </div>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Tributos, taxas, custos portuários, ex-tarifário e benefícios fiscais que
           alimentam o motor. Alíquotas e taxas têm <strong>vigência por data</strong> —
           o motor usa sempre a versão vigente.
@@ -96,7 +96,7 @@ function TributosTab() {
     <Card>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          <thead className="bg-muted text-left text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
             <tr>
               <Th>Parâmetro</Th><Th>Categoria</Th><Th>Valor vigente</Th>
               <Th>Vigência</Th><Th>Base legal</Th><Th className="text-right">Ações</Th>
@@ -104,12 +104,12 @@ function TributosTab() {
           </thead>
           <tbody>
             {current.map((r) => (
-              <tr key={r.paramKey} className="border-t border-slate-100">
-                <Td className="font-medium text-slate-800">{r.label}<div className="font-mono text-[11px] text-slate-400">{r.paramKey}</div></Td>
+              <tr key={r.paramKey} className="border-t border-border">
+                <Td className="font-medium text-foreground">{r.label}<div className="font-mono text-[11px] text-muted-foreground">{r.paramKey}</div></Td>
                 <Td><Badge variant="secondary">{CATEGORY_LABEL[r.category] ?? r.category}</Badge></Td>
                 <Td className="font-semibold">{r.unit === "bp" ? pctFromBp(r.valueBp) : brlFromCents(r.valueCents)}</Td>
-                <Td className="text-slate-500">{fmtDate(r.effectiveDate)}</Td>
-                <Td className="max-w-[220px] truncate text-slate-500" >{r.legalBasis ?? "—"}</Td>
+                <Td className="text-muted-foreground">{fmtDate(r.effectiveDate)}</Td>
+                <Td className="max-w-[220px] truncate text-muted-foreground" >{r.legalBasis ?? "—"}</Td>
                 <Td className="text-right">
                   <Button size="sm" variant="outline" onClick={() => setEditing({ paramKey: r.paramKey, label: r.label, category: r.category, unit: r.unit })}>
                     <History className="mr-1.5 h-3.5 w-3.5" /> Nova versão
@@ -196,13 +196,13 @@ function PortosTab() {
     <Card>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          <thead className="bg-muted text-left text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
             <tr><Th>Porto</Th><Th>UF</Th><Th>THC</Th><Th>Armazenagem</Th><Th>Liberação</Th><Th className="text-right">Ações</Th></tr>
           </thead>
           <tbody>
             {rows.map((r: any) => (
-              <tr key={r.id} className="border-t border-slate-100">
-                <Td className="font-medium text-slate-800">{r.portName}<div className="font-mono text-[11px] text-slate-400">{r.portCode}</div></Td>
+              <tr key={r.id} className="border-t border-border">
+                <Td className="font-medium text-foreground">{r.portName}<div className="font-mono text-[11px] text-muted-foreground">{r.portCode}</div></Td>
                 <Td>{r.stateCode}</Td>
                 <Td>{brlFromCents(r.thcCents)}</Td>
                 <Td>{pctFromBp(r.storageBp)} do CIF</Td>
@@ -272,23 +272,23 @@ function ExTarifarioTab() {
 
   return (
     <Card>
-      <div className="flex items-center justify-between border-b border-slate-100 p-3">
-        <p className="text-sm text-slate-500">Reduções/suspensões de II/IPI por NCM (Resolução GECEX).</p>
+      <div className="flex items-center justify-between border-b border-border p-3">
+        <p className="text-sm text-muted-foreground">Reduções/suspensões de II/IPI por NCM (Resolução GECEX).</p>
         <Button size="sm" onClick={() => setEditing("new")}><Plus className="mr-1.5 h-4 w-4" /> Novo</Button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          <thead className="bg-muted text-left text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
             <tr><Th>NCM</Th><Th>Ex</Th><Th>II reduzido</Th><Th>IPI reduzido</Th><Th>Base legal</Th><Th>Status</Th><Th className="text-right">Ações</Th></tr>
           </thead>
           <tbody>
             {rows.map((r: any) => (
-              <tr key={r.id} className="border-t border-slate-100">
+              <tr key={r.id} className="border-t border-border">
                 <Td className="font-mono">{r.ncmCode}</Td>
                 <Td>{r.exCode ?? "—"}</Td>
                 <Td>{pctFromBp(r.reducedIiRate)}</Td>
                 <Td>{pctFromBp(r.reducedIpiRate)}</Td>
-                <Td className="max-w-[200px] truncate text-slate-500">{r.legalBasis ?? "—"}</Td>
+                <Td className="max-w-[200px] truncate text-muted-foreground">{r.legalBasis ?? "—"}</Td>
                 <Td>{r.isActive ? <Badge className="bg-teal-50 text-teal-700">Ativo</Badge> : <Badge variant="secondary">Inativo</Badge>}</Td>
                 <Td className="text-right"><Button size="sm" variant="outline" onClick={() => setEditing(r)}>Editar</Button></Td>
               </tr>
@@ -372,22 +372,22 @@ function BeneficiosTab() {
 
   return (
     <Card>
-      <div className="flex items-center justify-between border-b border-slate-100 p-3">
-        <p className="text-sm text-slate-500">Benefícios nacionais e de bloco (Mercosul/ALADI), drawback, RECOF, etc.</p>
+      <div className="flex items-center justify-between border-b border-border p-3">
+        <p className="text-sm text-muted-foreground">Benefícios nacionais e de bloco (Mercosul/ALADI), drawback, RECOF, etc.</p>
         <Button size="sm" onClick={() => setEditing("new")}><Plus className="mr-1.5 h-4 w-4" /> Novo</Button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          <thead className="bg-muted text-left text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
             <tr><Th>Benefício</Th><Th>Tipo</Th><Th>Escopo</Th><Th>Base legal</Th><Th>Status</Th><Th className="text-right">Ações</Th></tr>
           </thead>
           <tbody>
             {rows.map((r: any) => (
-              <tr key={r.id} className="border-t border-slate-100">
-                <Td className="font-medium text-slate-800">{r.name}{r.code && <div className="font-mono text-[11px] text-slate-400">{r.code}</div>}</Td>
+              <tr key={r.id} className="border-t border-border">
+                <Td className="font-medium text-foreground">{r.name}{r.code && <div className="font-mono text-[11px] text-muted-foreground">{r.code}</div>}</Td>
                 <Td><Badge variant="secondary">{BENEFIT_LABEL[r.benefitType] ?? r.benefitType}</Badge></Td>
-                <Td className="text-slate-500">{r.stateCode ?? "Federal"}{r.ncmPattern ? ` · ${r.ncmPattern}` : ""}</Td>
-                <Td className="max-w-[200px] truncate text-slate-500">{r.legalBasis ?? "—"}</Td>
+                <Td className="text-muted-foreground">{r.stateCode ?? "Federal"}{r.ncmPattern ? ` · ${r.ncmPattern}` : ""}</Td>
+                <Td className="max-w-[200px] truncate text-muted-foreground">{r.legalBasis ?? "—"}</Td>
                 <Td>{r.isActive ? <Badge className="bg-teal-50 text-teal-700">Ativo</Badge> : <Badge variant="secondary">Inativo</Badge>}</Td>
                 <Td className="text-right"><Button size="sm" variant="outline" onClick={() => setEditing(r)}>Editar</Button></Td>
               </tr>
@@ -436,7 +436,7 @@ function BeneficioDialog({ row, onClose, onSaved }: { row: any | null; onClose: 
           </div>
           <Field label="Tipo">
             <select value={benefitType} onChange={(e) => setBenefitType(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+              className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm">
               {BENEFIT_TYPES.map((t) => <option key={t} value={t}>{BENEFIT_LABEL[t]}</option>)}
             </select>
           </Field>
@@ -517,13 +517,13 @@ function RotaImportacaoTab() {
             <Input value={antecipado} onChange={(e) => setAntecipado(e.target.value)} placeholder="ex: 1 ou 2,6 (TTD 409). Vazio = usa benefício cadastrado" />
           </Field>
           <Field label="Modelo">
-            <select value={modelo} onChange={(e) => setModelo(e.target.value as RotaInput["modelo"])} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+            <select value={modelo} onChange={(e) => setModelo(e.target.value as RotaInput["modelo"])} className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm">
               <option value="trading_revenda">Trading revende a cliente</option>
               <option value="transferencia_filial">Transferência entre filiais</option>
             </select>
           </Field>
           <Field label="Etapa final no destino">
-            <select value={etapa} onChange={(e) => setEtapa(e.target.value as RotaInput["etapaFinal"])} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+            <select value={etapa} onChange={(e) => setEtapa(e.target.value as RotaInput["etapaFinal"])} className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm">
               <option value="revenda_contribuinte">Revenda a contribuinte</option>
               <option value="consumidor_final">Consumidor final (DIFAL)</option>
             </select>
@@ -573,17 +573,17 @@ function RotaImportacaoTab() {
 
 function UfSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm">
       {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
     </select>
   );
 }
 
 function Stat({ label, value, good, strong }: { label: string; value: string; good?: boolean; strong?: boolean }) {
-  const color = good === undefined ? "text-slate-800" : good ? "text-teal-700" : "text-rose-700";
+  const color = good === undefined ? "text-foreground" : good ? "text-teal-700" : "text-rose-700";
   return (
-    <div className={`rounded-xl border bg-white p-3 ${strong ? "border-violet-200 ring-1 ring-violet-100" : "border-slate-200"}`}>
-      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+    <div className={`rounded-xl border bg-card p-3 ${strong ? "border-violet-200 ring-1 ring-violet-100" : "border-border"}`}>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={`mt-1 text-lg font-bold ${color}`}>{value}</p>
     </div>
   );
@@ -591,23 +591,23 @@ function Stat({ label, value, good, strong }: { label: string; value: string; go
 
 function RotaCard({ r, highlight }: { r: any; highlight?: boolean }) {
   return (
-    <div className={`rounded-2xl border bg-white p-4 ${highlight ? "border-violet-200" : "border-slate-200"}`}>
+    <div className={`rounded-2xl border bg-card p-4 ${highlight ? "border-violet-200" : "border-border"}`}>
       <div className="flex items-center gap-2">
-        <Route className={`h-4 w-4 ${highlight ? "text-violet-600" : "text-slate-400"}`} />
-        <h3 className="font-semibold text-slate-800">{r.rota}</h3>
+        <Route className={`h-4 w-4 ${highlight ? "text-violet-600" : "text-muted-foreground"}`} />
+        <h3 className="font-semibold text-foreground">{r.rota}</h3>
       </div>
-      <div className="mt-3 flex items-center justify-between border-b border-slate-100 pb-2">
-        <span className="text-sm text-slate-500">ICMS na importação</span>
-        <span className="font-bold text-slate-900">{brlFromCents(r.icmsImportacaoCents)}</span>
+      <div className="mt-3 flex items-center justify-between border-b border-border pb-2">
+        <span className="text-sm text-muted-foreground">ICMS na importação</span>
+        <span className="font-bold text-foreground">{brlFromCents(r.icmsImportacaoCents)}</span>
       </div>
       <ul className="mt-2 space-y-2">
         {r.legs.map((l: any, i: number) => (
           <li key={i} className="text-sm">
             <div className="flex items-center justify-between gap-2">
-              <span className="flex items-center gap-1 text-slate-600"><ArrowRight className="h-3 w-3 text-slate-300" /> {l.label}</span>
-              <span className="font-medium text-slate-700">{brlFromCents(l.valueCents)}</span>
+              <span className="flex items-center gap-1 text-muted-foreground"><ArrowRight className="h-3 w-3 text-muted-foreground/60" /> {l.label}</span>
+              <span className="font-medium text-foreground">{brlFromCents(l.valueCents)}</span>
             </div>
-            {l.obs && <p className="pl-4 text-[11px] text-slate-400">{l.obs}</p>}
+            {l.obs && <p className="pl-4 text-[11px] text-muted-foreground">{l.obs}</p>}
           </li>
         ))}
       </ul>
@@ -617,7 +617,7 @@ function RotaCard({ r, highlight }: { r: any; highlight?: boolean }) {
 
 /* ---------- primitivos visuais ---------- */
 function Card({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-2xl border border-slate-200 bg-white">{children}</div>;
+  return <div className="rounded-2xl border border-border bg-card">{children}</div>;
 }
 function Th({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
   return <th className={`px-4 py-2.5 ${className}`}>{children}</th>;
@@ -628,11 +628,11 @@ function Td({ children, className = "" }: { children?: React.ReactNode; classNam
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <Label className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</Label>
+      <Label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{label}</Label>
       {children}
     </div>
   );
 }
 function Placeholder({ text }: { text: string }) {
-  return <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">{text}</div>;
+  return <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">{text}</div>;
 }

@@ -212,18 +212,18 @@ export default function Operacoes() {
       {/* cabeçalho */}
       <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Painel de Operações</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="text-2xl font-bold text-foreground">Painel de Operações</h1>
+          <p className="text-sm text-muted-foreground">
             {ativas.length} ativa{ativas.length === 1 ? "" : "s"} · {encerradas.length} finalizada{encerradas.length === 1 ? "" : "s"}
           </p>
         </div>
         <div className="flex items-center gap-2">
           {/* alternador de visão */}
-          <div className="flex rounded-xl border border-slate-200 bg-white p-0.5">
+          <div className="flex rounded-xl border border-border bg-card p-0.5">
             <button
               onClick={() => setView("lista")}
               className={`inline-flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-xs font-semibold transition-colors ${
-                view === "lista" ? "bg-violet-600 text-white" : "text-slate-500 hover:text-slate-700"
+                view === "lista" ? "bg-violet-600 text-white" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <List className="h-3.5 w-3.5" /> Lista
@@ -231,7 +231,7 @@ export default function Operacoes() {
             <button
               onClick={() => setView("quadro")}
               className={`inline-flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-xs font-semibold transition-colors ${
-                view === "quadro" ? "bg-violet-600 text-white" : "text-slate-500 hover:text-slate-700"
+                view === "quadro" ? "bg-violet-600 text-white" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <LayoutGrid className="h-3.5 w-3.5" /> Quadro
@@ -249,7 +249,7 @@ export default function Operacoes() {
       </header>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 p-10 text-sm text-slate-400">
+        <div className="flex items-center gap-2 p-10 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Carregando operações…
         </div>
       ) : error ? (
@@ -257,10 +257,10 @@ export default function Operacoes() {
           Não foi possível carregar as operações.
         </div>
       ) : operacoes.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-12 text-center">
-          <ClipboardList className="mx-auto mb-3 h-10 w-10 text-slate-300" />
-          <h3 className="text-sm font-semibold text-slate-700">Nenhuma operação ainda</h3>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-slate-400">
+        <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
+          <ClipboardList className="mx-auto mb-3 h-10 w-10 text-muted-foreground/60" />
+          <h3 className="text-sm font-semibold text-foreground">Nenhuma operação ainda</h3>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
             Crie a primeira operação para acompanhar toda a esteira — da demanda à entrega.
           </p>
           <button
@@ -280,11 +280,11 @@ export default function Operacoes() {
               className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
                 stageFilter === "todas"
                   ? "border-violet-600 bg-violet-600 text-white"
-                  : "border-slate-200 bg-white text-slate-600 hover:border-violet-300"
+                  : "border-border bg-card text-muted-foreground hover:border-violet-300"
               }`}
             >
               Todas
-              <span className={`rounded-full px-1.5 text-[11px] ${stageFilter === "todas" ? "bg-white/20" : "bg-slate-100 text-slate-500"}`}>
+              <span className={`rounded-full px-1.5 text-[11px] ${stageFilter === "todas" ? "bg-card/20" : "bg-muted text-muted-foreground"}`}>
                 {ativas.length}
               </span>
             </button>
@@ -294,7 +294,7 @@ export default function Operacoes() {
               const Icon = col.Icon;
               return (
                 <React.Fragment key={col.key}>
-                  {i > 0 && <span className="self-center text-slate-300">›</span>}
+                  {i > 0 && <span className="self-center text-muted-foreground/60">›</span>}
                   <button
                     onClick={() => setStageFilter(active ? "todas" : col.key)}
                     title={STAGE_META[col.key].descricao}
@@ -302,13 +302,13 @@ export default function Operacoes() {
                       active
                         ? "border-violet-600 bg-violet-600 text-white"
                         : count > 0
-                          ? "border-slate-200 bg-white text-slate-600 hover:border-violet-300"
-                          : "border-slate-100 bg-slate-50 text-slate-400"
+                          ? "border-border bg-card text-muted-foreground hover:border-violet-300"
+                          : "border-border bg-muted text-muted-foreground"
                     }`}
                   >
                     <Icon className={`h-3.5 w-3.5 ${active ? "text-white" : "text-violet-500"}`} />
                     <span className="hidden lg:inline">{col.label}</span>
-                    <span className={`rounded-full px-1.5 text-[11px] ${active ? "bg-white/20" : "bg-slate-100 text-slate-500"}`}>
+                    <span className={`rounded-full px-1.5 text-[11px] ${active ? "bg-card/20" : "bg-muted text-muted-foreground"}`}>
                       {count}
                     </span>
                   </button>
@@ -321,40 +321,40 @@ export default function Operacoes() {
                 className={`ml-2 inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
                   stageFilter === "encerradas"
                     ? "border-slate-700 bg-slate-700 text-white"
-                    : "border-slate-200 bg-white text-slate-500 hover:border-slate-400"
+                    : "border-border bg-card text-muted-foreground hover:border-slate-400"
                 }`}
               >
-                <CheckCircle2 className={`h-3.5 w-3.5 ${stageFilter === "encerradas" ? "text-white" : "text-slate-400"}`} />
+                <CheckCircle2 className={`h-3.5 w-3.5 ${stageFilter === "encerradas" ? "text-white" : "text-muted-foreground"}`} />
                 Encerradas
-                <span className={`rounded-full px-1.5 text-[11px] ${stageFilter === "encerradas" ? "bg-white/20" : "bg-slate-100 text-slate-500"}`}>
+                <span className={`rounded-full px-1.5 text-[11px] ${stageFilter === "encerradas" ? "bg-card/20" : "bg-muted text-muted-foreground"}`}>
                   {encerradas.length}
                 </span>
               </button>
             )}
             {/* busca */}
             <div className="relative ml-auto min-w-[220px] flex-1 sm:max-w-xs">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Buscar código, título, cliente…"
-                className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-base sm:text-sm text-slate-700 placeholder:text-slate-300 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                className="w-full rounded-xl border border-border bg-card py-2 pl-9 pr-3 text-base sm:text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
               />
             </div>
           </div>
 
           {view === "lista" ? (
             /* ===================== VISÃO LISTA ===================== */
-            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+            <div className="overflow-x-auto rounded-2xl border border-border bg-card">
               {filtradas.length === 0 ? (
-                <p className="p-10 text-center text-sm text-slate-400">
+                <p className="p-10 text-center text-sm text-muted-foreground">
                   Nenhuma operação encontrada{query ? ` para “${query}”` : ""}.
                 </p>
               ) : (
                 <>
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-100 bg-slate-50/60 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                      <tr className="border-b border-border bg-muted/60 text-left text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                         <th className="px-4 py-2.5">Código</th>
                         <th className="px-4 py-2.5">Operação</th>
                         <th className="px-4 py-2.5">Etapa</th>
@@ -379,9 +379,9 @@ export default function Operacoes() {
                               {o.codigo}
                             </td>
                             <td className="max-w-[360px] px-4 py-3">
-                              <p className="truncate font-medium text-slate-800">{o.titulo}</p>
+                              <p className="truncate font-medium text-foreground">{o.titulo}</p>
                               {(o.clienteNome || o.fornecedorNome) && (
-                                <p className="truncate text-xs text-slate-400">
+                                <p className="truncate text-xs text-muted-foreground">
                                   {[o.clienteNome, o.fornecedorNome].filter(Boolean).join(" · ")}
                                 </p>
                               )}
@@ -398,22 +398,22 @@ export default function Operacoes() {
                                   <span className={`h-1.5 w-1.5 rounded-full ${pr.dot}`} /> {pr.label}
                                 </span>
                               ) : (
-                                <span className="text-xs text-slate-300">—</span>
+                                <span className="text-xs text-muted-foreground/60">—</span>
                               )}
                             </td>
-                            <td className="hidden whitespace-nowrap px-4 py-3 text-right font-medium text-slate-700 lg:table-cell">
-                              {o.valorEstimadoBrlCents ? formatCurrency(o.valorEstimadoBrlCents) : <span className="text-slate-300">—</span>}
+                            <td className="hidden whitespace-nowrap px-4 py-3 text-right font-medium text-foreground lg:table-cell">
+                              {o.valorEstimadoBrlCents ? formatCurrency(o.valorEstimadoBrlCents) : <span className="text-muted-foreground/60">—</span>}
                             </td>
-                            <td className="hidden whitespace-nowrap px-4 py-3 text-right text-slate-600 xl:table-cell">
-                              {o.margemEstimada != null ? `${(o.margemEstimada / 100).toFixed(1)}%` : <span className="text-slate-300">—</span>}
+                            <td className="hidden whitespace-nowrap px-4 py-3 text-right text-muted-foreground xl:table-cell">
+                              {o.margemEstimada != null ? `${(o.margemEstimada / 100).toFixed(1)}%` : <span className="text-muted-foreground/60">—</span>}
                             </td>
-                            <td className="hidden whitespace-nowrap px-4 py-3 text-right text-xs text-slate-400 md:table-cell">
+                            <td className="hidden whitespace-nowrap px-4 py-3 text-right text-xs text-muted-foreground md:table-cell">
                               {o.atualizadaEm ? formatTimeAgo(new Date(o.atualizadaEm)) : "—"}
                             </td>
                             <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <button className="rounded-lg p-1.5 text-slate-300 hover:bg-slate-100 hover:text-slate-600">
+                                  <button className="rounded-lg p-1.5 text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground">
                                     <MoreVertical className="h-4 w-4" />
                                   </button>
                                 </DropdownMenuTrigger>
@@ -441,7 +441,7 @@ export default function Operacoes() {
                   {filtradas.length > limit && (
                     <button
                       onClick={() => setLimit((l) => l + PAGE)}
-                      className="flex w-full items-center justify-center gap-1.5 border-t border-slate-100 py-3 text-xs font-semibold text-violet-600 hover:bg-violet-50/50"
+                      className="flex w-full items-center justify-center gap-1.5 border-t border-border py-3 text-xs font-semibold text-violet-600 hover:bg-violet-50/50"
                     >
                       <ChevronDown className="h-3.5 w-3.5" />
                       Mostrar mais ({filtradas.length - limit} restantes)
@@ -468,19 +468,19 @@ export default function Operacoes() {
                       }}
                       onDrop={() => handleDrop(col.key)}
                       className={`flex min-w-[230px] flex-1 flex-col rounded-2xl border p-2.5 transition-colors ${
-                        isOver ? "border-violet-400 bg-violet-50/70 ring-2 ring-violet-200" : "border-slate-200 bg-slate-50/60"
+                        isOver ? "border-violet-400 bg-violet-50/70 ring-2 ring-violet-200" : "border-border bg-muted/60"
                       }`}
                     >
                       <div className="mb-2.5 flex items-center gap-2 px-1">
                         <Icon className="h-4 w-4 shrink-0 text-violet-600" />
-                        <span className="truncate text-[13px] font-semibold text-slate-700" title={col.label}>{col.label}</span>
-                        <span className="ml-auto rounded-full bg-slate-200 px-2 text-xs font-semibold text-slate-500">
+                        <span className="truncate text-[13px] font-semibold text-foreground" title={col.label}>{col.label}</span>
+                        <span className="ml-auto rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
                           {itens.length}
                         </span>
                       </div>
                       <div className="flex min-h-[40px] flex-col gap-2">
                         {itens.length === 0 ? (
-                          <p className={`px-1 py-4 text-center text-xs ${isOver ? "text-violet-400" : "text-slate-300"}`}>
+                          <p className={`px-1 py-4 text-center text-xs ${isOver ? "text-violet-400" : "text-muted-foreground/60"}`}>
                             {isOver ? "Soltar aqui" : "—"}
                           </p>
                         ) : (
@@ -521,7 +521,7 @@ export default function Operacoes() {
               {encerradas.length > 0 && stageFilter !== "encerradas" && (
                 <section className="mt-6">
                   <div className="mb-3 flex items-center gap-3">
-                    <h2 className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Encerradas</h2>
+                    <h2 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Encerradas</h2>
                     {encerradas.length > 4 && (
                       <button
                         onClick={() => { setStageFilter("encerradas"); setView("lista"); }}

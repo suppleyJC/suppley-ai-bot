@@ -72,7 +72,7 @@ export default function ExcambiaMarket() {
   const timingCor =
     timing?.recomendacao === "comprar" ? "text-green-600"
     : timing?.recomendacao === "aguardar" ? "text-amber-600"
-    : "text-slate-500";
+    : "text-muted-foreground";
   const timingBorda =
     timing?.recomendacao === "comprar" ? "border-l-green-500"
     : timing?.recomendacao === "aguardar" ? "border-l-amber-500"
@@ -267,7 +267,7 @@ export default function ExcambiaMarket() {
                   onChange={(e) => setNcmInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && setNcmQuery(ncmInput)}
                   placeholder="NCM (8 dígitos) — ex.: 7317.00.20"
-                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="flex-1 rounded-lg border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
                 <Button onClick={() => setNcmQuery(ncmInput)} disabled={ncmInput.replace(/\D/g, "").length < 6}>
                   Consultar

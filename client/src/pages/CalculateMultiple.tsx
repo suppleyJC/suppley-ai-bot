@@ -855,7 +855,7 @@ export default function CalculateMultiple() {
                         value={formData.taxRegime || "lucro_presumido"} 
                         onValueChange={(v) => setFormData(prev => ({ ...prev, taxRegime: v, simplesFaixa: v === 'simples_nacional' ? (prev.simplesFaixa || 1) : 1 }))}
                       >
-                        <SelectTrigger className="w-[220px] bg-white dark:bg-gray-900">
+                        <SelectTrigger className="w-[220px] bg-card dark:bg-gray-900">
                           <SelectValue placeholder="Selecione o regime" />
                         </SelectTrigger>
                         <SelectContent>
@@ -877,7 +877,7 @@ export default function CalculateMultiple() {
                           value={String(formData.simplesFaixa || 1)} 
                           onValueChange={(v) => setFormData(prev => ({ ...prev, simplesFaixa: parseInt(v) }))}
                         >
-                          <SelectTrigger className="w-[280px] bg-white dark:bg-gray-900">
+                          <SelectTrigger className="w-[280px] bg-card dark:bg-gray-900">
                             <SelectValue placeholder="Selecione a faixa" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1302,7 +1302,7 @@ export default function CalculateMultiple() {
               </div>
               
               {/* Total Custos Aduaneiros */}
-              <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <div className="p-3 bg-muted dark:bg-gray-800 rounded-lg">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Total Custos Aduaneiros:</span>
                   <span className="text-lg font-bold text-primary">
