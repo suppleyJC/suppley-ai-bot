@@ -55,3 +55,9 @@
     radial-gradient(62% 58% at 50% 46%, var(--paper) 0%, transparent 80%),
     linear-gradient(var(--paper), transparent 14%, transparent 86%, var(--paper));
 }
+/* a vinheta dilui APENAS a malha: o conteúdo do palco sobe acima dela,
+   senão o ::before (posicionado) pinta por cima e desbota texto e marca */
+.chat-stage > *{
+  position: relative;
+  z-index: 1;
+}

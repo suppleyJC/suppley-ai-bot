@@ -130,7 +130,8 @@ const LogoIcon = ({ className }: { className?: string }) => (
 );
 
 // Data e horário correntes no canto superior esquerdo do palco do chat,
-// no formato "11 JUL 2026 · 22:14 BRT" (mono, caixa alta), a cada minuto.
+// no formato "11 JUL 2026 · 22:14 BRT", atualizando a cada minuto —
+// mesma fonte e corpo do indicador de câmbio (PTAX) no lado direito.
 const MESES_CURTOS = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
 
 function formataAgora(d: Date): string {
@@ -146,10 +147,7 @@ function RelogioAgora() {
     return () => clearInterval(t);
   }, []);
   return (
-    <span
-      className="whitespace-nowrap text-[10px] uppercase tracking-[0.12em] text-(--ink-2)"
-      style={{ fontFamily: "var(--exc-font-mono)" }}
-    >
+    <span className="whitespace-nowrap text-xs text-(--ink-2)">
       {formataAgora(agora)}
     </span>
   );

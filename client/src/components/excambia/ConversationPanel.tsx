@@ -47,7 +47,7 @@ export default function ConversationPanel({
 
   if (collapsed) {
     return (
-      <div className="flex h-full w-14 flex-shrink-0 flex-col items-center border-r border-(--hair) bg-(--exc-card) py-4 gap-3">
+      <div className="flex h-full w-14 flex-shrink-0 flex-col items-center border-r border-(--hair) bg-(--paper) py-4 gap-3">
         {/* expandir — círculo destacado */}
         <button
           onClick={onToggleCollapse}
@@ -93,7 +93,7 @@ export default function ConversationPanel({
         onClick={onToggleCollapse}
         className="fixed inset-0 z-30 bg-slate-900/20 backdrop-blur-[1px] sm:hidden"
       />
-      <div className="flex h-full w-64 md:w-80 flex-shrink-0 flex-col border-r border-(--hair) bg-(--exc-card) max-sm:absolute max-sm:inset-y-0 max-sm:left-0 max-sm:z-40 max-sm:w-[82vw] max-sm:max-w-[18rem] max-sm:shadow-2xl">
+      <div className="flex h-full w-64 md:w-80 flex-shrink-0 flex-col border-r border-(--hair) bg-(--paper) max-sm:absolute max-sm:inset-y-0 max-sm:left-0 max-sm:z-40 max-sm:w-[82vw] max-sm:max-w-[18rem] max-sm:shadow-2xl">
       {/* header */}
       <div className="flex items-center gap-2 p-3 sm:p-4 pb-2 sm:pb-2.5 flex-shrink-0">
         <button onClick={onNew}
@@ -120,7 +120,7 @@ export default function ConversationPanel({
         {/* GRUPO OPERAÇÕES */}
         {operacoes.length > 0 && (
           <>
-            <div className="sticky top-0 z-10 flex items-center bg-(--exc-card) px-2 pb-1.5 pt-3 text-[10px] font-bold uppercase tracking-wide text-(--ink-2)">
+            <div className="sticky top-0 z-10 flex items-center bg-(--paper) px-2 pb-1.5 pt-3 text-[10px] font-bold uppercase tracking-wide text-(--ink-2)">
               Operações
               <span className="ml-auto rounded-md bg-(--hair) px-1.5 text-[10px] text-(--ink-2)">
                 {operacoes.length} ativas
@@ -137,7 +137,7 @@ export default function ConversationPanel({
         {/* GRUPO CONVERSAS AVULSAS */}
         {avulsas.length > 0 && (
           <>
-            <div className="sticky top-0 z-10 bg-(--exc-card) px-2 pb-1.5 pt-4 text-[10px] font-bold uppercase tracking-wide text-(--ink-2)">
+            <div className="sticky top-0 z-10 bg-(--paper) px-2 pb-1.5 pt-4 text-[10px] font-bold uppercase tracking-wide text-(--ink-2)">
               Conversas
             </div>
             {avulsas.map((c) => (

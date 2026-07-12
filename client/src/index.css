@@ -68,8 +68,10 @@
   
   --radius: 1rem;
   
-  /* Light theme */
-  --background: oklch(0.985 0.002 290);
+  /* Light theme — fundo geral padronizado no neutro da marca (#FAF9F6),
+     via token da Excambia: TODAS as telas (chat, operações, proformas,
+     fornecedores, ativos, mercado) assentam sobre o mesmo branco */
+  --background: var(--paper);
   --foreground: oklch(0.18 0.04 290);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.18 0.04 290);
@@ -101,7 +103,7 @@
   --primary-foreground: oklch(0.98 0 0);
   --sidebar-primary: oklch(0.60 0.18 295);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --background: oklch(0.16 0.04 290);
+  --background: var(--paper);
   --foreground: oklch(0.94 0.01 290);
   --card: oklch(0.20 0.05 290);
   --card-foreground: oklch(0.94 0.01 290);
