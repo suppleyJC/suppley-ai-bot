@@ -214,10 +214,6 @@ export type StreamChunk =
   | { type: "thinking"; content: string }
   | { type: "tool_call"; name: string; args: Record<string, unknown> }
   | { type: "tool_result"; name: string; ok: boolean; summary: string }
-  /** Delta de TEXTO gerado em tempo real (fluidez — a resposta "digita"). */
-  | { type: "delta"; text: string }
-  /** O texto acumulado era preâmbulo de um turno com tools — descarte e recomece. */
-  | { type: "delta_reset" }
   | { type: "reply"; reply: string; toolsUsed: string[]; toolResults: OrchestratorOutput["toolResults"] };
 
 const MAX_TURNS = 6; // teto de idas-e-voltas com tools por mensagem
@@ -415,15 +411,12 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
 
     yield { type: "thinking", content: "Pensando..." };
 
-    // STREAMING de texto em tempo real: o invokeLLM roda com stream e empurra
-    // cada delta para uma fila, que este generator drena e repassa ao cliente
-    // enquanto a geração acontece — a resposta "digita" em vez de aparecer
-    // pronta. Se o turno terminar em tool calls, o texto era preâmbulo:
-    // emitimos delta_reset e o cliente recomeça o buffer no próximo turno.
-    const deltaQueue: string[] = [];
-    let wake: (() => void) | undefined;
-    let llmDone = false;
-    const llmPromise = invokeLLM({
+    // A Excambia CONCLUI o raciocínio em segundo plano (só o indicador de
+    // atividade aparece — nenhum texto vaza entre as ferramentas). A resposta
+    // final é entregue inteira e o cliente a REVELA fluindo no momento da
+    // entrega (typewriter), atendendo ao modelo "processa em silêncio → flui na
+    // entrega".
+    const result = await invokeLLM({
       messages: conversation,
       tools: toolSchemas.length > 0 ? toolSchemas : undefined,
       tool_choice: toolSchemas.length > 0 ? "auto" : undefined,
@@ -432,20 +425,7 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
       // Teto de saída alto: catalogar uma cotação grande gera argumentos de
       // tool com dezenas de itens — com o default (4096) o JSON era cortado.
       maxTokens: 16000,
-      onTextDelta: (t) => { deltaQueue.push(t); wake?.(); wake = undefined; },
-    }).then(
-      (r) => { llmDone = true; wake?.(); wake = undefined; return r; },
-      (e) => { llmDone = true; wake?.(); wake = undefined; throw e; },
-    );
-
-    while (!llmDone || deltaQueue.length > 0) {
-      if (deltaQueue.length > 0) {
-        yield { type: "delta", text: deltaQueue.splice(0).join("") };
-        continue;
-      }
-      await new Promise<void>((r) => { wake = r; });
-    }
-    const result = await llmPromise;
+    });
 
     const choice = result.choices?.[0]?.message;
     const toolCalls = choice?.tool_calls ?? [];
@@ -461,9 +441,6 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
       };
       return;
     }
-
-    // Turno com tools: o texto transmitido era preâmbulo — zera o buffer do cliente.
-    yield { type: "delta_reset" };
 
     conversation.push({
       role: "assistant",

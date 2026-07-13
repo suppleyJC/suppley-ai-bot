@@ -98,13 +98,6 @@ export type InvokeParams = {
   webSearch?: boolean;
   /** Limite de buscas por chamada (default 5). */
   webSearchMaxUses?: number;
-  /**
-   * STREAMING de texto: quando informado, a chamada usa a API de streaming da
-   * Anthropic e invoca o callback a cada delta de TEXTO gerado (fluidez no
-   * chat). O retorno da função continua sendo o resultado COMPLETO — nenhum
-   * chamador precisa mudar. Ignorado em saída estruturada.
-   */
-  onTextDelta?: (text: string) => void;
 };
 
 /** IDs de modelo disponíveis para roteamento por complexidade. */
@@ -269,103 +262,6 @@ const assertApiKey = () => {
   }
 };
 
-/**
- * Consome o SSE de streaming da Anthropic e RECONSTRÓI a resposta completa
- * (mesmo shape do JSON não-stream: id, model, content[], usage, stop_reason).
- * A cada delta de TEXTO, invoca onTextDelta — é o que dá fluidez ao chat.
- * Blocos de tool_use têm o input acumulado via input_json_delta e parseado
- * no content_block_stop. Blocos do servidor (web_search) passam intactos.
- */
-async function consumeAnthropicStream(
-  response: Response,
-  onTextDelta: (text: string) => void,
-): Promise<any> {
-  const result: any = { id: undefined, model: undefined, content: [], usage: undefined, stop_reason: undefined };
-  // Acumuladores por índice de bloco (a Anthropic indexa os blocos do content).
-  const blocks = new Map<number, any>();
-  const jsonPartials = new Map<number, string>();
-
-  const reader = (response.body as ReadableStream<Uint8Array>).getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  const handleEvent = (data: any) => {
-    switch (data?.type) {
-      case "message_start":
-        result.id = data.message?.id;
-        result.model = data.message?.model;
-        result.usage = { ...(data.message?.usage ?? {}) };
-        break;
-      case "content_block_start": {
-        const b = { ...(data.content_block ?? {}) };
-        if (b.type === "text" && typeof b.text !== "string") b.text = "";
-        blocks.set(data.index, b);
-        if (b.type === "tool_use" || b.type === "server_tool_use") jsonPartials.set(data.index, "");
-        break;
-      }
-      case "content_block_delta": {
-        const b = blocks.get(data.index);
-        if (!b) break;
-        if (data.delta?.type === "text_delta" && typeof data.delta.text === "string") {
-          b.text = (b.text ?? "") + data.delta.text;
-          if (b.type === "text") onTextDelta(data.delta.text);
-        } else if (data.delta?.type === "input_json_delta" && typeof data.delta.partial_json === "string") {
-          jsonPartials.set(data.index, (jsonPartials.get(data.index) ?? "") + data.delta.partial_json);
-        }
-        break;
-      }
-      case "content_block_stop": {
-        const b = blocks.get(data.index);
-        if (b && jsonPartials.has(data.index)) {
-          try {
-            b.input = JSON.parse(jsonPartials.get(data.index) || "{}");
-          } catch {
-            b.input = {};
-          }
-        }
-        break;
-      }
-      case "message_delta":
-        if (data.delta?.stop_reason) result.stop_reason = data.delta.stop_reason;
-        if (data.usage) result.usage = { ...(result.usage ?? {}), ...data.usage };
-        break;
-      case "error":
-        throw new Error(`LLM stream error: ${JSON.stringify(data.error ?? data)}`);
-      default:
-        break; // message_stop, ping etc.
-    }
-  };
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    // Eventos SSE separados por linha em branco; cada um com linhas "data: {...}".
-    let sep: number;
-    while ((sep = buffer.indexOf("\n\n")) !== -1) {
-      const rawEvent = buffer.slice(0, sep);
-      buffer = buffer.slice(sep + 2);
-      for (const line of rawEvent.split("\n")) {
-        if (!line.startsWith("data:")) continue;
-        const json = line.slice(5).trim();
-        if (!json) continue;
-        try {
-          handleEvent(JSON.parse(json));
-        } catch (e) {
-          if (e instanceof Error && e.message.startsWith("LLM stream error")) throw e;
-          /* linha malformada — ignora */
-        }
-      }
-    }
-  }
-
-  // Blocos em ordem de índice → content[] igual ao retorno não-stream.
-  result.content = Array.from(blocks.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([, b]) => b);
-  return result;
-}
-
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
 
@@ -383,7 +279,6 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     output_schema,
     webSearch,
     webSearchMaxUses,
-    onTextDelta,
   } = params;
 
   // A Anthropic não tem "response_format: json_schema" como a OpenAI. Para obter
@@ -531,11 +426,6 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     if (!payload.tool_choice) payload.tool_choice = { type: "auto" };
   }
 
-  // STREAMING quando há callback de delta (e a saída não é estruturada):
-  // mesma chamada, mesmo retorno — só o transporte muda.
-  const useStream = !!onTextDelta && !structuredToolName;
-  if (useStream) payload.stream = true;
-
   // Chamar API Anthropic
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -554,9 +444,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     );
   }
 
-  const result = useStream
-    ? await consumeAnthropicStream(response, onTextDelta!)
-    : await response.json() as any;
+  const result = await response.json() as any;
 
   // Medição de tokens/custo (fire-and-forget; inclui cache read/write).
   if (result.usage) {
