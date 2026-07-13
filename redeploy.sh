@@ -46,6 +46,7 @@ IDEMPOTENT_MIGRATIONS=(
   "drizzle/0040_proforma_file_key_optional_price.sql"
   "drizzle/0041_widen_proforma_file_url.sql"
   "drizzle/0042_decimal_quantity.sql"
+  "drizzle/0043_marco_responsavel_vencimento.sql"
 )
 
 echo "╔════════════════════════════════════════════════════════════╗"
