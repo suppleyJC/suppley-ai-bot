@@ -1165,7 +1165,18 @@ export async function getOperacao(userId: number, id: number, admin = false) {
   const financeiro = await db.select().from(operacaoFinanceiro)
     .where(eq(operacaoFinanceiro.operacaoId, id))
     .orderBy(desc(operacaoFinanceiro.criadoEm));
-  const marcos = await fetchMarcos(db, eq(operacaoMarcos.operacaoId, id), { ordenar: true });
+
+  // Marcos + jornada são um ENRIQUECIMENTO do card. Se algo aqui falhar
+  // (ex.: schema fora de sincronia com o banco), o card NUNCA deve deixar de
+  // abrir — degradamos para lista vazia e registramos a causa real no log.
+  let marcos: any[] = [];
+  try {
+    marcos = await fetchMarcos(db, eq(operacaoMarcos.operacaoId, id), { ordenar: true });
+  } catch (e) {
+    console.error(`[getOperacao ${id}] falha ao ler marcos — card abre sem jornada:`, e);
+    marcos = [];
+  }
+
   // Auditoria: quem criou a operação (nome do usuário; e-mail como fallback).
   const [dono] = await db.select({ name: users.name, email: users.email })
     .from(users).where(eq(users.id, op.userId)).limit(1);

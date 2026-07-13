@@ -78,8 +78,21 @@ export default function OperacaoDetail() {
   }
   if (error || !data?.operacao) {
     return (
-      <div className="p-8 text-sm text-red-500">
-        Não foi possível carregar esta operação.
+      <div className="p-8">
+        <p className="text-sm font-semibold text-red-500">
+          Não foi possível carregar esta operação.
+        </p>
+        {error?.message && (
+          <p className="mt-2 max-w-2xl whitespace-pre-wrap break-words rounded-lg bg-red-50 px-3 py-2 font-mono text-[11px] text-red-700">
+            {error.message}
+          </p>
+        )}
+        <button
+          onClick={() => utils.operations.get.invalidate({ id })}
+          className="mt-3 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted"
+        >
+          Tentar novamente
+        </button>
       </div>
     );
   }
