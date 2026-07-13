@@ -831,6 +831,65 @@ export async function removerFinanceiro(userId: number, lancamentoId: number, ad
 // Cada marco grava um evento na timeline (coesão Painel ↔ Excambia).
 // Imutáveis: uma vez registrado, apenas marcar como cancelado.
 // ---------------------------------------------------------------------------
+
+// RESILIÊNCIA A DEPLOY-ANTES-DA-MIGRAÇÃO: o schema já declara responsavel/vencimento
+// (migração 0043), mas se o binário subir antes de aplicá-la, o MySQL responde
+// "Unknown column" e derruba a operação inteira. Os helpers abaixo detectam esse
+// caso e caem para as colunas-base, tratando os campos novos como null — o painel
+// abre e funciona com ou sem a migração; ao aplicá-la, os campos passam a persistir.
+function isMissingColumnError(e: unknown): boolean {
+  const msg = (e as any)?.message ?? String(e ?? "");
+  const code = (e as any)?.code ?? "";
+  return code === "ER_BAD_FIELD_ERROR" || /unknown column|no such column|ER_BAD_FIELD_ERROR/i.test(msg);
+}
+
+// Colunas garantidas em produção (pré-0043). Sem responsavel/vencimento.
+const MARCO_COLS_BASE = {
+  id: operacaoMarcos.id,
+  operacaoId: operacaoMarcos.operacaoId,
+  userId: operacaoMarcos.userId,
+  tipo: operacaoMarcos.tipo,
+  status: operacaoMarcos.status,
+  descricao: operacaoMarcos.descricao,
+  dataReferencia: operacaoMarcos.dataReferencia,
+  refTipo: operacaoMarcos.refTipo,
+  refId: operacaoMarcos.refId,
+  autor: operacaoMarcos.autor,
+  criadoEm: operacaoMarcos.criadoEm,
+} as const;
+
+/** SELECT de marcos com fallback para colunas-base quando a 0043 ainda não rodou. */
+async function fetchMarcos(
+  db: any,
+  whereExpr: any,
+  opts: { ordenar?: boolean; unico?: boolean } = {},
+): Promise<any[]> {
+  const build = (cols?: any) => {
+    let q = (cols ? db.select(cols) : db.select()).from(operacaoMarcos).where(whereExpr);
+    if (opts.ordenar) q = q.orderBy(operacaoMarcos.dataReferencia);
+    if (opts.unico) q = q.limit(1);
+    return q;
+  };
+  try {
+    return await build();
+  } catch (e) {
+    if (!isMissingColumnError(e)) throw e;
+    const rows = await build(MARCO_COLS_BASE);
+    return rows.map((r: any) => ({ ...r, responsavel: null, vencimento: null }));
+  }
+}
+
+/** INSERT de marco com fallback: sem responsavel/vencimento quando a 0043 ainda não rodou. */
+async function inserirMarco(db: any, values: Record<string, unknown>): Promise<any> {
+  try {
+    return await db.insert(operacaoMarcos).values(values);
+  } catch (e) {
+    if (!isMissingColumnError(e)) throw e;
+    const { responsavel, vencimento, ...base } = values;
+    return db.insert(operacaoMarcos).values(base);
+  }
+}
+
 export async function registrarMarco(input: {
   userId: number;
   operacaoId: number;
@@ -853,7 +912,7 @@ export async function registrarMarco(input: {
     .limit(1);
   if (!op) throw new Error("operação não encontrada");
 
-  const [res] = await db.insert(operacaoMarcos).values({
+  const [res] = await inserirMarco(db, {
     operacaoId: input.operacaoId,
     userId: input.userId,
     tipo: input.tipo,
@@ -908,7 +967,7 @@ export async function registrarMarco(input: {
     estagioSincronizado = alvo;
   }
 
-  const [marco] = await db.select().from(operacaoMarcos).where(eq(operacaoMarcos.id, id)).limit(1);
+  const [marco] = await fetchMarcos(db, eq(operacaoMarcos.id, id), { unico: true });
   if (!marco) return null;
   // Anexa a informação de sincronia para quem registrou poder narrar o avanço.
   return { ...marco, estagioSincronizado };
@@ -931,8 +990,9 @@ export async function atualizarMarco(input: {
   if (!db) return null;
 
   // Posse via join à operação (o marco pertence à operação do usuário).
+  // Projeção só do dono para não arrastar responsavel/vencimento pré-0043.
   const [row] = await db
-    .select({ marco: operacaoMarcos, opUser: operacoes.userId })
+    .select({ id: operacaoMarcos.id, opUser: operacoes.userId })
     .from(operacaoMarcos)
     .innerJoin(operacoes, eq(operacoes.id, operacaoMarcos.operacaoId))
     .where(eq(operacaoMarcos.id, input.marcoId))
@@ -944,10 +1004,20 @@ export async function atualizarMarco(input: {
   if (input.responsavel !== undefined) patch.responsavel = input.responsavel;
   if (input.vencimento !== undefined) patch.vencimento = input.vencimento;
   if (input.descricao !== undefined) patch.descricao = input.descricao;
-  if (Object.keys(patch).length === 0) return row.marco;
 
-  await db.update(operacaoMarcos).set(patch as any).where(eq(operacaoMarcos.id, input.marcoId));
-  const [marco] = await db.select().from(operacaoMarcos).where(eq(operacaoMarcos.id, input.marcoId)).limit(1);
+  if (Object.keys(patch).length > 0) {
+    try {
+      await db.update(operacaoMarcos).set(patch as any).where(eq(operacaoMarcos.id, input.marcoId));
+    } catch (e) {
+      if (!isMissingColumnError(e)) throw e;
+      // Pré-0043: aplica só o que existe (descricao); responsavel/vencimento ficam para depois da migração.
+      const { responsavel, vencimento, ...rest } = patch;
+      if (Object.keys(rest).length > 0) {
+        await db.update(operacaoMarcos).set(rest as any).where(eq(operacaoMarcos.id, input.marcoId));
+      }
+    }
+  }
+  const [marco] = await fetchMarcos(db, eq(operacaoMarcos.id, input.marcoId), { unico: true });
   return marco ?? null;
 }
 
@@ -958,9 +1028,7 @@ export async function listarMarcos(userId: number, operacaoId: number, admin = f
     .where(posseOperacao(operacaoId, userId, admin))
     .limit(1);
   if (!op) return [];
-  return db.select().from(operacaoMarcos)
-    .where(eq(operacaoMarcos.operacaoId, operacaoId))
-    .orderBy(operacaoMarcos.dataReferencia);
+  return fetchMarcos(db, eq(operacaoMarcos.operacaoId, operacaoId), { ordenar: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -1097,9 +1165,7 @@ export async function getOperacao(userId: number, id: number, admin = false) {
   const financeiro = await db.select().from(operacaoFinanceiro)
     .where(eq(operacaoFinanceiro.operacaoId, id))
     .orderBy(desc(operacaoFinanceiro.criadoEm));
-  const marcos = await db.select().from(operacaoMarcos)
-    .where(eq(operacaoMarcos.operacaoId, id))
-    .orderBy(operacaoMarcos.dataReferencia);
+  const marcos = await fetchMarcos(db, eq(operacaoMarcos.operacaoId, id), { ordenar: true });
   // Auditoria: quem criou a operação (nome do usuário; e-mail como fallback).
   const [dono] = await db.select({ name: users.name, email: users.email })
     .from(users).where(eq(users.id, op.userId)).limit(1);
