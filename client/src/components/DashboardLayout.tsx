@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 
 import { useIsMobile } from "@/hooks/useMobile";
-import { LogOut, PanelLeft, Building2, Package, Settings, FileText, ChevronRight, Workflow, TrendingUp } from "lucide-react";
+import { LogOut, PanelLeft, Building2, Package, Settings, FileText, ChevronRight, Workflow } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -36,9 +36,9 @@ const OrbitalIcon = ({ className }: { className?: string }) => (
 );
 
 const menuItems = [
-  // INTELIGÊNCIA
+  // INTELIGÊNCIA — a inteligência de mercado agora vive dentro da própria
+  // Excambia (benchmark oficial, câmbio/commodities, reforma), sem ambiente à parte.
   { icon: OrbitalIcon, label: "Excambia", path: "/excambia", section: "inteligencia" },
-  { icon: TrendingUp, label: "Inteligência de mercado", path: "/excambia/market", section: "inteligencia" },
 
   // OPERAÇÕES
   { icon: Workflow, label: "Painel de operações", path: "/operacoes", section: "operacoes" },
@@ -122,7 +122,7 @@ function DashboardLayoutContent({
   // rota — assim o usuário ainda pode abrir/fechar manualmente dentro da página.
   const isExcambia = location.startsWith("/excambia");
   // Rotas do chat (conversa-primeiro) que devem ocupar a tela inteira, sem o
-  // padding/scroll padrão do conteúdo. O mercado (/excambia/market) NÃO entra.
+  // padding/scroll padrão do conteúdo.
   const isChatFullBleed = location === "/" || location === "/excambia";
   const wasExcambia = useRef(false);
   useEffect(() => {

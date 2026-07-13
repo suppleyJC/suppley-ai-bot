@@ -26,7 +26,6 @@ const Products = lazy(() => import("./pages/Products"));
 const Settings = lazy(() => import("./pages/Settings"));
 
 const ExcambiaChat = lazy(() => import("./pages/ExcambiaChat"));
-const ExcambiaMarket = lazy(() => import("./pages/ExcambiaMarket"));
 const ReformDashboard = lazy(() => import("./pages/ReformDashboard"));
 const RfqDashboard = lazy(() => import("./pages/RfqDashboard"));
 const RfqCreate = lazy(() => import("./pages/RfqCreate"));
@@ -66,7 +65,6 @@ function AuthenticatedRoutes() {
         <Route path="/products" component={Products} />
         <Route path="/settings" component={Settings} />
         <Route path="/excambia" component={ExcambiaChat} />
-        <Route path="/excambia/market" component={ExcambiaMarket} />
         <Route path="/industries" component={Marketplace} />
         <Route path="/industries/:id">{(params: any) => <IndustryDetail id={params.id} />}</Route>
         <Route path="/rfq" component={RfqDashboard} />

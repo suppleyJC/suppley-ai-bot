@@ -18,7 +18,6 @@ import { taxNotificationsRouter } from "./routers/taxNotificationsRouter";
 import { statePricingRouter } from "./routers/statePricingRouter";
 import { commoditiesRouter } from "./routers/commoditiesRouter";
 import { taxTablesRouter } from "./routers/taxTablesRouter";
-import { marketDataRouter } from "./routers/marketDataRouter";
 import { priceComparisonRouter } from "./routers/priceComparisonRouter";
 import { reformRouter } from "./routers/reformRouter";
 import { rfqRouter } from "./routers/rfqRouter";
@@ -26,7 +25,6 @@ import { messagingRouter } from "./routers/messagingRouter";
 // Motor V2 Integration
 import { estimativaRouter } from "./routers/estimativaRouter";
 import { operationsRouter } from "./routers/operationsRouter";
-import { marketRouter } from "./routers/marketRouter";
 import { conversasRouter } from "./routers/conversasRouter";
 import { fase5Router } from "./routers/fase5Router";
 import { proformaRouter } from "./routers/proformaRouter";
@@ -54,7 +52,6 @@ export const appRouter = router({
   statePricing: statePricingRouter,
   commodities: commoditiesRouter,
   taxTables: taxTablesRouter,
-  marketData: marketDataRouter,
   priceComparison: priceComparisonRouter,
   reform: reformRouter,
   rfq: rfqRouter,
@@ -74,7 +71,6 @@ export const appRouter = router({
   // Motor V2 endpoints (paralelos ao sistema existente)
   estimativa: estimativaRouter,
   operations: operationsRouter,
-  market: marketRouter,
 });
 
 export type AppRouter = typeof appRouter;
