@@ -25,6 +25,7 @@ import { CALC_SCHEMA_PROPERTIES, mapArgsToEstimativaInput, type ItemArg } from "
 // Serviços existentes
 import * as estimativaService from "../../services/estimativaService";
 import * as operacaoService from "../../services/operacaoService";
+import { consultarComexPorNcm, type ComexResumo } from "../../services/comexStatService";
 
 const schema = defineSchema(
   "montar_calculo",
@@ -136,6 +137,57 @@ export const montarCalculoTool: AgentTool = {
       ? `BARREIRAS COMERCIAIS DETECTADAS (OBRIGATÓRIO evidenciar na resposta, de forma afirmativa e consultiva): ${linhasBarreira.join(" | ")} `
       : "";
 
+    // BENCHMARK DE MERCADO (Pilar 4): FOB cotado × média oficial de importação
+    // (Comex Stat, US$/kg) por item com peso — automático, best-effort com
+    // timeout curto. Valida o preço do fornecedor contra o mercado real sem
+    // depender só da nossa base.
+    let benchTxt = "";
+    const benchmarks: Array<{
+      description: string; ncm: string; fobUsdKg: number;
+      mercadoUsdKg: number; desvioPct: number; veredicto: string;
+    }> = [];
+    try {
+      const comTimeout = <T,>(p: Promise<T>, ms: number) =>
+        Promise.race<T | null>([p, new Promise<null>((r) => setTimeout(() => r(null), ms))]);
+
+      const candidatos = itensResultado
+        .filter((it: any) => it.ncm && it.weightKgTotal > 0 && it.totalFob > 0)
+        .slice(0, 5); // teto de consultas externas por cálculo
+
+      // Uma consulta por NCM distinta (cacheia dentro do cálculo).
+      const ncmsUnicas = Array.from(new Set(candidatos.map((it: any) => String(it.ncm).replace(/\D/g, "")))) as string[];
+      const consultas = new Map<string, ComexResumo | null>();
+      await Promise.all(ncmsUnicas.map(async (n) => {
+        consultas.set(n, await comTimeout(consultarComexPorNcm({ ncm: n }), 4000).catch(() => null));
+      }));
+
+      for (const it of candidatos as any[]) {
+        const resumo = consultas.get(String(it.ncm).replace(/\D/g, ""));
+        if (!resumo?.disponivel || !resumo.precoMedioUsdKg) continue;
+        const fobUsdKg = it.totalFob / it.weightKgTotal;
+        const desvio = (fobUsdKg - resumo.precoMedioUsdKg) / resumo.precoMedioUsdKg;
+        const veredicto = desvio < -0.1 ? "ABAIXO do mercado (bom preço)"
+          : desvio > 0.1 ? "ACIMA do mercado (alavanca de negociação)"
+          : "alinhado ao mercado";
+        benchmarks.push({
+          description: it.description, ncm: it.ncm, fobUsdKg,
+          mercadoUsdKg: resumo.precoMedioUsdKg, desvioPct: Math.round(desvio * 1000) / 10,
+          veredicto,
+        });
+      }
+      if (benchmarks.length) {
+        const linhas = benchmarks.map((b) =>
+          `${b.description}: FOB cotado US$ ${b.fobUsdKg.toFixed(2)}/kg × média oficial de importação US$ ${b.mercadoUsdKg.toFixed(2)}/kg ` +
+          `(${b.desvioPct > 0 ? "+" : ""}${b.desvioPct}% — ${b.veredicto})`,
+        );
+        benchTxt =
+          `BENCHMARK DE MERCADO (Comex Stat oficial, últimos 12 meses — apresente como validação do preço): ` +
+          `${linhas.join(" · ")}. `;
+      }
+    } catch {
+      /* benchmark é enriquecimento — nunca atrasa/derruba o cálculo */
+    }
+
     // Preço final POR ITEM (segregado) — na unidade de medida de cada item + por kg.
     const porItem = itensResultado.length > 1
       ? `Preço final por item — ${itensResultado.map((it: any) =>
@@ -192,12 +244,16 @@ export const montarCalculoTool: AgentTool = {
         kpis +
         conversoes +
         barreirasTxt +
+        benchTxt +
         (precoVenda != null ? `Preço de venda sugerido ~ R$ ${brl(precoVenda)}. ` : "") +
         (margemPct != null ? `Margem bruta ${margemPct}%. ` : "") +
         porItem +
         alvoTxt +
         (resultado?.ncmWarnings?.length ? `⚠️ ${resultado.ncmWarnings.length} aviso(s) de NCM estimada — confirme antes de fechar.` : ""),
-      data: alvoData ? { ...resultado, precoAlvo: alvoData } : resultado,
+      data: {
+        ...(alvoData ? { ...resultado, precoAlvo: alvoData } : resultado),
+        ...(benchmarks.length ? { benchmarkMercado: benchmarks } : {}),
+      },
     };
   },
 };

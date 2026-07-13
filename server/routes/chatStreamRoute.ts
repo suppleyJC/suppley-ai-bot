@@ -121,17 +121,16 @@ router.post("/api/chat/stream", async (req: Request, res: Response) => {
       payload.attachment,
     );
 
-    // Enriquecimento automático (Pilar 2) — tolerante a falha
+    // Enriquecimento automático — FORA do caminho crítico: rodava ANTES do
+    // primeiro byte da resposta e atrasava a percepção de fluidez. Agora roda
+    // em paralelo (o agente já tem as mensagens no contexto; o snapshot da
+    // operação pega o enriquecimento a partir do próximo turno).
     if (payload.operacaoId) {
-      try {
-        await enrichOperacaoFromChat(
-          user.id,
-          payload.operacaoId,
-          payload.messages.map((m) => ({ author: m.role, content: m.content })),
-        );
-      } catch (err) {
-        console.error("[chatStream] enriquecimento falhou:", err);
-      }
+      void enrichOperacaoFromChat(
+        user.id,
+        payload.operacaoId,
+        payload.messages.map((m) => ({ author: m.role, content: m.content })),
+      ).catch((err) => console.error("[chatStream] enriquecimento falhou:", err));
     }
 
     // SSE headers

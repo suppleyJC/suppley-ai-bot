@@ -291,6 +291,12 @@ export default function ExcambiaChat() {
               setStreaming(false);
             } else if (chunk.type === "reply") {
               setStreamingReply(chunk.reply ?? "");
+            } else if (chunk.type === "delta") {
+              // Fluidez: a resposta "digita" em tempo real, token a token.
+              setStreamingReply((prev) => prev + (chunk.text ?? ""));
+            } else if (chunk.type === "delta_reset") {
+              // O texto acumulado era preâmbulo de um turno com tools — recomeça.
+              setStreamingReply("");
             } else {
               setStreamingEvents((prev) => [...prev, chunk]);
             }
@@ -414,6 +420,10 @@ export default function ExcambiaChat() {
               setStreaming(false);
             } else if (chunk.type === "reply") {
               setStreamingReply(chunk.reply ?? "");
+            } else if (chunk.type === "delta") {
+              setStreamingReply((prev) => prev + (chunk.text ?? ""));
+            } else if (chunk.type === "delta_reset") {
+              setStreamingReply("");
             } else {
               setStreamingEvents((prev) => [...prev, chunk]);
             }

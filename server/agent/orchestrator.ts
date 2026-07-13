@@ -152,6 +152,7 @@ START DA COTAÇÃO (da estimativa para o cenário real):
 APRESENTAÇÃO DO CÁLCULO (regra dura — os três números que decidem a compra vêm PRIMEIRO):
 - Toda apresentação de cálculo abre com os TRÊS NÚMEROS em destaque, nesta ordem: 1) VALOR FOB (US$ e R$), 2) VALOR TOTAL NACIONALIZADO (NF-e de nacionalização; cite também o custo líquido após créditos quando o regime gerar crédito), 3) CUSTO POR UNIDADE DE MEDIDA (na unidade cotada E na canônica — R$/kg, R$/un, R$/L — quando houver conversão). O detalhamento de tributos e despesas vem depois.
 - Quando o motor converter unidades (ton→kg, milheiro→un…), mostre a conversão em uma linha ("Conversões: 2 ton = 2.000 kg") — transparência da matemática.
+- BENCHMARK AUTOMÁTICO: quando o montar_calculo devolver "BENCHMARK DE MERCADO" (FOB cotado × média oficial de importação, Comex Stat), apresente a comparação logo após os três números — é a validação do preço contra o mercado real. Acima do mercado = alavanca de negociação (diga em quanto); abaixo = reforce o bom preço. Não exponha a mecânica da fonte além de "média oficial de importação".
 
 REFORMA TRIBUTÁRIA (EC 132/2023 · LC 214/2025 — você domina o assunto e SIMULA de verdade):
 - O sistema tem um MOTOR DUAL da reforma (simular_reforma_tributaria): CBS substitui PIS/COFINS/IPI, IBS substitui ICMS/ISS, Imposto Seletivo para produtos específicos (fumo, bebidas, combustíveis, veículos a combustão…). O II NÃO muda com a reforma.
@@ -213,6 +214,10 @@ export type StreamChunk =
   | { type: "thinking"; content: string }
   | { type: "tool_call"; name: string; args: Record<string, unknown> }
   | { type: "tool_result"; name: string; ok: boolean; summary: string }
+  /** Delta de TEXTO gerado em tempo real (fluidez — a resposta "digita"). */
+  | { type: "delta"; text: string }
+  /** O texto acumulado era preâmbulo de um turno com tools — descarte e recomece. */
+  | { type: "delta_reset" }
   | { type: "reply"; reply: string; toolsUsed: string[]; toolResults: OrchestratorOutput["toolResults"] };
 
 const MAX_TURNS = 6; // teto de idas-e-voltas com tools por mensagem
@@ -410,7 +415,15 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
 
     yield { type: "thinking", content: "Pensando..." };
 
-    const result = await invokeLLM({
+    // STREAMING de texto em tempo real: o invokeLLM roda com stream e empurra
+    // cada delta para uma fila, que este generator drena e repassa ao cliente
+    // enquanto a geração acontece — a resposta "digita" em vez de aparecer
+    // pronta. Se o turno terminar em tool calls, o texto era preâmbulo:
+    // emitimos delta_reset e o cliente recomeça o buffer no próximo turno.
+    const deltaQueue: string[] = [];
+    let wake: (() => void) | undefined;
+    let llmDone = false;
+    const llmPromise = invokeLLM({
       messages: conversation,
       tools: toolSchemas.length > 0 ? toolSchemas : undefined,
       tool_choice: toolSchemas.length > 0 ? "auto" : undefined,
@@ -419,7 +432,20 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
       // Teto de saída alto: catalogar uma cotação grande gera argumentos de
       // tool com dezenas de itens — com o default (4096) o JSON era cortado.
       maxTokens: 16000,
-    });
+      onTextDelta: (t) => { deltaQueue.push(t); wake?.(); wake = undefined; },
+    }).then(
+      (r) => { llmDone = true; wake?.(); wake = undefined; return r; },
+      (e) => { llmDone = true; wake?.(); wake = undefined; throw e; },
+    );
+
+    while (!llmDone || deltaQueue.length > 0) {
+      if (deltaQueue.length > 0) {
+        yield { type: "delta", text: deltaQueue.splice(0).join("") };
+        continue;
+      }
+      await new Promise<void>((r) => { wake = r; });
+    }
+    const result = await llmPromise;
 
     const choice = result.choices?.[0]?.message;
     const toolCalls = choice?.tool_calls ?? [];
@@ -435,6 +461,9 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
       };
       return;
     }
+
+    // Turno com tools: o texto transmitido era preâmbulo — zera o buffer do cliente.
+    yield { type: "delta_reset" };
 
     conversation.push({
       role: "assistant",
