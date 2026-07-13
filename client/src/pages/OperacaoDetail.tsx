@@ -10,7 +10,7 @@
  *
  * Acessível a partir do card no Painel de Operações e da lista da Excambia.
  */
-import React from "react";
+import React, { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import OperacaoTimeline from "@/components/OperacaoTimeline";
@@ -18,7 +18,14 @@ import OperacaoMarcos from "@/components/OperacaoMarcos";
 import OperacaoTracking from "@/components/OperacaoTracking";
 import OperacaoAnexos from "@/components/OperacaoAnexos";
 import OperacaoFinanceiro from "@/components/OperacaoFinanceiro";
-import { ArrowLeft, CalendarClock, Globe2, MessageCircle } from "lucide-react";
+import {
+  ProgressRing, CartaoAgora, CentralPendencias, MetricaTile,
+  type JornadaResumoData,
+} from "@/components/operacao/JornadaResumo";
+import type { TipoMarco } from "@/lib/marcoLabels";
+import {
+  ArrowLeft, CalendarClock, Globe2, MessageCircle, Anchor, DollarSign, AlertTriangle,
+} from "lucide-react";
 
 const MODO_LABEL: Record<string, { txt: string; cls: string }> = {
   cotacao:        { txt: "Cotação pronta",  cls: "bg-blue-50 text-blue-700" },
@@ -58,6 +65,11 @@ export default function OperacaoDetail() {
   const addEvento = trpc.operations.addEvento.useMutation({ onSuccess: invalidate });
   const update = trpc.operations.update.useMutation({ onSuccess: invalidate });
 
+  // Ponte cartão "Agora"/pendências → formulário de marcos (abre prefilled).
+  const [prefill, setPrefill] = useState<{ tipo: TipoMarco; nonce: number } | undefined>();
+  const registrarMarcoDe = (tipo: string) =>
+    setPrefill({ tipo: tipo as TipoMarco, nonce: Date.now() });
+
   if (!Number.isFinite(id)) {
     return <div className="p-8 text-sm text-muted-foreground">Operação inválida.</div>;
   }
@@ -76,6 +88,7 @@ export default function OperacaoDetail() {
   const marcos = (data as any).marcos ?? [];
   const anexos = (data as any).anexos ?? [];
   const financeiro = (data as any).financeiro ?? [];
+  const jornada = (data as any).jornada as JornadaResumoData | undefined;
   const st = STATUS_LABEL[operacao.status] ?? { txt: operacao.status, cls: "bg-muted text-muted-foreground" };
   const op = operacao as typeof operacao & {
     prioridade?: "baixa" | "media" | "alta" | "critica" | null;
@@ -93,6 +106,11 @@ export default function OperacaoDetail() {
   const modoMeta = op.modo ? MODO_LABEL[op.modo] : null;
   // Rastreio é relevante a partir da produção/embarque.
   const mostraTracking = ["execute", "finance", "closed"].includes(operacao.estagioAtual);
+
+  const brl = (cents: number) =>
+    `R$ ${(cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const conversar = () => navigate(`/excambia?operacao=${operacao.id}`);
 
   function handleAddNote() {
     const titulo = window.prompt("Nota para a operação:");
@@ -207,10 +225,52 @@ export default function OperacaoDetail() {
             />
           </label>
         </div>
+
+        {/* Faixa de métricas executivas: progresso, ETA, valor e riscos */}
+        <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-border pt-4">
+          <div className="flex items-center gap-3">
+            <ProgressRing pct={jornada?.progressoPct ?? 0} />
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Progresso</p>
+              <p className="text-sm font-bold text-foreground">
+                {jornada?.realizados ?? 0}/{jornada?.total ?? 13} marcos
+              </p>
+            </div>
+          </div>
+          <MetricaTile
+            Icon={Anchor}
+            label="ETA (chegada)"
+            value={op.trackingEta ? new Date(op.trackingEta).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : "—"}
+          />
+          <MetricaTile
+            Icon={DollarSign}
+            label="Valor estimado"
+            value={operacao.valorEstimadoBrlCents ? brl(operacao.valorEstimadoBrlCents) : "—"}
+            accent="text-teal-500"
+          />
+          <MetricaTile
+            Icon={AlertTriangle}
+            label="Riscos"
+            value={jornada?.riscos ? `${jornada.riscos} pendência${jornada.riscos === 1 ? "" : "s"}` : "nenhum"}
+            accent={jornada?.riscos ? "text-red-500" : "text-teal-500"}
+          />
+        </div>
       </header>
 
+      {/* Cartão "Agora" + central de pendências — o coração do redesenho */}
+      {jornada && (
+        <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <CartaoAgora
+            proxima={jornada.proximaAcao}
+            onRegistrar={registrarMarcoDe}
+            onConversar={conversar}
+          />
+          <CentralPendencias pendencias={jornada.pendencias} onRegistrar={registrarMarcoDe} />
+        </div>
+      )}
+
       <div className="mb-6">
-        <OperacaoMarcos operacaoId={operacao.id} marcos={marcos} onChange={invalidate} />
+        <OperacaoMarcos operacaoId={operacao.id} marcos={marcos} onChange={invalidate} prefill={prefill} />
       </div>
 
       {mostraTracking && (

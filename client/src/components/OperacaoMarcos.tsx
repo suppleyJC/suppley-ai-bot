@@ -5,14 +5,27 @@
  *   Estudo do item → Cotação e RFQ → Viabilidade → Produção e Embarque → Nacionalização e Entrega
  * Cada marco registrado gera um evento na timeline (coesão Painel ↔ Excambia).
  */
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { CheckCircle2, Plus, Loader2, PackageCheck } from "lucide-react";
+import { CheckCircle2, Plus, Loader2, PackageCheck, Clock } from "lucide-react";
 import { STAGE_LABELS } from "@/lib/stageLabels";
 import { MARCO_META, JORNADA_MARCOS, TODOS_MARCOS, type TipoMarco } from "@/lib/marcoLabels";
+import { responsavelMeta, saudeMeta, formatVencimento, type Responsavel } from "@/lib/jornadaLabels";
 
 type StatusMarco = "planejado" | "realizado" | "cancelado";
+
+const RESPONSAVEIS: Responsavel[] = [
+  "cliente", "excambia", "fornecedor", "agente", "despachante", "anuente", "sistema",
+];
+
+function saudeDe(v?: string | Date | null): string {
+  if (!v) return "sem_prazo";
+  const dias = (new Date(v).getTime() - Date.now()) / 86_400_000;
+  if (dias < 0) return "atrasado";
+  if (dias <= 2) return "atencao";
+  return "no_prazo";
+}
 
 interface Marco {
   id: number;
@@ -20,6 +33,8 @@ interface Marco {
   status: string;
   descricao?: string | null;
   dataReferencia: string | Date;
+  responsavel?: string | null;
+  vencimento?: string | Date | null;
 }
 
 // Fonte única compartilhada com o chat (OperationJourneyCard) — ver lib/marcoLabels.
@@ -39,17 +54,33 @@ function fmtData(d?: string | Date | null) {
 }
 
 export default function OperacaoMarcos({
-  operacaoId, marcos, onChange,
+  operacaoId, marcos, onChange, prefill,
 }: {
   operacaoId: number;
   marcos: Marco[];
   onChange: () => void;
+  /** Abre o formulário já com um marco selecionado (vindo do cartão "Agora"/pendências). */
+  prefill?: { tipo: TipoMarco; nonce: number };
 }) {
   const [showForm, setShowForm] = useState(false);
   const [tipo, setTipo] = useState<TipoMarco>("item_pesquisado");
   const [status, setStatus] = useState<StatusMarco>("realizado");
   const [descricao, setDescricao] = useState("");
   const [data, setData] = useState("");
+  const [responsavel, setResponsavel] = useState<"" | Responsavel>("");
+  const [vencimento, setVencimento] = useState("");
+  const secRef = useRef<HTMLElement>(null);
+
+  // Abre o formulário prefilled quando o cartão "Agora"/pendência dispara.
+  useEffect(() => {
+    if (!prefill) return;
+    setShowForm(true);
+    setTipo(prefill.tipo);
+    setStatus("realizado");
+    setData(new Date().toISOString().slice(0, 10));
+    secRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.nonce]);
 
   const registrar = trpc.operations.registrarMarco.useMutation({
     onSuccess: () => { onChange(); resetForm(); toast.success("Marco registrado."); },
@@ -62,6 +93,8 @@ export default function OperacaoMarcos({
     setStatus("realizado");
     setDescricao("");
     setData("");
+    setResponsavel("");
+    setVencimento("");
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -76,6 +109,8 @@ export default function OperacaoMarcos({
       status,
       descricao: descricao.trim() || undefined,
       dataReferencia: new Date(data),
+      responsavel: responsavel || undefined,
+      vencimento: vencimento ? new Date(vencimento) : undefined,
     });
   }
 
@@ -83,7 +118,7 @@ export default function OperacaoMarcos({
   const totalRealizados = TODOS_TIPOS.filter((t) => realizados.has(t)).length;
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-5">
+    <section ref={secRef} className="rounded-2xl border border-border bg-card p-5">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
           <PackageCheck className="h-3.5 w-3.5" /> Jornada · marcos ({totalRealizados}/{TODOS_TIPOS.length})
@@ -130,11 +165,24 @@ export default function OperacaoMarcos({
                             {fmtData(marcado.dataReferencia)}
                             {marcado.descricao ? ` · ${marcado.descricao}` : ""}
                           </p>
-                          {marcado.status !== "realizado" && (
-                            <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold ${STATUS_META[marcado.status as StatusMarco]?.cls || ""}`}>
-                              {STATUS_META[marcado.status as StatusMarco]?.txt || marcado.status}
-                            </span>
-                          )}
+                          {/* Chips do modelo de estados: responsável + prazo (com saúde). */}
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            {marcado.status !== "realizado" && (
+                              <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold ${STATUS_META[marcado.status as StatusMarco]?.cls || ""}`}>
+                                {STATUS_META[marcado.status as StatusMarco]?.txt || marcado.status}
+                              </span>
+                            )}
+                            {marcado.responsavel && (
+                              <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${responsavelMeta(marcado.responsavel).cls}`}>
+                                {responsavelMeta(marcado.responsavel).sigla} · {responsavelMeta(marcado.responsavel).label}
+                              </span>
+                            )}
+                            {marcado.vencimento && marcado.status !== "realizado" && (
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${saudeMeta(saudeDe(marcado.vencimento)).text}`}>
+                                <Clock className="h-2.5 w-2.5" /> {formatVencimento(new Date(marcado.vencimento).toISOString())}
+                              </span>
+                            )}
+                          </div>
                         </>
                       )}
                     </div>
@@ -177,13 +225,34 @@ export default function OperacaoMarcos({
               </select>
             </label>
           </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Data</span>
+              <input
+                type="date" value={data} onChange={(e) => setData(e.target.value)}
+                className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
+                required
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Vence em (opcional)</span>
+              <input
+                type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)}
+                className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
+              />
+            </label>
+          </div>
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Data</span>
-            <input
-              type="date" value={data} onChange={(e) => setData(e.target.value)}
+            <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Responsável (opcional)</span>
+            <select
+              value={responsavel} onChange={(e) => setResponsavel(e.target.value as "" | Responsavel)}
               className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
-              required
-            />
+            >
+              <option value="">— não definido —</option>
+              {RESPONSAVEIS.map((r) => (
+                <option key={r} value={r}>{responsavelMeta(r).label}</option>
+              ))}
+            </select>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Descrição (opcional)</span>

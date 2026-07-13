@@ -35,6 +35,11 @@ export type TipoMarco =
   | "di_registrada" | "nacionalizado" | "entregue";
 export type StatusMarco = "planejado" | "realizado" | "cancelado";
 export type ModoOperacao = "cotacao" | "desenvolvimento";
+// QUEM deve agir num marco (dimensão separada do estado do trabalho).
+export type Responsavel =
+  | "cliente" | "excambia" | "fornecedor" | "agente" | "despachante" | "anuente" | "sistema";
+// Saúde do prazo — DERIVADA do vencimento + status (não é coluna).
+export type SaudePrazo = "no_prazo" | "atencao" | "atrasado" | "sem_prazo";
 const ORDER: Estagio[] = ["demand", "source", "analyze", "execute", "finance", "closed"];
 
 // ---------------------------------------------------------------------------
@@ -98,6 +103,146 @@ const MARCO_EVENTO: Record<TipoMarco, string> = {
   nacionalizado: "nacionalizado",
   entregue: "entregue",
 };
+
+// ---------------------------------------------------------------------------
+// DERIVAÇÃO DA JORNADA — próxima ação ("Agora"), pendências e progresso.
+// Tudo calculado a partir dos marcos já existentes; nenhuma coluna nova além
+// de responsavel/vencimento. Alimenta o cabeçalho executivo e o cartão "Agora".
+// ---------------------------------------------------------------------------
+
+/** Ordem canônica dos 13 marcos (funil da jornada). */
+export const MARCO_ORDER: TipoMarco[] = [
+  "item_pesquisado", "fornecedores_identificados",
+  "rfq_enviada", "cotacao_recebida", "fornecedor_selecionado",
+  "calculo_feito", "go_aprovado",
+  "pedido_confirmado", "producao_iniciada", "produto_embarcado",
+  "di_registrada", "nacionalizado", "entregue",
+];
+
+/** Responsável SUGERIDO por marco (usado quando não há responsável manual). */
+export const MARCO_RESPONSAVEL_DEFAULT: Record<TipoMarco, Responsavel> = {
+  item_pesquisado: "excambia",
+  fornecedores_identificados: "excambia",
+  rfq_enviada: "excambia",
+  cotacao_recebida: "fornecedor",
+  fornecedor_selecionado: "cliente",
+  calculo_feito: "excambia",
+  go_aprovado: "cliente",
+  pedido_confirmado: "cliente",
+  producao_iniciada: "fornecedor",
+  produto_embarcado: "fornecedor",
+  di_registrada: "despachante",
+  nacionalizado: "despachante",
+  entregue: "agente",
+};
+
+/** Verbo de ação por marco (texto do cartão "Agora"). */
+export const MARCO_ACAO_PT: Record<TipoMarco, string> = {
+  item_pesquisado: "Pesquisar o item (preço médio, países, concorrentes)",
+  fornecedores_identificados: "Mapear fornecedores elegíveis",
+  rfq_enviada: "Enviar a RFQ aos fornecedores",
+  cotacao_recebida: "Receber e registrar as cotações",
+  fornecedor_selecionado: "Selecionar o fornecedor",
+  calculo_feito: "Calcular a viabilidade (landed cost)",
+  go_aprovado: "Aprovar a viabilidade (GO / NO-GO)",
+  pedido_confirmado: "Confirmar o pedido (PO)",
+  producao_iniciada: "Acompanhar o início da produção",
+  produto_embarcado: "Confirmar o embarque",
+  di_registrada: "Registrar a declaração (DI / DUIMP)",
+  nacionalizado: "Concluir o desembaraço",
+  entregue: "Confirmar a entrega final",
+};
+
+function saudeDoPrazo(vencimento?: Date | string | null): SaudePrazo {
+  if (!vencimento) return "sem_prazo";
+  const diffDias = (new Date(vencimento).getTime() - Date.now()) / 86_400_000;
+  if (diffDias < 0) return "atrasado";
+  if (diffDias <= 2) return "atencao";
+  return "no_prazo";
+}
+
+interface MarcoRow {
+  tipo: string;
+  status: string;
+  responsavel?: string | null;
+  vencimento?: Date | string | null;
+  dataReferencia?: Date | string | null;
+}
+
+interface MarcoInfo {
+  tipo: TipoMarco;
+  label: string;
+  acao: string;
+  estagio: Estagio;
+  responsavel: Responsavel;
+  vencimento: string | null;
+  saudePrazo: SaudePrazo;
+}
+
+export interface JornadaResumo {
+  progressoPct: number;
+  realizados: number;
+  total: number;
+  proximaAcao: MarcoInfo | null;
+  pendencias: (MarcoInfo & { status: StatusMarco })[];
+  riscos: number;
+}
+
+/**
+ * Resume a jornada para o cabeçalho executivo e o cartão "Agora":
+ *  - progresso (marcos realizados / 13)
+ *  - próxima ação (primeiro marco não concluído, com responsável e prazo)
+ *  - pendências (não concluídos, ordenados por urgência)
+ *  - riscos (pendências atrasadas ou em atenção)
+ */
+export function computeJornadaResumo(marcos: MarcoRow[]): JornadaResumo {
+  // Um marco por tipo: "realizado" tem precedência; senão, o mais recente.
+  const byTipo = new Map<TipoMarco, MarcoRow>();
+  for (const m of marcos) {
+    const t = m.tipo as TipoMarco;
+    if (!MARCO_ORDER.includes(t)) continue;
+    const prev = byTipo.get(t);
+    if (!prev || m.status === "realizado" || prev.status !== "realizado") byTipo.set(t, m);
+  }
+
+  const total = MARCO_ORDER.length;
+  const realizados = MARCO_ORDER.filter((t) => byTipo.get(t)?.status === "realizado").length;
+  const progressoPct = Math.round((realizados / total) * 100);
+
+  const concluido = (t: TipoMarco) => {
+    const s = byTipo.get(t)?.status;
+    return s === "realizado" || s === "cancelado";
+  };
+
+  const info = (t: TipoMarco): MarcoInfo => {
+    const m = byTipo.get(t);
+    return {
+      tipo: t,
+      label: MARCO_LABEL_PT[t],
+      acao: MARCO_ACAO_PT[t],
+      estagio: MARCO_ESTAGIO[t],
+      responsavel: (m?.responsavel as Responsavel) ?? MARCO_RESPONSAVEL_DEFAULT[t],
+      vencimento: m?.vencimento ? new Date(m.vencimento).toISOString() : null,
+      saudePrazo: saudeDoPrazo(m?.vencimento),
+    };
+  };
+
+  const naoConcluidos = MARCO_ORDER.filter((t) => !concluido(t));
+  const proximaAcao = naoConcluidos.length ? info(naoConcluidos[0]) : null;
+
+  const PESO: Record<SaudePrazo, number> = { atrasado: 0, atencao: 1, no_prazo: 2, sem_prazo: 3 };
+  const pendencias = naoConcluidos
+    .map((t) => ({ ...info(t), status: (byTipo.get(t)?.status as StatusMarco) ?? "planejado" }))
+    .sort((a, b) =>
+      PESO[a.saudePrazo] !== PESO[b.saudePrazo]
+        ? PESO[a.saudePrazo] - PESO[b.saudePrazo]
+        : MARCO_ORDER.indexOf(a.tipo) - MARCO_ORDER.indexOf(b.tipo),
+    );
+
+  const riscos = pendencias.filter((p) => p.saudePrazo === "atrasado" || p.saudePrazo === "atencao").length;
+
+  return { progressoPct, realizados, total, proximaAcao, pendencias, riscos };
+}
 
 // ---------------------------------------------------------------------------
 // NÍVEL DE ACESSO: usuário comum só enxerga/atua no que criou; administrador
@@ -693,6 +838,8 @@ export async function registrarMarco(input: {
   status?: StatusMarco;
   descricao?: string;
   dataReferencia?: Date;
+  responsavel?: Responsavel;
+  vencimento?: Date | null;
   refTipo?: string;
   refId?: number;
   autor?: "usuario" | "excambia" | "sistema";
@@ -713,6 +860,8 @@ export async function registrarMarco(input: {
     status: (input.status ?? "realizado") as any,
     descricao: input.descricao ?? null,
     dataReferencia: input.dataReferencia ?? sql`now()`,
+    responsavel: (input.responsavel ?? null) as any,
+    vencimento: input.vencimento ?? null,
     refTipo: input.refTipo ?? null,
     refId: input.refId ?? null,
     autor: input.autor ?? "usuario",
@@ -763,6 +912,43 @@ export async function registrarMarco(input: {
   if (!marco) return null;
   // Anexa a informação de sincronia para quem registrou poder narrar o avanço.
   return { ...marco, estagioSincronizado };
+}
+
+/**
+ * Edita campos de planejamento de um marco JÁ EXISTENTE (responsável, prazo,
+ * descrição). Não altera status nem dispara sincronia de estágio — para marcar
+ * como realizado use registrarMarco. Atualização parcial (só o que veio).
+ */
+export async function atualizarMarco(input: {
+  userId: number;
+  marcoId: number;
+  responsavel?: Responsavel | null;
+  vencimento?: Date | null;
+  descricao?: string | null;
+  admin?: boolean;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // Posse via join à operação (o marco pertence à operação do usuário).
+  const [row] = await db
+    .select({ marco: operacaoMarcos, opUser: operacoes.userId })
+    .from(operacaoMarcos)
+    .innerJoin(operacoes, eq(operacoes.id, operacaoMarcos.operacaoId))
+    .where(eq(operacaoMarcos.id, input.marcoId))
+    .limit(1);
+  if (!row) throw new Error("marco não encontrado");
+  if (!input.admin && row.opUser !== input.userId) throw new Error("sem acesso a este marco");
+
+  const patch: Record<string, unknown> = {};
+  if (input.responsavel !== undefined) patch.responsavel = input.responsavel;
+  if (input.vencimento !== undefined) patch.vencimento = input.vencimento;
+  if (input.descricao !== undefined) patch.descricao = input.descricao;
+  if (Object.keys(patch).length === 0) return row.marco;
+
+  await db.update(operacaoMarcos).set(patch as any).where(eq(operacaoMarcos.id, input.marcoId));
+  const [marco] = await db.select().from(operacaoMarcos).where(eq(operacaoMarcos.id, input.marcoId)).limit(1);
+  return marco ?? null;
 }
 
 export async function listarMarcos(userId: number, operacaoId: number, admin = false) {
@@ -920,6 +1106,8 @@ export async function getOperacao(userId: number, id: number, admin = false) {
   return {
     operacao: op, eventos, estagios, anexos, financeiro, marcos,
     criadoPorNome: dono?.name || dono?.email || null,
+    // Derivação para o cabeçalho executivo e o cartão "Agora".
+    jornada: computeJornadaResumo(marcos),
   };
 }
 

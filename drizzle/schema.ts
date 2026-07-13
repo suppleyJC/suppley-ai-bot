@@ -1709,6 +1709,13 @@ export const operacaoMarcos = mysqlTable(
     status: mysqlEnum("status", ["planejado", "realizado", "cancelado"])
       .default("realizado").notNull(),
 
+    // QUEM deve agir para o marco acontecer (dimensão separada do status).
+    responsavel: mysqlEnum("responsavel", [
+      "cliente", "excambia", "fornecedor", "agente", "despachante", "anuente", "sistema",
+    ]),
+    // ATÉ QUANDO — a "saúde do prazo" é derivada disto + status no service.
+    vencimento: timestamp("vencimento"),
+
     descricao: text("descricao"),
     dataReferencia: timestamp("dataReferencia").notNull(),
 

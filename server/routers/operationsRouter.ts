@@ -249,6 +249,22 @@ export const operationsRouter = router({
       status: z.enum(["planejado", "realizado", "cancelado"]).optional(),
       descricao: z.string().optional(),
       dataReferencia: z.date().optional(),
+      responsavel: z.enum([
+        "cliente", "excambia", "fornecedor", "agente", "despachante", "anuente", "sistema",
+      ]).optional(),
+      vencimento: z.date().nullable().optional(),
     }))
     .mutation(({ ctx, input }) => svc.registrarMarco({ userId: ctx.user.id, ...input, admin: isAdmin(ctx) })),
+
+  // Edita planejamento de um marco existente (responsável, prazo, descrição).
+  atualizarMarco: protectedProcedure
+    .input(z.object({
+      marcoId: z.number(),
+      responsavel: z.enum([
+        "cliente", "excambia", "fornecedor", "agente", "despachante", "anuente", "sistema",
+      ]).nullable().optional(),
+      vencimento: z.date().nullable().optional(),
+      descricao: z.string().nullable().optional(),
+    }))
+    .mutation(({ ctx, input }) => svc.atualizarMarco({ userId: ctx.user.id, ...input, admin: isAdmin(ctx) })),
 });
