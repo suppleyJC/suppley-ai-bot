@@ -24,6 +24,13 @@ const schema = defineSchema(
     properties: {
       produto: { type: "string", description: "Nome do produto a classificar" },
       descricao: { type: "string", description: "Descrição/detalhes do produto (opcional, melhora a precisão)" },
+      contextoDocumento: {
+        type: "string",
+        description:
+          "A linha COMPLETA do item como consta na proforma/cotação (especificações, " +
+          "material, dimensões, uso). SEMPRE passe quando o item vier de um documento — " +
+          "o cruzamento nome × descrição do documento decide a NCM correta.",
+      },
     },
     required: ["produto"],
   },
@@ -39,8 +46,10 @@ export const classificarNcmTool: AgentTool = {
       return { ok: false, summary: "Informe o nome do produto para classificar.", error: "produto vazio" };
     }
     const descricao = typeof args.descricao === "string" ? args.descricao : undefined;
+    const contextoDocumento =
+      typeof args.contextoDocumento === "string" ? args.contextoDocumento : undefined;
 
-    const resultado = await ncmService.suggestNCMWithAI(produto, descricao);
+    const resultado = await ncmService.suggestNCMWithAI(produto, descricao, contextoDocumento);
 
     const sug = resultado.suggestedNCM;
     const conf = typeof sug?.confidence === "number" ? `${Math.round(sug.confidence)}%` : "n/d";

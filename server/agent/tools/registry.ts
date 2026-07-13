@@ -44,6 +44,7 @@ import {
 import { compararRotasImportacaoTool } from "./compararRotasImportacao";
 import { calcularCubagemTool } from "./calcularCubagem";
 import { precificacaoNacionalTool, depreciacaoAtivoTool } from "./precificacaoNacional";
+import { simularReformaTool } from "./simularReforma";
 
 /** Tools de capacidade direta — o "chão de fábrica" que os especialistas acionam. */
 export const BASE_TOOLS: AgentTool[] = [
@@ -86,6 +87,8 @@ export const BASE_TOOLS: AgentTool[] = [
   enviarCotacaoFornecedorTool,
   registrarRespostaFornecedorTool,
   contrapropostaFornecedorTool,
+  // Reforma tributária — simula IBS/CBS/Imposto Seletivo (atual × transição × 2033+)
+  simularReformaTool,
   // Estratégia interestadual — compara importar direto vs. via estado-hub com benefício
   compararRotasImportacaoTool,
   // Cubagem — quantas unidades cabem em 20'/40'/40HC (volume + peso)

@@ -2079,6 +2079,47 @@ export type NcmException = typeof ncmExceptions.$inferSelect;
 export type InsertNcmException = typeof ncmExceptions.$inferInsert;
 
 /**
+ * Barreiras comerciais e defesa comercial por NCM — antidumping, medidas
+ * compensatórias, salvaguardas e CIDE. Casamento por PREFIXO de NCM
+ * (prefixo mais longo vence) + país de origem (null = qualquer origem).
+ *
+ * `valor` NULO = medida DETECTADA sem valor parametrizado (a Excambia
+ * evidencia e confirma o valor vigente na fonte oficial). Mantida via
+ * seed/admin — fonte: CAMEX/GECEX (gov.br/produtividade-e-comercio-exterior).
+ */
+export const tradeBarriers = mysqlTable("trade_barriers", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Prefixo NCM (2 a 8 dígitos, sem pontos). */
+  ncmPrefix: varchar("ncmPrefix", { length: 8 }).notNull(),
+  /** País de origem alvo (normalizado, ex.: "China"); null = qualquer origem. */
+  paisOrigem: varchar("paisOrigem", { length: 60 }),
+  tipo: mysqlEnum("tipo", [
+    "antidumping", "medida_compensatoria", "salvaguarda", "cide", "direito_provisorio",
+  ]).notNull(),
+  /** Mecanismo de cobrança da medida. */
+  mecanismo: mysqlEnum("mecanismo", [
+    "ad_valorem",      // % sobre o valor aduaneiro (valor em bp)
+    "usd_por_kg",      // US$ por kg (valor em cents de USD)
+    "usd_por_ton",     // US$ por tonelada (valor em cents de USD)
+    "usd_por_unidade", // US$ por unidade/par (valor em cents de USD)
+  ]),
+  /** bp p/ ad_valorem; cents USD p/ específicos. NULL = valor a confirmar. */
+  valor: int("valor"),
+  descricao: text("descricao"),
+  baseLegal: varchar("baseLegal", { length: 255 }),
+  vigenciaAte: timestamp("vigenciaAte"),
+  isActive: boolean("isActive").default(true).notNull(),
+  fonte: varchar("fonte", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  byNcm: index("idx_trade_barriers_ncm").on(t.ncmPrefix),
+  uqBarreira: unique("uq_trade_barriers").on(t.ncmPrefix, t.paisOrigem, t.tipo),
+}));
+export type TradeBarrier = typeof tradeBarriers.$inferSelect;
+export type InsertTradeBarrier = typeof tradeBarriers.$inferInsert;
+
+/**
  * LLM Usage — medição de tokens/custo por chamada (para escalar com visibilidade).
  * input_tokens do Anthropic é o input NÃO cacheado; cache_* vêm separados.
  */

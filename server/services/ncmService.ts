@@ -352,11 +352,19 @@ export async function getNCMByCode(ncmCode: string): Promise<any | null> {
  */
 export async function suggestNCMWithAI(
   productName: string,
-  productDescription?: string
+  productDescription?: string,
+  /**
+   * CRUZAMENTO COM O DOCUMENTO (proforma/cotação): a linha completa do item
+   * como consta no documento — especificações, material, dimensões, uso.
+   * Melhora a precisão: a NCM é decidida pelas características REAIS do item,
+   * não só pelo nome curto.
+   */
+  documentContext?: string,
 ): Promise<NCMOptimizationResult> {
   const normalizedName = productName.toLowerCase().trim();
   const normalizedDesc = (productDescription || "").toLowerCase().trim();
-  const cacheKey = `${normalizedName}|${normalizedDesc}`;
+  const normalizedDoc = (documentContext || "").toLowerCase().trim().slice(0, 400);
+  const cacheKey = `${normalizedName}|${normalizedDesc}|${normalizedDoc}`;
 
   // Check cache
   const cached = suggestionCache.get(cacheKey);
@@ -378,6 +386,8 @@ export async function suggestNCMWithAI(
 PRODUTO A CLASSIFICAR:
 Nome: ${productName}
 ${productDescription ? `Descrição: ${productDescription}` : ""}
+${documentContext ? `Como consta no documento (proforma/cotação): ${documentContext}
+IMPORTANTE: cruze o nome com a descrição do documento — material, dimensões, uso e especificações do documento DECIDEM a posição correta quando o nome for genérico.` : ""}
 
 NCMs DISPONÍVEIS NO SISTEMA:
 ${ncmContext || "Nenhum NCM similar encontrado no banco de dados."}

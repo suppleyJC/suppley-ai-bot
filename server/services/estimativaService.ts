@@ -20,6 +20,8 @@ import { getStateIcmsInternalRate, getStateName } from "./statePricingService";
 import { getStateImportBenefit } from "./stateBenefits";
 import { consultarTtce, ttceEnabled } from "./ttceService";
 import { isMercosulCountry } from "./taxCalculationService";
+import { converterItem, custoPorCanonica, type ConversaoItem } from "./unitConversionService";
+import { detectarBarreiras, formatarBarreira, type BarreiraDetectada } from "./tradeBarrierService";
 
 export interface EstimativaProductInput {
   productName: string;
@@ -27,6 +29,8 @@ export interface EstimativaProductInput {
   ncmCode: string;
   quantity: number;
   unit?: string;
+  /** Itens por embalagem quando a unidade é pct/cx/fardo/rolo/saco (1 cx = N un). */
+  itensPorEmbalagem?: number;
   /** Preço unitário FOB na moeda da cotação */
   unitPrice: number;
   /** Peso bruto TOTAL do item em kg (T.G.W). Habilita custo por kg. */
@@ -135,9 +139,23 @@ export interface DespesasBreakdown {
   expediente: number;
   portoCode: string | null;
 }
+/** Insight de unidade por item: conversão p/ canônica + custo na canônica. */
+export interface ItemUnidadeInsight {
+  description: string;
+  conversao: ConversaoItem;
+  /** Custo líquido na unidade canônica (ex.: R$/kg p/ item cotado em ton). */
+  custoCanonico: { valor: number; unidade: string } | null;
+  /** FOB unitário na unidade canônica (USD). */
+  fobCanonico: { valor: number; unidade: string } | null;
+}
+
 export interface EstimativaResult extends EngineResult {
   ncmWarnings: string[];
   despesasBreakdown?: DespesasBreakdown;
+  /** Conversões de unidade por item (peso/volume/contagem → kg/L/un). */
+  unidades?: ItemUnidadeInsight[];
+  /** Barreiras comerciais detectadas por item (antidumping/CIDE/compensatórias). */
+  barreiras?: { description: string; ncm: string; detectadas: BarreiraDetectada[] }[];
 }
 
 /** Defaults de PIS/COFINS de venda por regime */
@@ -157,6 +175,7 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
 
   // ---- Resolver alíquotas por NCM ----
   const items: EngineItemInput[] = [];
+  const conversoes: ConversaoItem[] = [];
   for (const p of input.products) {
     let iiRate = p.iiRateOverride;
     let ipiRate = p.ipiRateOverride;
@@ -240,6 +259,18 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
       }
     }
 
+    // INTELIGÊNCIA DE UNIDADES: reconhece a unidade em linguagem natural e
+    // deriva o peso total quando a própria unidade é de peso (2 ton → 2000 kg)
+    // — habilita o custo/kg sem o usuário repetir o peso. A quantidade/preço
+    // originais seguem intactos para o motor (paridade de planilha).
+    const conv = converterItem({
+      quantity: p.quantity,
+      unit: p.unit,
+      itensPorEmbalagem: p.itensPorEmbalagem,
+    });
+    conversoes.push(conv);
+    const pesoTotalKg = p.pesoTotalKg ?? conv.pesoTotalKgDerivado ?? undefined;
+
     items.push({
       description: p.productName,
       ncm: p.ncmCode,
@@ -248,7 +279,7 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
       unit: p.unit,
       unitPriceFob: p.unitPrice,
       // Peso TOTAL → peso unitário (o motor trabalha com peso por unidade).
-      unitWeightKg: p.pesoTotalKg != null && p.quantity > 0 ? p.pesoTotalKg / p.quantity : undefined,
+      unitWeightKg: pesoTotalKg != null && p.quantity > 0 ? pesoTotalKg / p.quantity : undefined,
       iiRate: iiRate!,
       ipiRate: ipiRate!,
       icmsStValue: p.icmsStValue,
@@ -403,7 +434,49 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
   };
 
   const result = calculateImportCost(globals, items);
-  return { ...result, ncmWarnings, despesasBreakdown };
+
+  // BARREIRAS COMERCIAIS (Pilar 2): detecção estruturada por NCM+origem em
+  // TODO cálculo — antidumping, medidas compensatórias, salvaguardas e CIDE.
+  // Evidencia com impacto estimado quando o valor é parametrizado; o valor da
+  // medida NÃO entra no custo do motor (paridade de planilha) — o aviso deixa
+  // isso explícito para o agente somar/na apresentação.
+  const barreiras: NonNullable<EstimativaResult["barreiras"]> = [];
+  for (let i = 0; i < result.items.length; i++) {
+    const it = result.items[i];
+    try {
+      const detectadas = await detectarBarreiras({
+        ncm: it.ncm ?? "",
+        paisOrigem: input.paisOrigem,
+        valorAduaneiroBrl: it.customsValueBrl,
+        pesoTotalKg: it.weightKgTotal || undefined,
+        quantidade: it.quantity,
+        cambio: input.exchangeRate,
+      });
+      if (detectadas.length) {
+        barreiras.push({ description: it.description, ncm: it.ncm ?? "", detectadas });
+        for (const b of detectadas) {
+          ncmWarnings.push(`🛑 ${formatarBarreira(b, it.ncm ?? "")}`);
+        }
+      }
+    } catch {
+      /* detecção é best-effort — nunca derruba o cálculo */
+    }
+  }
+
+  // Insights de unidade por item: custo líquido e FOB na unidade CANÔNICA
+  // (kg/L/un) quando a unidade original é conversível — o total nunca muda,
+  // só a leitura (2 ton a R$10.000 ⇒ R$5,00/kg).
+  const unidades: ItemUnidadeInsight[] = result.items.map((it, i) => {
+    const conv = conversoes[i];
+    return {
+      description: it.description,
+      conversao: conv,
+      custoCanonico: custoPorCanonica(it.netTotalCost, conv),
+      fobCanonico: custoPorCanonica(it.totalFob, conv),
+    };
+  });
+
+  return { ...result, ncmWarnings, despesasBreakdown, unidades, barreiras };
 }
 
 // ============================================================

@@ -162,6 +162,85 @@ export async function generateEstimativaExcel(
   const fxRate = s.exchangeRate || 1;
 
   // ============================================================
+  // ABA 0 — RESUMO (destaque executivo: FOB, nacionalizado, custo/unidade)
+  // Criada ANTES das abas certificadas para abrir o arquivo nela; só VALORES
+  // do motor (nenhuma fórmula), então não interfere nas referências cruzadas
+  // do modelo 1:1. Vale para os dois modos (internal/client) — sem spread.
+  // ============================================================
+  {
+    const rs = wb.addWorksheet("RESUMO");
+    [3.5, 46, 20, 20, 20, 20].forEach((w, i) => (rs.getColumn(i + 1).width = w));
+    paintWhite(rs, 40, 8, 10);
+
+    rs.mergeCells("B2:F2");
+    set(rs, "B2", "RESUMO EXECUTIVO — CUSTO DE IMPORTAÇÃO", {
+      bold: true, size: 14, al: "center", color: WHITE, bg: DARK, border: true,
+    });
+    rs.getRow(2).height = 24;
+    set(rs, "B3", opts.quotationName, { size: 10, al: "left" });
+
+    // --- Os três KPIs em destaque ---
+    const kpiRow = (ref: number, rotulo: string, valor: CellVal, fmt: string, destaque = false) => {
+      set(rs, `B${ref}`, rotulo, {
+        bold: true, size: destaque ? 12 : 11, border: true,
+        bg: destaque ? DARK : undefined, color: destaque ? WHITE : undefined,
+      });
+      set(rs, `C${ref}`, valor, {
+        bold: true, size: destaque ? 12 : 11, fmt, al: "right", border: true,
+        bg: destaque ? DARK : undefined, color: destaque ? WHITE : undefined,
+      });
+      rs.getRow(ref).height = destaque ? 22 : 18;
+    };
+
+    kpiRow(5, `VALOR FOB (${cur})`, s.fobTotalFob, USD_CN);
+    kpiRow(6, "VALOR FOB (R$)", s.fobTotalBrl, BRL2);
+    kpiRow(7, "VALOR CIF (R$)  — FOB + frete + seguro", s.cifTotalBrl, BRL2);
+    kpiRow(8, "TRIBUTOS DA IMPORTAÇÃO (II+IPI+PIS/COFINS+ICMS+taxas)", s.taxesTotal, BRL2);
+    kpiRow(9, "VALOR TOTAL NACIONALIZADO (NF-e de nacionalização)", s.nfeNacionalizacao, BRL2, true);
+    kpiRow(10, "CUSTO LÍQUIDO TOTAL (após créditos do regime)", s.netCostTotal, BRL2, true);
+    if (s.finalidade !== "consumo_proprio") {
+      kpiRow(11, "PREÇO DE VENDA SUGERIDO (total)", s.salePriceTotal, BRL2);
+    }
+
+    // --- Custo por unidade de medida, por item ---
+    const unidades = (result as { unidades?: Array<{
+      conversao?: { descricao?: string | null };
+      custoCanonico?: { valor: number; unidade: string } | null;
+    }> }).unidades;
+
+    const h0 = 13;
+    set(rs, `B${h0}`, "CUSTO POR UNIDADE DE MEDIDA", { bold: true, size: 11, color: WHITE, bg: DARK, border: true });
+    ["Qtde", "Unid.", "Custo líq./unid.", "Custo na canônica"].forEach((h, i) => {
+      set(rs, `${rs.getColumn(3 + i).letter}${h0}`, h, { bold: true, size: 10, al: "center", color: WHITE, bg: DARK, border: true });
+    });
+    items.forEach((it, i) => {
+      const r = h0 + 1 + i;
+      const u = unidades?.[i];
+      set(rs, `B${r}`, it.description, { size: 10, border: true });
+      set(rs, `C${r}`, it.quantity, { size: 10, fmt: NUM2, al: "right", border: true });
+      set(rs, `D${r}`, it.unit || "un", { size: 10, al: "center", border: true });
+      set(rs, `E${r}`, it.netUnitCost, { size: 10, fmt: BRL2, al: "right", border: true, bold: true });
+      const canon = u?.custoCanonico
+        ? `R$ ${u.custoCanonico.valor.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}/${u.custoCanonico.unidade}`
+        : it.netCostPerKg > 0
+          ? `R$ ${it.netCostPerKg.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}/kg`
+          : "—";
+      set(rs, `F${r}`, canon, { size: 10, al: "right", border: true });
+    });
+
+    // Conversões aplicadas + nota de fonte.
+    let nr = h0 + items.length + 2;
+    const convs = (unidades ?? []).map((u) => u?.conversao?.descricao).filter(Boolean);
+    if (convs.length) {
+      set(rs, `B${nr}`, `Conversões de unidade: ${convs.join("; ")}`, { size: 9, al: "left" });
+      nr += 1;
+    }
+    set(rs, `B${nr}`,
+      "Valores do motor certificado. Detalhamento completo nas abas INVOICE, CUSTO MERCADORIA e EST. DE CUSTO.",
+      { size: 9, al: "left" });
+  }
+
+  // ============================================================
   // ABA 1 — INVOICE / PACKING LIST
   // ============================================================
   const inv = wb.addWorksheet(SHEET_INVOICE);

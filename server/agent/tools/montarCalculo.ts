@@ -99,9 +99,44 @@ export const montarCalculoTool: AgentTool = {
     const margemPct = typeof margemFrac === "number" ? (margemFrac * 100).toFixed(1) : undefined;
     const precoVenda = resultado?.summary?.salePriceTotal;
 
-    // Preço final POR ITEM (segregado) — na unidade de medida de cada item + por kg.
     const brl = (n: number) => Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+    const usd = (n: number) => Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
     const itensResultado = Array.isArray(resultado?.items) ? resultado.items : [];
+
+    // DESTAQUE EXECUTIVO (obrigatório na resposta): os três números que a
+    // legislação e a decisão de compra pedem — FOB, total nacionalizado e
+    // custo por unidade de medida. O LLM deve abrir a apresentação com eles.
+    const s = resultado?.summary;
+    const kpis = s
+      ? `APRESENTE EM DESTAQUE (nesta ordem, antes de qualquer detalhe): ` +
+        `1) VALOR FOB: US$ ${usd(s.fobTotalFob)} (R$ ${brl(s.fobTotalBrl)} @ câmbio ${s.exchangeRate}). ` +
+        `2) VALOR TOTAL NACIONALIZADO (NF-e de nacionalização: CIF + II + IPI + PIS/COFINS + ICMS + despesas): R$ ${brl(s.nfeNacionalizacao)}` +
+        (custo != null ? ` — custo líquido após créditos do regime: R$ ${brl(custo)}. ` : ". ") +
+        `3) CUSTO POR UNIDADE DE MEDIDA: ${itensResultado.map((it: any, i: number) => {
+          const u = resultado?.unidades?.[i];
+          let linha = `${it.description}: R$ ${brl(it.netUnitCost)}/${it.unit || "un"}`;
+          if (u?.custoCanonico) linha += ` (= R$ ${brl(u.custoCanonico.valor)}/${u.custoCanonico.unidade})`;
+          else if (it.netCostPerKg > 0) linha += ` (R$ ${brl(it.netCostPerKg)}/kg)`;
+          return linha;
+        }).join(" · ")}. `
+      : "";
+
+    // Conversões de unidade aplicadas (transparência da matemática).
+    const convTxt = (resultado?.unidades ?? [])
+      .map((u) => u.conversao.descricao)
+      .filter(Boolean);
+    const conversoes = convTxt.length
+      ? `Conversões de unidade aplicadas: ${convTxt.join("; ")}. `
+      : "";
+
+    // BARREIRAS COMERCIAIS detectadas (antidumping/CIDE/compensatórias) — o
+    // agente DEVE evidenciá-las na resposta, com impacto e postura afirmativa.
+    const linhasBarreira = (resultado?.ncmWarnings ?? []).filter((w) => w.startsWith("🛑"));
+    const barreirasTxt = linhasBarreira.length
+      ? `BARREIRAS COMERCIAIS DETECTADAS (OBRIGATÓRIO evidenciar na resposta, de forma afirmativa e consultiva): ${linhasBarreira.join(" | ")} `
+      : "";
+
+    // Preço final POR ITEM (segregado) — na unidade de medida de cada item + por kg.
     const porItem = itensResultado.length > 1
       ? `Preço final por item — ${itensResultado.map((it: any) =>
           `${it.description}: R$ ${brl(it.netTotalCost)} (R$ ${brl(it.netUnitCost)}/${it.unit}` +
@@ -154,7 +189,9 @@ export const montarCalculoTool: AgentTool = {
       ok: true,
       summary:
         `Cálculo concluído pelo motor certificado. ` +
-        (custo != null ? `Custo líquido ~ R$ ${brl(custo)}. ` : "") +
+        kpis +
+        conversoes +
+        barreirasTxt +
         (precoVenda != null ? `Preço de venda sugerido ~ R$ ${brl(precoVenda)}. ` : "") +
         (margemPct != null ? `Margem bruta ${margemPct}%. ` : "") +
         porItem +

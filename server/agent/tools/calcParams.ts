@@ -14,6 +14,7 @@ export interface ItemArg {
   precoFobUnitarioUsd: number;
   ncm?: string;
   unidade?: string;
+  itensPorEmbalagem?: number;
   pesoTotalKg?: number;
 }
 
@@ -33,8 +34,23 @@ export const CALC_SCHEMA_PROPERTIES = {
         quantidade: { type: "number", description: "Quantidade na unidade de medida do item" },
         precoFobUnitarioUsd: { type: "number", description: "Preço FOB unitário em USD (por unidade de medida)" },
         ncm: { type: "string", description: "NCM específico deste item (pode diferir entre itens)" },
-        unidade: { type: "string", description: "Unidade de medida do item: PC/UN/KG/MILHEIRO/CX etc. O custo unitário sai nesta unidade." },
-        pesoTotalKg: { type: "number", description: "Peso bruto TOTAL do item em kg (T.G.W) — habilita o custo por kg" },
+        unidade: {
+          type: "string",
+          description:
+            "Unidade de medida do item COMO O USUÁRIO DISSE — o motor entende e converte " +
+            "nativamente: peso (g, kg, ton/tonelada, lb), volume (ml, L, m³), comerciais " +
+            "(un/pc, milheiro=1000un, dúzia, cento, par, pct/cx). O custo sai na unidade " +
+            "original E na canônica (kg/L/un). Ex.: item em 'ton' já habilita o custo/kg " +
+            "sem informar peso.",
+        },
+        itensPorEmbalagem: {
+          type: "number",
+          description:
+            "Quando a unidade é embalagem (pct, cx, fardo, rolo, saco): quantos itens/unidades " +
+            "cada embalagem contém (1 cx = N un). Habilita o custo por unidade real. " +
+            "Pergunte se a pessoa cotou em caixas/pacotes e não disser o conteúdo.",
+        },
+        pesoTotalKg: { type: "number", description: "Peso bruto TOTAL do item em kg (T.G.W) — habilita o custo por kg. Desnecessário quando a unidade já é de peso (kg/ton/g): o motor deriva sozinho." },
       },
       required: ["quantidade", "precoFobUnitarioUsd"],
     },
@@ -160,6 +176,7 @@ export function mapArgsToEstimativaInput(
       quantity: Number(i.quantidade),
       unitPrice: Number(i.precoFobUnitarioUsd),
       unit: typeof i.unidade === "string" ? i.unidade : undefined,
+      itensPorEmbalagem: typeof i.itensPorEmbalagem === "number" ? i.itensPorEmbalagem : undefined,
       pesoTotalKg: typeof i.pesoTotalKg === "number" ? i.pesoTotalKg : undefined,
     })),
     exchangeRate: args.cambioBrl as number,
