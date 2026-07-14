@@ -10,7 +10,7 @@
  *
  * Não chama LLM nem rede — pura orquestração sobre o banco (Drizzle).
  */
-import { and, desc, eq, like, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, like, inArray, sql, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   operacoes, operacaoEventos, operacaoEstagios, operacaoAnexos, operacaoFinanceiro, operacaoMarcos, demandas,
@@ -242,6 +242,48 @@ export function computeJornadaResumo(marcos: MarcoRow[]): JornadaResumo {
   const riscos = pendencias.filter((p) => p.saudePrazo === "atrasado" || p.saudePrazo === "atencao").length;
 
   return { progressoPct, realizados, total, proximaAcao, pendencias, riscos };
+}
+
+/**
+ * Resumo ENXUTO da jornada para o card do Kanban (não arrasta a lista inteira de
+ * pendências como o detalhe). Alimenta o card de governança: progresso, próxima
+ * ação com responsável/prazo e contagem de riscos — o "ponto focal" do quadro.
+ */
+export interface JornadaCard {
+  progressoPct: number;
+  realizados: number;
+  total: number;
+  riscos: number;
+  proximaAcao: {
+    tipo: TipoMarco;
+    label: string;
+    acao: string;
+    estagio: Estagio;
+    responsavel: Responsavel;
+    vencimento: string | null;
+    saudePrazo: SaudePrazo;
+  } | null;
+}
+
+export function compactJornada(marcos: MarcoRow[]): JornadaCard {
+  const j = computeJornadaResumo(marcos);
+  return {
+    progressoPct: j.progressoPct,
+    realizados: j.realizados,
+    total: j.total,
+    riscos: j.riscos,
+    proximaAcao: j.proximaAcao
+      ? {
+          tipo: j.proximaAcao.tipo,
+          label: j.proximaAcao.label,
+          acao: j.proximaAcao.acao,
+          estagio: j.proximaAcao.estagio,
+          responsavel: j.proximaAcao.responsavel,
+          vencimento: j.proximaAcao.vencimento,
+          saudePrazo: j.proximaAcao.saudePrazo,
+        }
+      : null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1132,17 +1174,41 @@ export async function listOperacoes(userId: number, admin = false) {
     .leftJoin(users, eq(users.id, operacoes.userId))
     .where(admin ? undefined : eq(operacoes.userId, userId))
     .orderBy(desc(operacoes.atualizadaEm));
+
+  // JORNADA POR CARD: um único SELECT de marcos de TODAS as operações da lista,
+  // agrupado em memória. Alimenta o card de governança do Kanban (progresso,
+  // próxima ação, responsável, prazo, risco) sem uma query por card. Se a leitura
+  // de marcos falhar (schema fora de sincronia), os cards abrem sem jornada.
+  const ids = rows.map((r) => r.op.id);
+  const marcosByOp = new Map<number, MarcoRow[]>();
+  if (ids.length) {
+    try {
+      const marcos = await fetchMarcos(db, inArray(operacaoMarcos.operacaoId, ids), { ordenar: true });
+      for (const m of marcos as (MarcoRow & { operacaoId: number })[]) {
+        const arr = marcosByOp.get(m.operacaoId) ?? [];
+        arr.push(m);
+        marcosByOp.set(m.operacaoId, arr);
+      }
+    } catch (e) {
+      console.error("[listOperacoes] falha ao ler marcos — cards sem jornada:", e);
+    }
+  }
+
   return rows.map(({ op: o, criadoPorNome, criadoPorEmail }) => ({
     id: o.id, codigo: o.codigo, titulo: o.titulo,
     estagioAtual: o.estagioAtual, status: o.status,
     clienteNome: o.clienteNome, fornecedorNome: o.fornecedorNome,
-    valorEstimadoBrl: o.valorEstimadoBrlCents, margemEstimada: o.margemEstimadaBp,
+    valorEstimadoBrl: o.valorEstimadoBrlCents,
+    valorEstimadoBrlCents: o.valorEstimadoBrlCents, // alias esperado pelo card
+    margemEstimada: o.margemEstimadaBp,
     prioridade: o.prioridade, prazoDesejado: o.prazoDesejado,
     responsavelId: o.responsavelId, origemDesejada: o.origemDesejada,
     modo: o.modo,
     criadaEm: o.criadaEm,
     atualizadaEm: o.atualizadaEm,
     criadoPorNome: criadoPorNome || criadoPorEmail || null,
+    // Governança derivada dos marcos — o "ponto focal" do card no quadro.
+    jornada: compactJornada(marcosByOp.get(o.id) ?? []),
   }));
 }
 

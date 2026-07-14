@@ -17,7 +17,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
   ClipboardList, Plus, Loader2, Copy, Trash2, Search, LayoutGrid, List,
-  CheckCircle2, MoreVertical, ChevronDown, MessageCircle,
+  CheckCircle2, MoreVertical, ChevronDown, MessageCircle, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -30,12 +30,20 @@ import {
 import { STAGE_ORDER, STAGE_META, STAGE_LABELS, type Estagio } from "@/lib/stageLabels";
 import { getPriorityMeta, formatCurrency, formatTimeAgo } from "@/lib/operationStatus";
 import OperationCard from "@/components/OperationCard";
+import OperacaoKanbanCard, { type KanbanJornada } from "@/components/operacao/OperacaoKanbanCard";
 
 const COLUNAS = STAGE_ORDER.map((key) => ({
   key,
   label: STAGE_META[key].label,
   Icon: STAGE_META[key].Icon,
 }));
+
+/** Acento por coluna: funil que migra do "estudo" (violeta) à "entrega" (turquesa). */
+const COL_ACCENT: Record<Estagio, string> = {
+  demand: "bg-violet-300", source: "bg-violet-400", analyze: "bg-violet-500",
+  execute: "bg-teal-400", finance: "bg-teal-500",
+  closed: "bg-slate-400", lost: "bg-slate-300",
+};
 
 /** Teto de cards renderizados por coluna no quadro (excedente vai p/ lista). */
 const KANBAN_CAP = 30;
@@ -61,6 +69,7 @@ interface OperacaoRow {
   atualizadaEm?: Date | null;
   criadaEm?: string | Date | null;
   criadoPorNome?: string | null;
+  jornada?: KanbanJornada | null;
 }
 
 function toEntity(o: OperacaoRow) {
@@ -459,6 +468,8 @@ export default function Operacoes() {
                   const visiveis = itens.slice(0, KANBAN_CAP);
                   const Icon = col.Icon;
                   const isOver = overCol === col.key;
+                  // Governança agregada da coluna: soma de riscos das operações nela.
+                  const riscosCol = itens.reduce((s, o) => s + (o.jornada?.riscos ?? 0), 0);
                   return (
                     <div
                       key={col.key}
@@ -467,50 +478,63 @@ export default function Operacoes() {
                         if (!e.currentTarget.contains(e.relatedTarget as Node)) setOverCol((c) => (c === col.key ? null : c));
                       }}
                       onDrop={() => handleDrop(col.key)}
-                      className={`flex min-w-[230px] flex-1 flex-col rounded-2xl border p-2.5 transition-colors ${
-                        isOver ? "border-violet-400 bg-violet-50/70 ring-2 ring-violet-200" : "border-border bg-muted/60"
+                      className={`flex min-w-[248px] flex-1 flex-col overflow-hidden rounded-2xl border transition-colors ${
+                        isOver ? "border-violet-400 bg-violet-50/70 ring-2 ring-violet-200" : "border-border bg-muted/50"
                       }`}
                     >
-                      <div className="mb-2.5 flex items-center gap-2 px-1">
-                        <Icon className="h-4 w-4 shrink-0 text-violet-600" />
-                        <span className="truncate text-[13px] font-semibold text-foreground" title={col.label}>{col.label}</span>
-                        <span className="ml-auto rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
-                          {itens.length}
-                        </span>
-                      </div>
-                      <div className="flex min-h-[40px] flex-col gap-2">
-                        {itens.length === 0 ? (
-                          <p className={`px-1 py-4 text-center text-xs ${isOver ? "text-violet-400" : "text-muted-foreground/60"}`}>
-                            {isOver ? "Soltar aqui" : "—"}
-                          </p>
-                        ) : (
-                          <>
-                            {visiveis.map((o) => (
-                              <div
-                                key={o.id}
-                                draggable
-                                onDragStart={(e) => { setDragId(o.id); e.dataTransfer.effectAllowed = "move"; }}
-                                onDragEnd={() => { setDragId(null); setOverCol(null); }}
-                                className={`cursor-grab active:cursor-grabbing ${dragId === o.id ? "opacity-50" : ""}`}
-                              >
-                                <OperationCard
-                                  entity={toEntity(o)}
-                                  compact={true}
-                                  onClick={() => navigate(`/operacao/${o.id}`)}
-                                  actions={cardActions(o)}
-                                />
-                              </div>
-                            ))}
-                            {itens.length > KANBAN_CAP && (
-                              <button
-                                onClick={() => { setStageFilter(col.key); setView("lista"); }}
-                                className="rounded-xl border border-dashed border-violet-200 py-2 text-xs font-semibold text-violet-600 hover:bg-violet-50"
-                              >
-                                +{itens.length - KANBAN_CAP} — ver na lista
-                              </button>
-                            )}
-                          </>
-                        )}
+                      {/* acento do funil */}
+                      <div className={`h-1 w-full ${COL_ACCENT[col.key] ?? "bg-violet-400"}`} />
+                      <div className="flex flex-col p-2.5">
+                        <div className="mb-2.5 flex items-center gap-2 px-1">
+                          <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                            <Icon className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="truncate text-[13px] font-semibold text-foreground" title={col.label}>{col.label}</span>
+                          {riscosCol > 0 && (
+                            <span
+                              className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-700"
+                              title={`${riscosCol} pendência(s) em risco nesta etapa`}
+                            >
+                              <AlertTriangle className="h-2.5 w-2.5" /> {riscosCol}
+                            </span>
+                          )}
+                          <span className="ml-auto rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
+                            {itens.length}
+                          </span>
+                        </div>
+                        <div className="flex max-h-[calc(100vh-320px)] min-h-[40px] flex-col gap-2 overflow-y-auto pr-0.5">
+                          {itens.length === 0 ? (
+                            <p className={`px-1 py-4 text-center text-xs ${isOver ? "text-violet-400" : "text-muted-foreground/60"}`}>
+                              {isOver ? "Soltar aqui" : "—"}
+                            </p>
+                          ) : (
+                            <>
+                              {visiveis.map((o) => (
+                                <div
+                                  key={o.id}
+                                  draggable
+                                  onDragStart={(e) => { setDragId(o.id); e.dataTransfer.effectAllowed = "move"; }}
+                                  onDragEnd={() => { setDragId(null); setOverCol(null); }}
+                                  className={`cursor-grab active:cursor-grabbing ${dragId === o.id ? "opacity-50" : ""}`}
+                                >
+                                  <OperacaoKanbanCard
+                                    op={o}
+                                    onClick={() => navigate(`/operacao/${o.id}`)}
+                                    actions={cardActions(o)}
+                                  />
+                                </div>
+                              ))}
+                              {itens.length > KANBAN_CAP && (
+                                <button
+                                  onClick={() => { setStageFilter(col.key); setView("lista"); }}
+                                  className="rounded-xl border border-dashed border-violet-200 py-2 text-xs font-semibold text-violet-600 hover:bg-violet-50"
+                                >
+                                  +{itens.length - KANBAN_CAP} — ver na lista
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
