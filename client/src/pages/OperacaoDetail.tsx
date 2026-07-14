@@ -18,13 +18,19 @@ import OperacaoTimeline from "@/components/OperacaoTimeline";
 import OperacaoTracking from "@/components/OperacaoTracking";
 import OperacaoAnexos from "@/components/OperacaoAnexos";
 import OperacaoFinanceiro from "@/components/OperacaoFinanceiro";
+import JornadaTrilho from "@/components/operacao/JornadaTrilho";
+import OperacaoNotas from "@/components/operacao/OperacaoNotas";
 import {
   ProgressRing, CartaoAgora, CentralPendencias, MetricaTile,
   type JornadaResumoData, type MarcoRegistroInput,
 } from "@/components/operacao/JornadaResumo";
+import type { TipoMarco } from "@/lib/marcoLabels";
 import {
   ArrowLeft, CalendarClock, Globe2, MessageCircle, Anchor, DollarSign, AlertTriangle,
+  LayoutDashboard, Route, ListChecks, Paperclip, StickyNote,
 } from "lucide-react";
+
+type TabKey = "geral" | "jornada" | "pendencias" | "documentos" | "custos" | "notas";
 
 const MODO_LABEL: Record<string, { txt: string; cls: string }> = {
   cotacao:        { txt: "Cotação pronta",  cls: "bg-blue-50 text-blue-700" },
@@ -47,6 +53,7 @@ export default function OperacaoDetail() {
   const id = Number(params?.id);
 
   const utils = trpc.useUtils();
+  const [tab, setTab] = useState<TabKey>("geral");
   const { data, isLoading, error } = trpc.operations.get.useQuery(
     { id },
     { enabled: Number.isFinite(id) },
@@ -95,6 +102,18 @@ export default function OperacaoDetail() {
       responsavel: m.responsavel,
       vencimento: m.vencimento ?? undefined,
       descricao: m.descricao,
+    });
+  };
+
+  /** Nota ancorada (opcionalmente) a um marco — reusa operacao_eventos. */
+  const adicionarNota = (texto: string, marcoTipo?: TipoMarco) => {
+    if (!data?.operacao) return;
+    addEvento.mutate({
+      operacaoId: data.operacao.id,
+      tipo: "nota_interna",
+      estagio: data.operacao.estagioAtual,
+      titulo: texto,
+      payload: marcoTipo ? { marcoTipo } : undefined,
     });
   };
 
@@ -151,12 +170,8 @@ export default function OperacaoDetail() {
     `R$ ${(cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const conversar = () => navigate(`/excambia?operacao=${operacao.id}`);
-
-  function handleAddNote() {
-    const titulo = window.prompt("Nota para a operação:");
-    if (!titulo) return;
-    addEvento.mutate({ operacaoId: operacao.id, tipo: "nota_interna", estagio: operacao.estagioAtual, titulo });
-  }
+  const marcos = (data as any).marcos ?? [];
+  const notasCount = (eventos as any[]).filter((e) => e.tipo === "nota_interna").length;
 
   function handleChangePrioridade(e: React.ChangeEvent<HTMLSelectElement>) {
     update.mutate({ operacaoId: operacao.id, prioridade: e.target.value as any });
@@ -219,92 +234,154 @@ export default function OperacaoDetail() {
           </div>
         </div>
 
-        {/* metadados editáveis: prioridade, prazo, origem desejada */}
-        <div className="mt-4 grid grid-cols-1 gap-3 border-t border-border pt-4 sm:grid-cols-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Prioridade</span>
-            <div className="flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${prio.dot}`} />
-              <select
-                value={op.prioridade ?? "media"}
-                onChange={handleChangePrioridade}
-                disabled={update.isPending}
-                className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground disabled:opacity-60"
-              >
-                {PRIORITY_ORDER.map((p) => (
-                  <option key={p} value={p}>{getPriorityMeta(p).label}</option>
-                ))}
-              </select>
-            </div>
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-              <CalendarClock className="mr-1 inline h-3 w-3" /> Prazo desejado
-            </span>
-            <input
-              type="date"
-              value={op.prazoDesejado ? new Date(op.prazoDesejado).toISOString().slice(0, 10) : ""}
-              onChange={handleChangePrazo}
-              disabled={update.isPending}
-              className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground disabled:opacity-60"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-              <Globe2 className="mr-1 inline h-3 w-3" /> Origem
-            </span>
-            <input
-              type="text"
-              defaultValue={op.origemDesejada ?? ""}
-              onBlur={handleBlurOrigem}
-              disabled={update.isPending}
-              placeholder="Ex.: China, Índia, Coreia do Sul…"
-              className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground placeholder:font-normal placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
-            />
-          </label>
-        </div>
-
-        {/* Faixa de métricas executivas: progresso, ETA, valor e riscos */}
-        <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-border pt-4">
-          <div className="flex items-center gap-3">
-            <ProgressRing pct={jornada?.progressoPct ?? 0} />
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Progresso</p>
-              <p className="text-sm font-bold text-foreground">
-                {jornada?.realizados ?? 0}/{jornada?.total ?? 13} marcos
-              </p>
-            </div>
-          </div>
-          <MetricaTile
-            Icon={Anchor}
-            label="ETA (chegada)"
-            value={op.trackingEta ? new Date(op.trackingEta).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : "—"}
-          />
-          <MetricaTile
-            Icon={DollarSign}
-            label="Valor estimado"
-            value={operacao.valorEstimadoBrlCents ? brl(operacao.valorEstimadoBrlCents) : "—"}
-            accent="text-teal-500"
-          />
-          <MetricaTile
-            Icon={AlertTriangle}
-            label="Riscos"
-            value={jornada?.riscos ? `${jornada.riscos} pendência${jornada.riscos === 1 ? "" : "s"}` : "nenhum"}
-            accent={jornada?.riscos ? "text-red-500" : "text-teal-500"}
-          />
-        </div>
       </header>
 
-      {/* Cartão "Agora" + Jornada · marcos (bloco único) — o coração do redesenho */}
-      {jornada && (
-        <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <CartaoAgora
-            proxima={jornada.proximaAcao}
-            onRegistrar={concluirMarco}
-            onConversar={conversar}
+      {/* ABAS — o detalhe da operação organizado por seção */}
+      <nav className="mb-5 flex gap-1 overflow-x-auto border-b border-border">
+        {([
+          { key: "geral",      label: "Visão geral", Icon: LayoutDashboard, count: null },
+          { key: "jornada",    label: "Jornada",     Icon: Route,           count: null },
+          { key: "pendencias", label: "Pendências",  Icon: ListChecks,      count: jornada?.pendencias.length ?? 0 },
+          { key: "documentos", label: "Documentos",  Icon: Paperclip,       count: anexos.length },
+          { key: "custos",     label: "Custos",      Icon: DollarSign,      count: financeiro.length },
+          { key: "notas",      label: "Notas",       Icon: StickyNote,      count: notasCount },
+        ] as { key: TabKey; label: string; Icon: typeof Route; count: number | null }[]).map((t) => {
+          const active = tab === t.key;
+          const Icon = t.Icon;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors ${
+                active
+                  ? "border-violet-600 text-violet-700"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="h-4 w-4" /> {t.label}
+              {t.count != null && t.count > 0 && (
+                <span className={`rounded-full px-1.5 text-[10px] ${active ? "bg-violet-100 text-violet-700" : "bg-muted text-muted-foreground"}`}>
+                  {t.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* ---------------- VISÃO GERAL ---------------- */}
+      {tab === "geral" && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-border bg-card p-5">
+            {/* metadados editáveis: prioridade, prazo, origem desejada */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Prioridade</span>
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${prio.dot}`} />
+                  <select
+                    value={op.prioridade ?? "media"}
+                    onChange={handleChangePrioridade}
+                    disabled={update.isPending}
+                    className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground disabled:opacity-60"
+                  >
+                    {PRIORITY_ORDER.map((p) => (
+                      <option key={p} value={p}>{getPriorityMeta(p).label}</option>
+                    ))}
+                  </select>
+                </div>
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                  <CalendarClock className="mr-1 inline h-3 w-3" /> Prazo desejado
+                </span>
+                <input
+                  type="date"
+                  value={op.prazoDesejado ? new Date(op.prazoDesejado).toISOString().slice(0, 10) : ""}
+                  onChange={handleChangePrazo}
+                  disabled={update.isPending}
+                  className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground disabled:opacity-60"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                  <Globe2 className="mr-1 inline h-3 w-3" /> Origem
+                </span>
+                <input
+                  type="text"
+                  defaultValue={op.origemDesejada ?? ""}
+                  onBlur={handleBlurOrigem}
+                  disabled={update.isPending}
+                  placeholder="Ex.: China, Índia, Coreia do Sul…"
+                  className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground placeholder:font-normal placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
+                />
+              </label>
+            </div>
+
+            {/* Faixa de métricas executivas: progresso, ETA, valor e riscos */}
+            <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-border pt-4">
+              <div className="flex items-center gap-3">
+                <ProgressRing pct={jornada?.progressoPct ?? 0} />
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Progresso</p>
+                  <p className="text-sm font-bold text-foreground">
+                    {jornada?.realizados ?? 0}/{jornada?.total ?? 13} marcos
+                  </p>
+                </div>
+              </div>
+              <MetricaTile
+                Icon={Anchor}
+                label="ETA (chegada)"
+                value={op.trackingEta ? new Date(op.trackingEta).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : "—"}
+              />
+              <MetricaTile
+                Icon={DollarSign}
+                label="Valor estimado"
+                value={operacao.valorEstimadoBrlCents ? brl(operacao.valorEstimadoBrlCents) : "—"}
+                accent="text-teal-500"
+              />
+              <MetricaTile
+                Icon={AlertTriangle}
+                label="Riscos"
+                value={jornada?.riscos ? `${jornada.riscos} pendência${jornada.riscos === 1 ? "" : "s"}` : "nenhum"}
+                accent={jornada?.riscos ? "text-red-500" : "text-teal-500"}
+              />
+            </div>
+          </div>
+
+          {jornada && (
+            <CartaoAgora
+              proxima={jornada.proximaAcao}
+              onRegistrar={concluirMarco}
+              onConversar={conversar}
+            />
+          )}
+
+          {mostraTracking && (
+            <OperacaoTracking operacao={op as any} onChange={invalidate} />
+          )}
+        </div>
+      )}
+
+      {/* ---------------- JORNADA (substitui a esteira) ---------------- */}
+      {tab === "jornada" && (
+        <div className="space-y-6">
+          <JornadaTrilho marcos={marcos} proximaTipo={jornada?.proximaAcao?.tipo ?? null} />
+          <OperacaoTimeline
+            operacao={operacao as any}
+            eventos={eventos as any}
+            showEsteira={false}
+            onAdvanceStage={() => advance.mutate({ operacaoId: operacao.id })}
+            onDecideGoNoGo={(d) => decide.mutate({ operacaoId: operacao.id, decision: d })}
           />
+        </div>
+      )}
+
+      {/* ---------------- PENDÊNCIAS ---------------- */}
+      {tab === "pendencias" && (
+        jornada ? (
           <CentralPendencias
             pendencias={jornada.pendencias}
             realizados={jornada.realizados}
@@ -314,27 +391,29 @@ export default function OperacaoDetail() {
             registrando={registrarMarco.isPending}
             concluindoTipo={concluindoTipo}
           />
-        </div>
+        ) : (
+          <p className="p-6 text-sm text-muted-foreground">Sem jornada disponível para esta operação.</p>
+        )
       )}
 
-      {mostraTracking && (
-        <div className="mb-6">
-          <OperacaoTracking operacao={op as any} onChange={invalidate} />
-        </div>
-      )}
-
-      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {/* ---------------- DOCUMENTOS ---------------- */}
+      {tab === "documentos" && (
         <OperacaoAnexos operacaoId={operacao.id} anexos={anexos} onChange={invalidate} />
-        <OperacaoFinanceiro operacaoId={operacao.id} lancamentos={financeiro} onChange={invalidate} />
-      </div>
+      )}
 
-      <OperacaoTimeline
-        operacao={operacao as any}
-        eventos={eventos as any}
-        onAddNote={handleAddNote}
-        onAdvanceStage={() => advance.mutate({ operacaoId: operacao.id })}
-        onDecideGoNoGo={(d) => decide.mutate({ operacaoId: operacao.id, decision: d })}
-      />
+      {/* ---------------- CUSTOS ---------------- */}
+      {tab === "custos" && (
+        <OperacaoFinanceiro operacaoId={operacao.id} lancamentos={financeiro} onChange={invalidate} />
+      )}
+
+      {/* ---------------- NOTAS ---------------- */}
+      {tab === "notas" && (
+        <OperacaoNotas
+          eventos={eventos as any}
+          onAdd={adicionarNota}
+          adding={addEvento.isPending}
+        />
+      )}
     </div>
   );
 }

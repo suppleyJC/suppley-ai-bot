@@ -52,6 +52,8 @@ export interface OperacaoTimelineProps {
   onAdvanceStage?: () => void;
   onAddNote?: () => void;
   onDecideGoNoGo?: (d: "go" | "no_go") => void;
+  /** Oculta a esteira flat lateral (a aba Jornada usa o trilho de marcos). */
+  showEsteira?: boolean;
 }
 
 /* ---------- esteira: derivada do mapa único de rótulos ---------- */
@@ -119,15 +121,16 @@ function fmtBRL(cents?: number | null) {
 }
 
 export default function OperacaoTimeline({
-  operacao, eventos, onAdvanceStage, onAddNote, onDecideGoNoGo,
+  operacao, eventos, onAdvanceStage, onAddNote, onDecideGoNoGo, showEsteira = true,
 }: OperacaoTimelineProps) {
   const idxAtual = ORDEM.indexOf(operacao.estagioAtual);
   const isAnalyze = operacao.estagioAtual === "analyze";
   const encerrada = operacao.estagioAtual === "closed" || operacao.estagioAtual === "lost";
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
+    <div className={showEsteira ? "grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]" : ""}>
       {/* ESTEIRA VERTICAL */}
+      {showEsteira && (
       <aside className="rounded-2xl border border-border bg-card p-5">
         <h3 className="mb-4 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
           Esteira da operação
@@ -180,6 +183,7 @@ export default function OperacaoTimeline({
           </div>
         </div>
       </aside>
+      )}
 
       {/* LINHA DO TEMPO DE EVENTOS — histórico cronológico (auditoria) */}
       <section>
