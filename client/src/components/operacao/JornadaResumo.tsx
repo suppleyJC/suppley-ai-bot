@@ -10,10 +10,25 @@
  * A comunicação com a Excambia continua no CHAT PRINCIPAL: os botões apenas
  * fazem deep-link para /excambia?operacao= — nada de chat embutido na operação.
  */
-import React from "react";
-import { Clock, ArrowRight, MessageCircle, Plus, ListChecks, Zap } from "lucide-react";
-import { responsavelMeta, saudeMeta, formatVencimento } from "@/lib/jornadaLabels";
+import React, { useState } from "react";
+import { Clock, ArrowRight, MessageCircle, Plus, ListChecks, Zap, Check, Loader2, X } from "lucide-react";
+import { responsavelMeta, saudeMeta, formatVencimento, type Responsavel } from "@/lib/jornadaLabels";
 import { STAGE_LABELS } from "@/lib/stageLabels";
+import { JORNADA_MARCOS, MARCO_META, type TipoMarco } from "@/lib/marcoLabels";
+
+const RESPONSAVEIS: Responsavel[] = [
+  "cliente", "excambia", "fornecedor", "agente", "despachante", "anuente", "sistema",
+];
+
+/** Payload de registro detalhado de um marco (planejamento com responsável/prazo). */
+export interface MarcoRegistroInput {
+  tipo: TipoMarco;
+  status: "planejado" | "realizado" | "cancelado";
+  dataReferencia: Date;
+  responsavel?: Responsavel;
+  vencimento?: Date | null;
+  descricao?: string;
+}
 
 export interface MarcoInfo {
   tipo: string;
@@ -120,7 +135,7 @@ export function CartaoAgora({
             onClick={() => onRegistrar(proxima.tipo)}
             className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
           >
-            <Plus className="h-4 w-4" /> Registrar marco
+            <Check className="h-4 w-4" /> Concluir esta etapa
           </button>
           <button
             onClick={onConversar}
@@ -134,27 +149,160 @@ export function CartaoAgora({
   );
 }
 
-/** Central de pendências da operação — não concluídos, por urgência. */
+/**
+ * JORNADA · MARCOS — bloco ÚNICO de marcos da operação (unifica o antigo
+ * "Pendências" com o antigo timeline "Jornada · Marcos", eliminando a
+ * duplicidade). Lista os marcos que faltam, por urgência, com:
+ *   - "Concluir" de UM clique (registra realizado agora → atualiza o contador
+ *     e o banco na hora);
+ *   - "Registrar" → formulário de planejamento (status, data, responsável,
+ *     prazo, descrição), preservando o modelo de estados.
+ */
 export function CentralPendencias({
-  pendencias, onRegistrar, max = 6,
+  pendencias, realizados, total, onConcluir, onSubmit, registrando, concluindoTipo, max = 8,
 }: {
   pendencias: (MarcoInfo & { status: string })[];
-  onRegistrar: (tipo: string) => void;
+  realizados: number;
+  total: number;
+  /** Um clique: conclui o marco (realizado, agora). */
+  onConcluir: (tipo: string) => void;
+  /** Registro detalhado (planejamento com responsável/prazo). */
+  onSubmit: (input: MarcoRegistroInput) => void;
+  registrando: boolean;
+  /** Tipo em conclusão no momento (para o spinner no card certo). */
+  concluindoTipo?: string | null;
   max?: number;
 }) {
+  const [showForm, setShowForm] = useState(false);
+  const [tipo, setTipo] = useState<TipoMarco>((pendencias[0]?.tipo as TipoMarco) ?? "item_pesquisado");
+  const [status, setStatus] = useState<MarcoRegistroInput["status"]>("realizado");
+  const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
+  const [responsavel, setResponsavel] = useState<"" | Responsavel>("");
+  const [vencimento, setVencimento] = useState("");
+  const [descricao, setDescricao] = useState("");
+
   const lista = pendencias.slice(0, max);
+
+  function resetForm() {
+    setShowForm(false);
+    setStatus("realizado");
+    setData(new Date().toISOString().slice(0, 10));
+    setResponsavel("");
+    setVencimento("");
+    setDescricao("");
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!data) return;
+    onSubmit({
+      tipo,
+      status,
+      dataReferencia: new Date(data),
+      responsavel: responsavel || undefined,
+      vencimento: vencimento ? new Date(vencimento) : undefined,
+      descricao: descricao.trim() || undefined,
+    });
+    resetForm();
+  }
+
   return (
     <section className="rounded-2xl border border-border bg-card p-5">
-      <h3 className="mb-3 inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-        <ListChecks className="h-3.5 w-3.5" /> Pendências ({pendencias.length})
-      </h3>
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          <ListChecks className="h-3.5 w-3.5" /> Jornada · marcos ({realizados}/{total})
+        </h3>
+        <button
+          onClick={() => setShowForm((v) => !v)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700"
+        >
+          {showForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+          {showForm ? "Fechar" : "Registrar"}
+        </button>
+      </div>
+
+      {/* Formulário de registro detalhado (planejamento com responsável/prazo) */}
+      {showForm && (
+        <form onSubmit={submit} className="mb-4 space-y-3 rounded-xl border border-border bg-muted/50 p-3">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Marco</span>
+              <select
+                value={tipo} onChange={(e) => setTipo(e.target.value as TipoMarco)}
+                className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
+              >
+                {JORNADA_MARCOS.map((g) => (
+                  <optgroup key={g.estagio} label={STAGE_LABELS[g.estagio as keyof typeof STAGE_LABELS] ?? g.estagio}>
+                    {g.tipos.map((t) => (
+                      <option key={t} value={t}>{MARCO_META[t].label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Status</span>
+              <select
+                value={status} onChange={(e) => setStatus(e.target.value as MarcoRegistroInput["status"])}
+                className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
+              >
+                <option value="planejado">Planejado</option>
+                <option value="realizado">Realizado</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Data</span>
+              <input type="date" value={data} onChange={(e) => setData(e.target.value)} required
+                className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm" />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Vence em (opcional)</span>
+              <input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)}
+                className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm" />
+            </label>
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Responsável (opcional)</span>
+            <select
+              value={responsavel} onChange={(e) => setResponsavel(e.target.value as "" | Responsavel)}
+              className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
+            >
+              <option value="">— não definido —</option>
+              {RESPONSAVEIS.map((r) => (
+                <option key={r} value={r}>{responsavelMeta(r).label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Descrição (opcional)</span>
+            <input type="text" value={descricao} onChange={(e) => setDescricao(e.target.value)}
+              placeholder="Ex.: Confirmado com Fabricante XYZ"
+              className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm" />
+          </label>
+          <div className="flex gap-2">
+            <button type="submit" disabled={registrando}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60">
+              {registrando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Salvar marco
+            </button>
+            <button type="button" onClick={resetForm}
+              className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+
       {lista.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nenhuma pendência — jornada em dia.</p>
+        <p className="text-sm text-muted-foreground">Todos os marcos concluídos — jornada completa. 🎉</p>
       ) : (
         <ul className="space-y-2">
           {lista.map((p) => {
             const saude = saudeMeta(p.saudePrazo);
             const resp = responsavelMeta(p.responsavel);
+            const concluindo = concluindoTipo === p.tipo;
             return (
               <li
                 key={p.tipo}
@@ -172,14 +320,16 @@ export function CentralPendencias({
                   </p>
                 </div>
                 <span className={`hidden sm:inline-flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold ${resp.cls}`}
-                  title={resp.label}>
+                  title={`Responsável sugerido: ${resp.label}`}>
                   {resp.sigla}
                 </span>
                 <button
-                  onClick={() => onRegistrar(p.tipo)}
-                  className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg border border-violet-200 px-2 py-1 text-[11px] font-semibold text-violet-700 hover:bg-violet-50"
+                  onClick={() => onConcluir(p.tipo)}
+                  disabled={registrando}
+                  className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg border border-violet-200 px-2.5 py-1 text-[11px] font-semibold text-violet-700 hover:bg-violet-50 disabled:opacity-50"
                 >
-                  Concluir <ArrowRight className="h-3 w-3" />
+                  {concluindo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                  Concluir
                 </button>
               </li>
             );

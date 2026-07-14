@@ -12,17 +12,16 @@
  */
 import React, { useState } from "react";
 import { useRoute, useLocation } from "wouter";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import OperacaoTimeline from "@/components/OperacaoTimeline";
-import OperacaoMarcos from "@/components/OperacaoMarcos";
 import OperacaoTracking from "@/components/OperacaoTracking";
 import OperacaoAnexos from "@/components/OperacaoAnexos";
 import OperacaoFinanceiro from "@/components/OperacaoFinanceiro";
 import {
   ProgressRing, CartaoAgora, CentralPendencias, MetricaTile,
-  type JornadaResumoData,
+  type JornadaResumoData, type MarcoRegistroInput,
 } from "@/components/operacao/JornadaResumo";
-import type { TipoMarco } from "@/lib/marcoLabels";
 import {
   ArrowLeft, CalendarClock, Globe2, MessageCircle, Anchor, DollarSign, AlertTriangle,
 } from "lucide-react";
@@ -65,10 +64,39 @@ export default function OperacaoDetail() {
   const addEvento = trpc.operations.addEvento.useMutation({ onSuccess: invalidate });
   const update = trpc.operations.update.useMutation({ onSuccess: invalidate });
 
-  // Ponte cartão "Agora"/pendências → formulário de marcos (abre prefilled).
-  const [prefill, setPrefill] = useState<{ tipo: TipoMarco; nonce: number } | undefined>();
-  const registrarMarcoDe = (tipo: string) =>
-    setPrefill({ tipo: tipo as TipoMarco, nonce: Date.now() });
+  // MARCOS: uma única fonte de escrita para o cartão "Agora" e o bloco
+  // "Jornada · marcos". Concluir de um clique OU registro detalhado usam a
+  // mesma mutation — o contador e o banco atualizam na hora.
+  const [concluindoTipo, setConcluindoTipo] = useState<string | null>(null);
+  const registrarMarco = trpc.operations.registrarMarco.useMutation({
+    onSuccess: () => { invalidate(); toast.success("Marco registrado."); },
+    onError: (e) => toast.error(e.message || "Não foi possível registrar o marco."),
+    onSettled: () => setConcluindoTipo(null),
+  });
+
+  /** Um clique: conclui o marco (realizado, agora). */
+  const concluirMarco = (tipo: string) => {
+    setConcluindoTipo(tipo);
+    registrarMarco.mutate({
+      operacaoId: id,
+      tipo: tipo as any,
+      status: "realizado",
+      dataReferencia: new Date(),
+    });
+  };
+
+  /** Registro detalhado (planejamento com responsável/prazo/descrição). */
+  const registrarMarcoDetalhado = (m: MarcoRegistroInput) => {
+    registrarMarco.mutate({
+      operacaoId: id,
+      tipo: m.tipo as any,
+      status: m.status,
+      dataReferencia: m.dataReferencia,
+      responsavel: m.responsavel,
+      vencimento: m.vencimento ?? undefined,
+      descricao: m.descricao,
+    });
+  };
 
   if (!Number.isFinite(id)) {
     return <div className="p-8 text-sm text-muted-foreground">Operação inválida.</div>;
@@ -98,7 +126,6 @@ export default function OperacaoDetail() {
   }
 
   const { operacao, eventos } = data;
-  const marcos = (data as any).marcos ?? [];
   const anexos = (data as any).anexos ?? [];
   const financeiro = (data as any).financeiro ?? [];
   const jornada = (data as any).jornada as JornadaResumoData | undefined;
@@ -270,21 +297,25 @@ export default function OperacaoDetail() {
         </div>
       </header>
 
-      {/* Cartão "Agora" + central de pendências — o coração do redesenho */}
+      {/* Cartão "Agora" + Jornada · marcos (bloco único) — o coração do redesenho */}
       {jornada && (
         <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <CartaoAgora
             proxima={jornada.proximaAcao}
-            onRegistrar={registrarMarcoDe}
+            onRegistrar={concluirMarco}
             onConversar={conversar}
           />
-          <CentralPendencias pendencias={jornada.pendencias} onRegistrar={registrarMarcoDe} />
+          <CentralPendencias
+            pendencias={jornada.pendencias}
+            realizados={jornada.realizados}
+            total={jornada.total}
+            onConcluir={concluirMarco}
+            onSubmit={registrarMarcoDetalhado}
+            registrando={registrarMarco.isPending}
+            concluindoTipo={concluindoTipo}
+          />
         </div>
       )}
-
-      <div className="mb-6">
-        <OperacaoMarcos operacaoId={operacao.id} marcos={marcos} onChange={invalidate} prefill={prefill} />
-      </div>
 
       {mostraTracking && (
         <div className="mb-6">

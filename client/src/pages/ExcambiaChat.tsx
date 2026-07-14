@@ -153,37 +153,6 @@ function RelogioAgora() {
   );
 }
 
-/**
- * Revela a resposta JÁ CONCLUÍDA fluindo na tela ("processa em silêncio →
- * flui na entrega"). Revela por palavras, com duração limitada (~700ms) e
- * desaceleração no fim — nada de streaming durante o raciocínio. Resolve
- * quando a revelação termina; cancelável via ref para não vazar timers.
- */
-function revealReply(
-  full: string,
-  setReply: (s: string) => void,
-  cancelRef: { current: boolean },
-): Promise<void> {
-  return new Promise((resolve) => {
-    if (!full) { setReply(""); resolve(); return; }
-    // Mantém tokens de markdown intactos revelando por palavras (com separadores).
-    const partes = full.split(/(\s+)/);
-    const DURACAO = 700;
-    const PASSOS = Math.min(partes.length, 48);
-    const porPasso = Math.max(1, Math.ceil(partes.length / PASSOS));
-    const intervalo = DURACAO / Math.ceil(partes.length / porPasso);
-    let i = 0;
-    const tick = () => {
-      if (cancelRef.current) { setReply(full); resolve(); return; }
-      i += porPasso;
-      if (i >= partes.length) { setReply(full); resolve(); return; }
-      setReply(partes.slice(0, i).join(""));
-      setTimeout(tick, intervalo);
-    };
-    tick();
-  });
-}
-
 export default function ExcambiaChat() {
   const [activeId, setActiveId] = useState<number | undefined>(undefined);
   // No mobile inicia recolhido (chat ocupa a tela toda); no desktop, expandido.
@@ -199,8 +168,6 @@ export default function ExcambiaChat() {
   const [streaming, setStreaming] = useState(false);
   const [streamingReply, setStreamingReply] = useState("");
   const [streamingEvents, setStreamingEvents] = useState<Array<any>>([]);
-  // Cancela a revelação da resposta se a conversa mudar/desmontar no meio.
-  const revealCancel = useRef(false);
   const utils = trpc.useUtils();
 
   const create = trpc.conversas.create.useMutation({
@@ -323,11 +290,11 @@ export default function ExcambiaChat() {
           try {
             const chunk = JSON.parse(line.slice(6));
 
-            if (chunk.type === "done") {
-              setStreaming(false);
-            } else if (chunk.type === "reply") {
+            if (chunk.type === "reply") {
               finalReply = chunk.reply ?? "";
-            } else {
+            } else if (chunk.type !== "done") {
+              // "done" NÃO encerra aqui — finalizamos após a revelação, para a
+              // mensagem não sumir antes do fade de entrega.
               setStreamingEvents((prev) => [...prev, chunk]);
             }
           } catch {
@@ -336,18 +303,16 @@ export default function ExcambiaChat() {
         }
       }
 
-      // ENTREGA FLUIDA: revela a resposta pronta antes de trocar pela persistida.
-      revealCancel.current = false;
-      await revealReply(finalReply, setStreamingReply, revealCancel);
-
-      // Encerra o streaming ANTES de carregar a versão persistida — evita que a
-      // resposta transmitida e a persistida sejam pintadas juntas (encavalamento).
-      setStreaming(false);
-      setStreamingReply("");
-      setStreamingEvents([]);
+      // ENTREGA FLUIDA: troca o indicador de atividade pela resposta PRONTA, que
+      // entra com fade/subida suave (CSS, sem re-parse de markdown). A versão
+      // persistida é buscada em paralelo e substitui sem gap (mesmo conteúdo).
+      setStreamingReply(finalReply);
       await utils.conversas.get.invalidate({ id });
       utils.conversas.list.invalidate();
       refreshPainel(operacaoId);
+      setStreaming(false);
+      setStreamingReply("");
+      setStreamingEvents([]);
     } catch (err: any) {
       console.error("Falha ao enviar mensagem:", err);
       setDraft(text);
@@ -451,11 +416,9 @@ export default function ExcambiaChat() {
           if (!line.startsWith("data: ")) continue;
           try {
             const chunk = JSON.parse(line.slice(6));
-            if (chunk.type === "done") {
-              setStreaming(false);
-            } else if (chunk.type === "reply") {
+            if (chunk.type === "reply") {
               finalReply = chunk.reply ?? "";
-            } else {
+            } else if (chunk.type !== "done") {
               setStreamingEvents((prev) => [...prev, chunk]);
             }
           } catch {
@@ -464,17 +427,15 @@ export default function ExcambiaChat() {
         }
       }
 
-      // ENTREGA FLUIDA: revela a resposta pronta antes de trocar pela persistida.
-      revealCancel.current = false;
-      await revealReply(finalReply, setStreamingReply, revealCancel);
-
-      // Encerra o streaming ANTES de carregar a versão persistida (anti-encavalamento).
-      setStreaming(false);
-      setStreamingReply("");
-      setStreamingEvents([]);
+      // ENTREGA FLUIDA: resposta pronta entra com fade/subida (CSS); persistida
+      // substitui em paralelo, sem gap.
+      setStreamingReply(finalReply);
       await utils.conversas.get.invalidate({ id });
       utils.conversas.list.invalidate();
       refreshPainel(operacaoId);
+      setStreaming(false);
+      setStreamingReply("");
+      setStreamingEvents([]);
     } catch (err: any) {
       console.error("Falha ao enviar anexo:", err);
       setStreaming(false);
@@ -567,7 +528,10 @@ export default function ExcambiaChat() {
               ))}
               {(streaming || uploading) && (
                 streamingReply ? (
-                  <Message role="assistant" content={streamingReply} />
+                  // Entrega fluida: a resposta pronta entra com fade/subida suave.
+                  <div className="excambia-reveal">
+                    <Message role="assistant" content={streamingReply} />
+                  </div>
                 ) : (
                   <StreamingActivity events={streamingEvents} />
                 )

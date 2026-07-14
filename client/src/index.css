@@ -587,6 +587,19 @@
   @media (prefers-reduced-motion: reduce) {
     .excambia-ellipsis::after { animation: none; }
   }
+
+  /* Entrega fluida da resposta: a mensagem PRONTA entra com fade + leve subida,
+     sem re-parse de markdown (suave e barato, ao contrário do typewriter). */
+  .excambia-reveal {
+    animation: excambia-reveal 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes excambia-reveal {
+    0%   { opacity: 0; transform: translateY(8px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .excambia-reveal { animation: none; }
+  }
 }
 
 @layer utilities {

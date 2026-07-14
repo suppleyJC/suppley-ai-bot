@@ -181,8 +181,11 @@ export default function OperacaoTimeline({
         </div>
       </aside>
 
-      {/* LINHA DO TEMPO DE EVENTOS */}
+      {/* LINHA DO TEMPO DE EVENTOS — histórico cronológico (auditoria) */}
       <section>
+        <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          Histórico da operação
+        </h3>
         {/* ações */}
         {!encerrada && (
           <div className="mb-4 flex flex-wrap gap-2">
