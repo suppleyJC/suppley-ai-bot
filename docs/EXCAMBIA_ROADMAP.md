@@ -17,8 +17,8 @@ Este documento é o mapa vivo da evolução. Status: ✅ entregue · 🔨 parcia
 | Pesquisa web nativa (legislação, câmbio, commodities, com citações) | ✅ | `_core/llm.ts` (`webSearch`) |
 | Roteamento por complexidade (Haiku/Sonnet/Opus) | ✅ | `MODELS` em `_core/llm.ts` |
 | Saída estruturada (schema → tool forçada) | ✅ | `_core/llm.ts` |
-| **Extended thinking (cadeia de pensamento) adaptativo** | ✅ | `thinking` em `invokeLLM`; heurística `precisaRaciocinioProfundo` |
-| **Interleaved thinking (raciocinar ENTRE tools)** | ✅ | header beta quando thinking+tools |
+| **Extended thinking (cadeia de pensamento) adaptativo** | ✅ | `thinking` em `invokeLLM`; heurística `precisaRaciocinioProfundo`; fallback automático sem thinking se a chamada falhar |
+| Interleaved thinking (raciocinar ENTRE tools) | ⏸ | revertido — o header beta (`interleaved-thinking-2025-05-14`) exige habilitação explícita na conta e causou 400 em produção (upload de anexo); requer confirmar o beta habilitado antes de reativar |
 | **System prompt dinâmico por perfil do usuário** | ✅ | `PERFIL ATIVO` em `buildSystemContent` |
 | **Gestão de contexto (compactação de histórico via Haiku)** | ✅ | `compactarHistorico` |
 | Streaming token a token da resposta final | ⬜ | hoje: typewriter no client |

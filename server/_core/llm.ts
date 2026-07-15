@@ -467,17 +467,31 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     "x-api-key": ENV.anthropicApiKey!,
     "anthropic-version": "2023-06-01",
   };
-  // Interleaved thinking: permite raciocinar ENTRE chamadas de tool (analisar o
-  // resultado de uma tool antes de decidir a próxima) — essencial p/ análises
-  // multi-fonte (mercado → comex → cálculo).
-  if (thinkingEnabled && payload.tools) {
-    headers["anthropic-beta"] = "interleaved-thinking-2025-05-14";
-  }
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  // NOTA: NÃO enviamos o header beta "interleaved-thinking" — é um recurso beta
+  // que exige habilitação explícita na conta/organização da Anthropic; sem ela,
+  // a API rejeita a requisição INTEIRA com 400 (já causou uma regressão em
+  // produção: upload de anexo com thinking ativo passou a falhar). O extended
+  // thinking "básico" (sem interleaving) já funciona normalmente sem esse header.
+
+  let response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
   });
+
+  // Rede de segurança: se a chamada COM thinking falhar, tenta de novo SEM
+  // thinking antes de desistir — uma análise complexa não pode deixar o chat
+  // mudo por causa de uma incompatibilidade pontual do recurso.
+  if (!response.ok && thinkingEnabled) {
+    const retryPayload = { ...payload };
+    delete retryPayload.thinking;
+    retryPayload.max_tokens = requestedMax;
+    response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(retryPayload),
+    });
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
