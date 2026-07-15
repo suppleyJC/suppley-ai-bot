@@ -50,6 +50,7 @@ IDEMPOTENT_MIGRATIONS=(
   "drizzle/0044_trade_barriers.sql"
   "drizzle/0045_drop_market_reference_tables.sql"
   "drizzle/0046_marcos_granulares.sql"
+  "drizzle/0047_operacao_rota.sql"
 )
 
 echo "╔════════════════════════════════════════════════════════════╗"
@@ -117,6 +118,7 @@ log "Verificando colunas críticas do schema..."
 CRITICAL_COLUMNS=(
   "proformas fileKey"
   "operacoes modo"
+  "operacoes modal"
 )
 SCHEMA_OK=1
 for par in "${CRITICAL_COLUMNS[@]}"; do

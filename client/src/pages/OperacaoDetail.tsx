@@ -20,6 +20,7 @@ import OperacaoAnexos from "@/components/OperacaoAnexos";
 import OperacaoFinanceiro from "@/components/OperacaoFinanceiro";
 import JornadaTrilho from "@/components/operacao/JornadaTrilho";
 import OperacaoNotas from "@/components/operacao/OperacaoNotas";
+import LandedCostResumo from "@/components/operacao/LandedCostResumo";
 import {
   ProgressRing, CartaoAgora, CentralPendencias, MetricaTile,
   type JornadaResumoData, type MarcoRegistroInput,
@@ -37,6 +38,13 @@ const MODO_LABEL: Record<string, { txt: string; cls: string }> = {
   desenvolvimento:{ txt: "Desenvolvimento", cls: "bg-amber-50 text-amber-700" },
 };
 import { PRIORITY_ORDER, getPriorityMeta } from "@/lib/priorityLabels";
+
+type Modal = "maritimo" | "aereo" | "rodoviario" | "ferroviario" | "multimodal";
+const MODAL_LABEL: Record<Modal, string> = {
+  maritimo: "Marítimo", aereo: "Aéreo", rodoviario: "Rodoviário",
+  ferroviario: "Ferroviário", multimodal: "Multimodal",
+};
+const INCOTERMS = ["EXW", "FCA", "FAS", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"];
 
 const STATUS_LABEL: Record<string, { txt: string; cls: string }> = {
   ativa:     { txt: "Ativa",     cls: "bg-violet-50 text-violet-700" },
@@ -154,6 +162,10 @@ export default function OperacaoDetail() {
     prazoDesejado?: string | Date | null;
     origemDesejada?: string | null;
     modo?: "cotacao" | "desenvolvimento" | null;
+    modal?: Modal | null;
+    incoterm?: string | null;
+    portoOrigem?: string | null;
+    portoDestino?: string | null;
     trackingContainer?: string | null;
     trackingBl?: string | null;
     trackingArmador?: string | null;
@@ -188,6 +200,25 @@ export default function OperacaoDetail() {
     update.mutate({ operacaoId: operacao.id, origemDesejada: v });
   }
 
+  function handleChangeModal(e: React.ChangeEvent<HTMLSelectElement>) {
+    update.mutate({ operacaoId: operacao.id, modal: (e.target.value || null) as Modal | null });
+  }
+  function handleChangeIncoterm(e: React.ChangeEvent<HTMLSelectElement>) {
+    update.mutate({ operacaoId: operacao.id, incoterm: e.target.value || null });
+  }
+  function handleBlurPorto(campo: "portoOrigem" | "portoDestino", atual: string | null | undefined) {
+    return (e: React.FocusEvent<HTMLInputElement>) => {
+      const v = e.target.value.trim();
+      if (v === (atual ?? "")) return;
+      update.mutate({ operacaoId: operacao.id, [campo]: v || null });
+    };
+  }
+  // Rota física resumida para o chip do cabeçalho (origem → destino · modal · incoterm).
+  const rotaChip = [
+    op.portoOrigem || op.origemPais || op.origemDesejada,
+    op.portoDestino,
+  ].filter(Boolean).join(" → ");
+
   return (
     <div className="mx-auto max-w-5xl p-6">
       <button
@@ -208,6 +239,25 @@ export default function OperacaoDetail() {
                 .filter(Boolean)
                 .join(" · ") || "—"}
             </p>
+            {(rotaChip || op.modal || op.incoterm) && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {rotaChip && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                    <Route className="h-3 w-3" /> {rotaChip}
+                  </span>
+                )}
+                {op.modal && (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-foreground">
+                    {MODAL_LABEL[op.modal]}
+                  </span>
+                )}
+                {op.incoterm && (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-foreground">
+                    {op.incoterm}
+                  </span>
+                )}
+              </div>
+            )}
             {/* Auditoria: quem criou a operação (no chat ou no painel), quando e a que horas */}
             <p className="mt-0.5 text-xs text-muted-foreground">
               Criada{(data as any).criadoPorNome ? ` por ${(data as any).criadoPorNome}` : ""}
@@ -320,6 +370,58 @@ export default function OperacaoDetail() {
               </label>
             </div>
 
+            {/* Rota logística: modal, incoterm e portos */}
+            <div className="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-4 sm:grid-cols-4">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Modal</span>
+                <select
+                  value={op.modal ?? ""}
+                  onChange={handleChangeModal}
+                  disabled={update.isPending}
+                  className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground disabled:opacity-60"
+                >
+                  <option value="">—</option>
+                  {(Object.keys(MODAL_LABEL) as Modal[]).map((m) => (
+                    <option key={m} value={m}>{MODAL_LABEL[m]}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Incoterm</span>
+                <select
+                  value={op.incoterm ?? ""}
+                  onChange={handleChangeIncoterm}
+                  disabled={update.isPending}
+                  className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground disabled:opacity-60"
+                >
+                  <option value="">—</option>
+                  {INCOTERMS.map((i) => <option key={i} value={i}>{i}</option>)}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Porto de origem</span>
+                <input
+                  type="text"
+                  defaultValue={op.portoOrigem ?? ""}
+                  onBlur={handleBlurPorto("portoOrigem", op.portoOrigem)}
+                  disabled={update.isPending}
+                  placeholder="Ex.: Shanghai"
+                  className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground placeholder:font-normal placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Porto de destino</span>
+                <input
+                  type="text"
+                  defaultValue={op.portoDestino ?? ""}
+                  onBlur={handleBlurPorto("portoDestino", op.portoDestino)}
+                  disabled={update.isPending}
+                  placeholder="Ex.: Itajaí"
+                  className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-medium text-foreground placeholder:font-normal placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
+                />
+              </label>
+            </div>
+
             {/* Faixa de métricas executivas: progresso, ETA, valor e riscos */}
             <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-border pt-4">
               <div className="flex items-center gap-3">
@@ -403,7 +505,10 @@ export default function OperacaoDetail() {
 
       {/* ---------------- CUSTOS ---------------- */}
       {tab === "custos" && (
-        <OperacaoFinanceiro operacaoId={operacao.id} lancamentos={financeiro} onChange={invalidate} />
+        <div className="space-y-6">
+          <LandedCostResumo lancamentos={financeiro} estimadoBrlCents={operacao.valorEstimadoBrlCents} />
+          <OperacaoFinanceiro operacaoId={operacao.id} lancamentos={financeiro} onChange={invalidate} />
+        </div>
       )}
 
       {/* ---------------- NOTAS ---------------- */}

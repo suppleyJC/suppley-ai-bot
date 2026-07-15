@@ -1527,6 +1527,12 @@ export const operacoes = mysqlTable(
     // Nulo em operações antigas (antes do campo existir).
     modo: mysqlEnum("modo", ["cotacao", "desenvolvimento"]),
 
+    // Rota logística (cabeçalho executivo): modal, incoterm e portos.
+    modal: mysqlEnum("modal", ["maritimo", "aereo", "rodoviario", "ferroviario", "multimodal"]),
+    incoterm: varchar("incoterm", { length: 10 }),
+    portoOrigem: varchar("portoOrigem", { length: 120 }),
+    portoDestino: varchar("portoDestino", { length: 120 }),
+
     // Tracking de embarque (preenchimento manual; integração com API fica pendente).
     trackingContainer: varchar("trackingContainer", { length: 60 }),
     trackingBl: varchar("trackingBl", { length: 60 }),

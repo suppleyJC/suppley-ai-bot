@@ -582,6 +582,10 @@ export async function updateOperacao(input: {
   responsavelId?: number | null;
   origemDesejada?: string;
   modo?: ModoOperacao;
+  modal?: "maritimo" | "aereo" | "rodoviario" | "ferroviario" | "multimodal" | null;
+  incoterm?: string | null;
+  portoOrigem?: string | null;
+  portoDestino?: string | null;
   trackingContainer?: string | null;
   trackingBl?: string | null;
   trackingArmador?: string | null;
@@ -612,6 +616,10 @@ export async function updateOperacao(input: {
   if (input.responsavelId !== undefined) patch.responsavelId = input.responsavelId;
   if (input.origemDesejada !== undefined) patch.origemDesejada = input.origemDesejada;
   if (input.modo !== undefined) patch.modo = input.modo;
+  if (input.modal !== undefined) patch.modal = input.modal;
+  if (input.incoterm !== undefined) patch.incoterm = input.incoterm;
+  if (input.portoOrigem !== undefined) patch.portoOrigem = input.portoOrigem;
+  if (input.portoDestino !== undefined) patch.portoDestino = input.portoDestino;
   if (input.trackingContainer !== undefined) patch.trackingContainer = input.trackingContainer;
   if (input.trackingBl !== undefined) patch.trackingBl = input.trackingBl;
   if (input.trackingArmador !== undefined) patch.trackingArmador = input.trackingArmador;
@@ -621,7 +629,17 @@ export async function updateOperacao(input: {
 
   if (Object.keys(patch).length === 0) return op;
 
-  await db.update(operacoes).set(patch).where(eq(operacoes.id, input.operacaoId));
+  try {
+    await db.update(operacoes).set(patch).where(eq(operacoes.id, input.operacaoId));
+  } catch (e) {
+    // Resiliência a deploy-antes-da-migração (0047): sem as colunas de rota,
+    // aplica só o restante — os campos de rota persistem após a migração rodar.
+    if (!isMissingColumnError(e)) throw e;
+    const { modal, incoterm, portoOrigem, portoDestino, ...rest } = patch as Record<string, unknown>;
+    if (Object.keys(rest).length > 0) {
+      await db.update(operacoes).set(rest as any).where(eq(operacoes.id, input.operacaoId));
+    }
+  }
   const [updated] = await db.select().from(operacoes).where(eq(operacoes.id, input.operacaoId)).limit(1);
   return updated ?? null;
 }
