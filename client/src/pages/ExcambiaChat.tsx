@@ -241,6 +241,7 @@ export default function ExcambiaChat() {
   }
 
   async function handleSend() {
+    if (streaming || uploading) return; // evita duplo envio (clique duplo / Enter repetido)
     const text = draft.trim();
     if (!text) return;
     setDraft("");
@@ -576,13 +577,18 @@ export default function ExcambiaChat() {
               <textarea
                 ref={taRef}
                 value={draft} onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (!streaming && !uploading) handleSend(); } }}
                 rows={1} placeholder="Escreva para a Excambia…"
                 className="flex-1 resize-none bg-transparent py-1.5 text-base sm:text-[14px] leading-relaxed text-(--ink) outline-none placeholder:text-(--ink-2) max-h-[200px] overflow-y-auto scrollbar-custom"
               />
               <button onClick={handleSend}
-                className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-[10px] bg-violet-600 text-white hover:bg-violet-700 flex-shrink-0">
-                <SendHorizontal className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
+                disabled={streaming || uploading || !draft.trim()}
+                className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-[10px] bg-violet-600 text-white hover:bg-violet-700 flex-shrink-0 disabled:opacity-40 disabled:hover:bg-violet-600">
+                {streaming ? (
+                  <Loader2 className="h-4 w-4 sm:h-[18px] sm:w-[18px] animate-spin" />
+                ) : (
+                  <SendHorizontal className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
+                )}
               </button>
             </div>
             <p className="mt-1.5 sm:mt-2 text-center text-[10px] sm:text-[11px] text-(--ink-2) px-2">
@@ -653,7 +659,7 @@ function Welcome({ onPick }: { onPick: (t: string) => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-3 sm:px-6 py-8 sm:py-12 text-center min-h-0">
       <span className="mb-4 sm:mb-5 flex-shrink-0">
-        <ExcambiaOrb />
+        <ExcambiaOrb size={48} />
       </span>
       <h1 className="mb-2 sm:mb-2.5 text-xl sm:text-2xl md:text-[26px] font-semibold tracking-tight text-(--ink)">
         Olá, Jean. O que vamos{" "}
@@ -731,7 +737,7 @@ function StreamingActivity({ events }: { events: any[] }) {
   return (
     <div className="group flex w-full items-start gap-2 sm:gap-3">
       {/* mesmo tamanho do indicador anterior (32px), ciclo curto de 10s */}
-      <ExcambiaOrb size={32} duration={10} />
+      <ExcambiaOrb size={24} duration={10} />
       <div className="min-w-0 flex-1 pt-0.5">
         {steps.length === 0 ? (
           <TypingDots />
@@ -785,7 +791,7 @@ function Message({ role, content, pending, criadaEm, toolResults, conversaId, op
     return (
       <div className="group flex w-full items-start gap-2 sm:gap-3">
         {pending ? (
-          <ExcambiaOrb size={32} duration={10} />
+          <ExcambiaOrb size={24} duration={10} />
         ) : (
           <span className="flex h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0 items-center justify-center rounded-lg bg-(--exc-card) border border-(--hair) p-1">
             <LogoIcon />
