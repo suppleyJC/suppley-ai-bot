@@ -1577,6 +1577,8 @@ export const operacaoEventos = mysqlTable(
       "nacionalizado", "entregue",
       // Marcos da jornada (estudo / sourcing) sem evento equivalente prévio
       "item_pesquisado", "fornecedores_identificados", "fornecedor_selecionado",
+      // Evento genérico dos marcos granulares (fases 1–9) sem tipo próprio
+      "marco_registrado",
     ]).notNull(),
     estagio: mysqlEnum("estagio",
       ["demand", "source", "analyze", "execute", "finance", "closed", "lost"]).notNull(),
@@ -1694,16 +1696,24 @@ export const operacaoMarcos = mysqlTable(
     userId: int("userId").notNull(),
 
     tipo: mysqlEnum("tipo", [
-      // Estudo do item
-      "item_pesquisado", "fornecedores_identificados",
-      // Cotação e RFQ
-      "rfq_enviada", "cotacao_recebida", "fornecedor_selecionado",
-      // Viabilidade
-      "calculo_feito", "go_aprovado",
-      // Produção e Embarque
-      "pedido_confirmado", "producao_iniciada", "produto_embarcado",
-      // Nacionalização e Entrega
-      "di_registrada", "nacionalizado", "entregue",
+      // Fase 1 — Produto e conformidade
+      "item_pesquisado", "especificacao_definida", "ncm_classificada", "conformidade_verificada",
+      // Fase 2 — Sourcing e homologação
+      "fornecedores_identificados", "rfq_enviada", "cotacao_recebida", "fornecedor_selecionado",
+      // Fase 3 — Viabilidade econômica
+      "calculo_feito", "benchmark_mercado", "go_aprovado",
+      // Fase 4 — Contratação e pedido
+      "contrato_assinado", "pedido_confirmado", "pagamento_realizado",
+      // Fase 5 — Produção e qualidade
+      "producao_iniciada", "inspecao_agendada", "inspecao_aprovada",
+      // Fase 6 — Logística na origem
+      "booking_confirmado", "invoice_emitida", "bl_emitido", "produto_embarcado",
+      // Fase 7 — Trânsito internacional
+      "em_transito", "chegada_prevista",
+      // Fase 8 — Desembaraço
+      "di_registrada", "impostos_recolhidos", "carga_chegou", "nacionalizado",
+      // Fase 9 — Entrega e fechamento
+      "carga_liberada", "entregue", "operacao_fechada",
     ]).notNull(),
 
     status: mysqlEnum("status", ["planejado", "realizado", "cancelado"])

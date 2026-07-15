@@ -12,7 +12,6 @@
 import React, { useState } from "react";
 import { StickyNote, Loader2, Plus } from "lucide-react";
 import { MARCO_META, getMarcoLabel, JORNADA_MARCOS, type TipoMarco } from "@/lib/marcoLabels";
-import { STAGE_LABELS } from "@/lib/stageLabels";
 
 interface Evento {
   id: number;
@@ -83,7 +82,7 @@ export default function OperacaoNotas({
           >
             <option value="">Sem marco específico</option>
             {JORNADA_MARCOS.map((g) => (
-              <optgroup key={g.estagio} label={STAGE_LABELS[g.estagio as keyof typeof STAGE_LABELS] ?? g.estagio}>
+              <optgroup key={g.fase} label={`${g.fase}. ${g.label}`}>
                 {g.tipos.map((t) => (
                   <option key={t} value={t}>{MARCO_META[t].label}</option>
                 ))}

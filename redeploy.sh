@@ -49,6 +49,7 @@ IDEMPOTENT_MIGRATIONS=(
   "drizzle/0043_marco_responsavel_vencimento.sql"
   "drizzle/0044_trade_barriers.sql"
   "drizzle/0045_drop_market_reference_tables.sql"
+  "drizzle/0046_marcos_granulares.sql"
 )
 
 echo "╔════════════════════════════════════════════════════════════╗"

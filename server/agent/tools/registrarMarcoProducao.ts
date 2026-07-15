@@ -13,15 +13,10 @@
  */
 import { defineSchema, type AgentTool, type ToolContext, type ToolResult } from "./types";
 import * as operacaoService from "../../services/operacaoService";
-import { MARCO_LABEL_PT, STAGE_LABEL_PT } from "../../services/operacaoService";
+import { MARCO_LABEL_PT, STAGE_LABEL_PT, MARCO_ORDER } from "../../services/operacaoService";
 
-const TIPOS: operacaoService.TipoMarco[] = [
-  "item_pesquisado", "fornecedores_identificados",
-  "rfq_enviada", "cotacao_recebida", "fornecedor_selecionado",
-  "calculo_feito", "go_aprovado",
-  "pedido_confirmado", "producao_iniciada", "produto_embarcado",
-  "di_registrada", "nacionalizado", "entregue",
-];
+// Fonte única: todos os marcos da jornada (fases 1–9), na ordem canônica.
+const TIPOS: operacaoService.TipoMarco[] = MARCO_ORDER;
 
 const schema = defineSchema(
   "registrar_marco_producao",

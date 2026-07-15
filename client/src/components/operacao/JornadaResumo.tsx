@@ -232,7 +232,7 @@ export function CentralPendencias({
                 className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
               >
                 {JORNADA_MARCOS.map((g) => (
-                  <optgroup key={g.estagio} label={STAGE_LABELS[g.estagio as keyof typeof STAGE_LABELS] ?? g.estagio}>
+                  <optgroup key={g.fase} label={`${g.fase}. ${g.label}`}>
                     {g.tipos.map((t) => (
                       <option key={t} value={t}>{MARCO_META[t].label}</option>
                     ))}

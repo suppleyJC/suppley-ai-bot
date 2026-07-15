@@ -12,7 +12,7 @@ import React from "react";
 import {
   Users, FileBarChart, CircleDollarSign,
   Check, Sparkles, Truck, FileText, StickyNote, AlertTriangle, Clock, Paperclip,
-  ShoppingCart, Factory, FileCheck, Zap, PackageCheck,
+  ShoppingCart, Factory, FileCheck, Zap, PackageCheck, Milestone,
 } from "lucide-react";
 import { STAGE_ORDER, STAGE_META, STAGE_ORDER_FULL, type Estagio } from "@/lib/stageLabels";
 
@@ -89,6 +89,7 @@ function eventoVisual(tipo: string): { Icon: React.ComponentType<any>; tint: str
     nacionalizado:       { Icon: Zap, tint: "text-teal-600 bg-teal-50" },
     entregue:            { Icon: PackageCheck, tint: "text-emerald-600 bg-emerald-50" },
     nota_interna:      { Icon: StickyNote, tint: "text-muted-foreground bg-muted" },
+    marco_registrado:  { Icon: Milestone, tint: "text-violet-600 bg-violet-50" },
     alerta_ia:         { Icon: Sparkles, tint: "text-teal-600 bg-teal-50" },
     mensagem:          { Icon: Sparkles, tint: "text-teal-600 bg-teal-50" },
   };

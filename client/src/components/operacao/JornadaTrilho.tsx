@@ -8,8 +8,7 @@
  */
 import React from "react";
 import { Check } from "lucide-react";
-import { JORNADA_MARCOS, MARCO_META, type TipoMarco } from "@/lib/marcoLabels";
-import { STAGE_LABELS } from "@/lib/stageLabels";
+import { JORNADA_MARCOS, MARCO_META, MARCO_GATE, type TipoMarco } from "@/lib/marcoLabels";
 
 interface MarcoRow {
   tipo: string;
@@ -46,11 +45,12 @@ export default function JornadaTrilho({
         {JORNADA_MARCOS.map((group) => {
           const done = group.tipos.filter((t) => realizado(t)).length;
           return (
-            <div key={group.estagio}>
+            <div key={group.fase}>
               <div className="mb-2 flex items-center gap-2">
-                <span className="text-xs font-bold text-foreground">
-                  {STAGE_LABELS[group.estagio as keyof typeof STAGE_LABELS] ?? group.estagio}
+                <span className="inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
+                  {group.fase}
                 </span>
+                <span className="text-xs font-bold text-foreground">{group.label}</span>
                 <span className="text-[10px] font-semibold text-muted-foreground">
                   {done}/{group.tipos.length}
                 </span>
@@ -100,6 +100,14 @@ export default function JornadaTrilho({
                           {isCurrent && (
                             <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-700">
                               Agora
+                            </span>
+                          )}
+                          {MARCO_GATE[t as TipoMarco] && (
+                            <span
+                              className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700"
+                              title={`Gate de governança: ${MARCO_GATE[t as TipoMarco]}`}
+                            >
+                              Gate
                             </span>
                           )}
                         </div>

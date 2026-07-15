@@ -327,7 +327,7 @@ export default function OperacaoDetail() {
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Progresso</p>
                   <p className="text-sm font-bold text-foreground">
-                    {jornada?.realizados ?? 0}/{jornada?.total ?? 13} marcos
+                    {jornada?.realizados ?? 0}/{jornada?.total ?? 30} marcos
                   </p>
                 </div>
               </div>

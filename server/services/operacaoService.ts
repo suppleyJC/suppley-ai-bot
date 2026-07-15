@@ -28,11 +28,26 @@ export type TipoFinanceiro =
 export type DirecaoFinanceiro = "entrada" | "saida";
 export type StatusFinanceiro = "previsto" | "realizado" | "cancelado";
 export type TipoMarco =
-  | "item_pesquisado" | "fornecedores_identificados"
-  | "rfq_enviada" | "cotacao_recebida" | "fornecedor_selecionado"
-  | "calculo_feito" | "go_aprovado"
-  | "pedido_confirmado" | "producao_iniciada" | "produto_embarcado"
-  | "di_registrada" | "nacionalizado" | "entregue";
+  // Fase 1 — Produto e conformidade
+  | "item_pesquisado" | "especificacao_definida" | "ncm_classificada" | "conformidade_verificada"
+  // Fase 2 — Sourcing e homologação
+  | "fornecedores_identificados" | "rfq_enviada" | "cotacao_recebida" | "fornecedor_selecionado"
+  // Fase 3 — Viabilidade econômica
+  | "calculo_feito" | "benchmark_mercado" | "go_aprovado"
+  // Fase 4 — Contratação e pedido
+  | "contrato_assinado" | "pedido_confirmado" | "pagamento_realizado"
+  // Fase 5 — Produção e qualidade
+  | "producao_iniciada" | "inspecao_agendada" | "inspecao_aprovada"
+  // Fase 6 — Logística na origem
+  | "booking_confirmado" | "invoice_emitida" | "bl_emitido" | "produto_embarcado"
+  // Fase 7 — Trânsito internacional
+  | "em_transito" | "chegada_prevista"
+  // Fase 8 — Desembaraço
+  | "di_registrada" | "impostos_recolhidos" | "carga_chegou" | "nacionalizado"
+  // Fase 9 — Entrega e fechamento
+  | "carga_liberada" | "entregue" | "operacao_fechada";
+/** Fase da jornada (1–9) — camada de apresentação sobre os 5 estágios internos. */
+export type FaseJornada = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type StatusMarco = "planejado" | "realizado" | "cancelado";
 export type ModoOperacao = "cotacao" | "desenvolvimento";
 // QUEM deve agir num marco (dimensão separada do estado do trabalho).
@@ -56,52 +71,137 @@ export const STAGE_LABEL_PT: Record<Estagio, string> = {
 
 export const MARCO_LABEL_PT: Record<TipoMarco, string> = {
   item_pesquisado: "Item pesquisado",
+  especificacao_definida: "Especificação definida",
+  ncm_classificada: "NCM classificada",
+  conformidade_verificada: "Conformidade verificada",
   fornecedores_identificados: "Fornecedores identificados",
   rfq_enviada: "RFQ enviada",
   cotacao_recebida: "Cotação recebida",
   fornecedor_selecionado: "Fornecedor selecionado",
   calculo_feito: "Cálculo feito",
+  benchmark_mercado: "Benchmark de mercado",
   go_aprovado: "GO aprovado",
+  contrato_assinado: "Contrato/PI assinado",
   pedido_confirmado: "Pedido confirmado",
+  pagamento_realizado: "Pagamento/câmbio",
   producao_iniciada: "Produção iniciada",
+  inspecao_agendada: "Inspeção agendada",
+  inspecao_aprovada: "Inspeção aprovada",
+  booking_confirmado: "Booking confirmado",
+  invoice_emitida: "Commercial invoice",
+  bl_emitido: "BL / AWB emitido",
   produto_embarcado: "Produto embarcado",
-  di_registrada: "DI registrada",
+  em_transito: "Em trânsito",
+  chegada_prevista: "ETA / chegada prevista",
+  di_registrada: "DI / DUIMP registrada",
+  impostos_recolhidos: "Impostos recolhidos",
+  carga_chegou: "Carga chegou",
   nacionalizado: "Nacionalizado",
+  carga_liberada: "Carga liberada",
   entregue: "Entregue",
+  operacao_fechada: "Operação fechada",
 };
 
-/** Estágio da jornada a que cada marco pertence (agrupamento do funil). */
+/** Estágio INTERNO (5) a que cada marco pertence — dirige a convergência do Kanban. */
 export const MARCO_ESTAGIO: Record<TipoMarco, Estagio> = {
   item_pesquisado: "demand",
+  especificacao_definida: "demand",
+  ncm_classificada: "demand",
+  conformidade_verificada: "demand",
   fornecedores_identificados: "demand",
   rfq_enviada: "source",
   cotacao_recebida: "source",
   fornecedor_selecionado: "source",
   calculo_feito: "analyze",
+  benchmark_mercado: "analyze",
   go_aprovado: "analyze",
+  contrato_assinado: "execute",
   pedido_confirmado: "execute",
+  pagamento_realizado: "execute",
   producao_iniciada: "execute",
+  inspecao_agendada: "execute",
+  inspecao_aprovada: "execute",
+  booking_confirmado: "execute",
+  invoice_emitida: "execute",
+  bl_emitido: "execute",
   produto_embarcado: "execute",
+  em_transito: "finance",
+  chegada_prevista: "finance",
   di_registrada: "finance",
+  impostos_recolhidos: "finance",
+  carga_chegou: "finance",
   nacionalizado: "finance",
+  carga_liberada: "finance",
   entregue: "finance",
+  operacao_fechada: "finance",
 };
 
-/** Tipo de evento da timeline gerado por cada marco (alguns reusam eventos existentes). */
+/** Fase da jornada (1–9) a que cada marco pertence — camada de apresentação. */
+export const MARCO_FASE: Record<TipoMarco, FaseJornada> = {
+  item_pesquisado: 1, especificacao_definida: 1, ncm_classificada: 1, conformidade_verificada: 1,
+  fornecedores_identificados: 2, rfq_enviada: 2, cotacao_recebida: 2, fornecedor_selecionado: 2,
+  calculo_feito: 3, benchmark_mercado: 3, go_aprovado: 3,
+  contrato_assinado: 4, pedido_confirmado: 4, pagamento_realizado: 4,
+  producao_iniciada: 5, inspecao_agendada: 5, inspecao_aprovada: 5,
+  booking_confirmado: 6, invoice_emitida: 6, bl_emitido: 6, produto_embarcado: 6,
+  em_transito: 7, chegada_prevista: 7,
+  di_registrada: 8, impostos_recolhidos: 8, carga_chegou: 8, nacionalizado: 8,
+  carga_liberada: 9, entregue: 9, operacao_fechada: 9,
+};
+
+/** Rótulo de cada fase (1–9) da jornada. */
+export const FASE_LABEL: Record<FaseJornada, string> = {
+  1: "Produto e conformidade",
+  2: "Sourcing e homologação",
+  3: "Viabilidade econômica",
+  4: "Contratação e pedido",
+  5: "Produção e qualidade",
+  6: "Logística na origem",
+  7: "Trânsito internacional",
+  8: "Desembaraço",
+  9: "Entrega e fechamento",
+};
+
+/** Marcos que são GATES de governança (decisão/aprovação que trava o avanço). */
+export const MARCO_GATE: Partial<Record<TipoMarco, string>> = {
+  go_aprovado: "GO / NO-GO",
+  inspecao_aprovada: "Inspeção de qualidade",
+  di_registrada: "Regime DUIMP × DI",
+};
+
+/** Tipo de evento da timeline gerado por cada marco (alguns reusam eventos existentes;
+ * os marcos granulares novos caem no evento genérico "marco_registrado"). */
 const MARCO_EVENTO: Record<TipoMarco, string> = {
   item_pesquisado: "item_pesquisado",
+  especificacao_definida: "marco_registrado",
+  ncm_classificada: "marco_registrado",
+  conformidade_verificada: "marco_registrado",
   fornecedores_identificados: "fornecedores_identificados",
   rfq_enviada: "rfq_enviada",
   cotacao_recebida: "cotacao_recebida",
   fornecedor_selecionado: "fornecedor_selecionado",
   calculo_feito: "calculo_executado",
+  benchmark_mercado: "marco_registrado",
   go_aprovado: "go_decidido",
+  contrato_assinado: "marco_registrado",
   pedido_confirmado: "pedido_confirmado",
+  pagamento_realizado: "marco_registrado",
   producao_iniciada: "producao_iniciada",
+  inspecao_agendada: "marco_registrado",
+  inspecao_aprovada: "marco_registrado",
+  booking_confirmado: "marco_registrado",
+  invoice_emitida: "marco_registrado",
+  bl_emitido: "marco_registrado",
   produto_embarcado: "produto_embarcado",
+  em_transito: "marco_registrado",
+  chegada_prevista: "marco_registrado",
   di_registrada: "di_registrada",
+  impostos_recolhidos: "marco_registrado",
+  carga_chegou: "marco_registrado",
   nacionalizado: "nacionalizado",
+  carga_liberada: "marco_registrado",
   entregue: "entregue",
+  operacao_fechada: "marco_registrado",
 };
 
 // ---------------------------------------------------------------------------
@@ -110,47 +210,85 @@ const MARCO_EVENTO: Record<TipoMarco, string> = {
 // de responsavel/vencimento. Alimenta o cabeçalho executivo e o cartão "Agora".
 // ---------------------------------------------------------------------------
 
-/** Ordem canônica dos 13 marcos (funil da jornada). */
+/** Ordem canônica dos marcos (funil da jornada, fases 1→9). */
 export const MARCO_ORDER: TipoMarco[] = [
-  "item_pesquisado", "fornecedores_identificados",
-  "rfq_enviada", "cotacao_recebida", "fornecedor_selecionado",
-  "calculo_feito", "go_aprovado",
-  "pedido_confirmado", "producao_iniciada", "produto_embarcado",
-  "di_registrada", "nacionalizado", "entregue",
+  "item_pesquisado", "especificacao_definida", "ncm_classificada", "conformidade_verificada",
+  "fornecedores_identificados", "rfq_enviada", "cotacao_recebida", "fornecedor_selecionado",
+  "calculo_feito", "benchmark_mercado", "go_aprovado",
+  "contrato_assinado", "pedido_confirmado", "pagamento_realizado",
+  "producao_iniciada", "inspecao_agendada", "inspecao_aprovada",
+  "booking_confirmado", "invoice_emitida", "bl_emitido", "produto_embarcado",
+  "em_transito", "chegada_prevista",
+  "di_registrada", "impostos_recolhidos", "carga_chegou", "nacionalizado",
+  "carga_liberada", "entregue", "operacao_fechada",
 ];
 
 /** Responsável SUGERIDO por marco (usado quando não há responsável manual). */
 export const MARCO_RESPONSAVEL_DEFAULT: Record<TipoMarco, Responsavel> = {
   item_pesquisado: "excambia",
+  especificacao_definida: "cliente",
+  ncm_classificada: "excambia",
+  conformidade_verificada: "excambia",
   fornecedores_identificados: "excambia",
   rfq_enviada: "excambia",
   cotacao_recebida: "fornecedor",
   fornecedor_selecionado: "cliente",
   calculo_feito: "excambia",
+  benchmark_mercado: "excambia",
   go_aprovado: "cliente",
+  contrato_assinado: "cliente",
   pedido_confirmado: "cliente",
+  pagamento_realizado: "cliente",
   producao_iniciada: "fornecedor",
+  inspecao_agendada: "excambia",
+  inspecao_aprovada: "fornecedor",
+  booking_confirmado: "agente",
+  invoice_emitida: "fornecedor",
+  bl_emitido: "agente",
   produto_embarcado: "fornecedor",
+  em_transito: "agente",
+  chegada_prevista: "agente",
   di_registrada: "despachante",
+  impostos_recolhidos: "despachante",
+  carga_chegou: "despachante",
   nacionalizado: "despachante",
+  carga_liberada: "despachante",
   entregue: "agente",
+  operacao_fechada: "excambia",
 };
 
 /** Verbo de ação por marco (texto do cartão "Agora"). */
 export const MARCO_ACAO_PT: Record<TipoMarco, string> = {
   item_pesquisado: "Pesquisar o item (preço médio, países, concorrentes)",
+  especificacao_definida: "Definir a especificação técnica do item",
+  ncm_classificada: "Classificar a NCM do item",
+  conformidade_verificada: "Verificar conformidade e anuências (órgãos)",
   fornecedores_identificados: "Mapear fornecedores elegíveis",
   rfq_enviada: "Enviar a RFQ aos fornecedores",
   cotacao_recebida: "Receber e registrar as cotações",
-  fornecedor_selecionado: "Selecionar o fornecedor",
+  fornecedor_selecionado: "Selecionar e homologar o fornecedor",
   calculo_feito: "Calcular a viabilidade (landed cost)",
+  benchmark_mercado: "Comparar com o benchmark de mercado",
   go_aprovado: "Aprovar a viabilidade (GO / NO-GO)",
+  contrato_assinado: "Assinar o contrato / proforma (PI)",
   pedido_confirmado: "Confirmar o pedido (PO)",
+  pagamento_realizado: "Realizar o pagamento / fechar câmbio",
   producao_iniciada: "Acompanhar o início da produção",
+  inspecao_agendada: "Agendar a inspeção de qualidade",
+  inspecao_aprovada: "Aprovar a inspeção de qualidade",
+  booking_confirmado: "Confirmar o booking (reserva de praça)",
+  invoice_emitida: "Emitir a commercial invoice",
+  bl_emitido: "Emitir o BL / AWB",
   produto_embarcado: "Confirmar o embarque",
+  em_transito: "Acompanhar o trânsito internacional",
+  chegada_prevista: "Atualizar a ETA (chegada prevista)",
   di_registrada: "Registrar a declaração (DI / DUIMP)",
+  impostos_recolhidos: "Recolher os impostos de importação",
+  carga_chegou: "Confirmar a chegada da carga",
   nacionalizado: "Concluir o desembaraço",
+  carga_liberada: "Liberar a carga para retirada",
   entregue: "Confirmar a entrega final",
+  operacao_fechada: "Fechar a operação (previsto × realizado)",
 };
 
 function saudeDoPrazo(vencimento?: Date | string | null): SaudePrazo {
@@ -190,7 +328,7 @@ export interface JornadaResumo {
 
 /**
  * Resume a jornada para o cabeçalho executivo e o cartão "Agora":
- *  - progresso (marcos realizados / 13)
+ *  - progresso (marcos realizados / total da jornada)
  *  - próxima ação (primeiro marco não concluído, com responsável e prazo)
  *  - pendências (não concluídos, ordenados por urgência)
  *  - riscos (pendências atrasadas ou em atenção)
@@ -1292,10 +1430,10 @@ export async function getOperacaoContextoChat(
   if (meta.length) linhas.push(meta.join(" · "));
 
   const realizados = marcos.filter((m) => m.status === "realizado");
-  const pendentes = (Object.keys(MARCO_LABEL_PT) as TipoMarco[])
+  const pendentes = MARCO_ORDER
     .filter((t) => !realizados.some((m) => m.tipo === t));
   linhas.push(
-    `Marcos realizados (${realizados.length}/13): ` +
+    `Marcos realizados (${realizados.length}/${MARCO_ORDER.length}): ` +
     (realizados.length
       ? realizados.map((m) => `${MARCO_LABEL_PT[m.tipo as TipoMarco] ?? m.tipo} (${dt(m.dataReferencia)})`).join(", ")
       : "nenhum ainda"),
