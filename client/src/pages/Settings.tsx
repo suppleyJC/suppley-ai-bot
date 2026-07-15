@@ -337,6 +337,17 @@ function UsuariosTab() {
     onSuccess: () => { toast.success("Papel atualizado"); utils.users.list.invalidate(); },
     onError: (e) => toast.error(e.message),
   });
+  const resetPwdMut = trpc.users.resetPassword.useMutation({
+    onSuccess: () => toast.success("Senha redefinida com sucesso!"),
+    onError: (e) => toast.error(e.message),
+  });
+
+  const handleResetPassword = (id: number, email: string) => {
+    const newPassword = window.prompt(`Nova senha provisória para ${email} (mín. 8 caracteres):`);
+    if (!newPassword) return;
+    if (newPassword.length < 8) return toast.error("A senha deve ter pelo menos 8 caracteres");
+    resetPwdMut.mutate({ id, newPassword });
+  };
 
   const submit = () => {
     if (form.name.trim().length < 2) return toast.error("Informe o nome");
@@ -437,6 +448,14 @@ function UsuariosTab() {
                                 onClick={() => roleMut.mutate({ id: u.id, role: u.role === "admin" ? "user" : "admin" })}
                               >
                                 {u.role === "admin" ? "Tornar usuário" : "Tornar admin"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={resetPwdMut.isPending}
+                                onClick={() => handleResetPassword(u.id, u.email ?? "")}
+                              >
+                                Redefinir senha
                               </Button>
                               <Button
                                 size="sm"

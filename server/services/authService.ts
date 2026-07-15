@@ -210,6 +210,28 @@ export async function updateUserRole(id: number, role: "user" | "admin"): Promis
 }
 
 /**
+ * Redefine a senha de um usuário diretamente pelo administrador — sem exigir
+ * a senha atual nem depender de envio de email (recuperação por token ainda
+ * não está conectada a um provedor de email). Usado quando o usuário não
+ * consegue entrar (senha provisória incorreta, esquecida, etc.).
+ */
+export async function adminResetPassword(id: number, newPassword: string): Promise<AuthResult> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "Banco de dados indisponível" };
+
+  if (newPassword.length < 8) {
+    return { success: false, error: "A senha deve ter pelo menos 8 caracteres" };
+  }
+
+  const target = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  if (target.length === 0) return { success: false, error: "Usuário não encontrado" };
+
+  const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await db.update(users).set({ passwordHash }).where(eq(users.id, id));
+  return { success: true };
+}
+
+/**
  * Remove um usuário. O administrador principal não pode ser removido.
  */
 export async function deleteUser(id: number): Promise<AuthResult> {

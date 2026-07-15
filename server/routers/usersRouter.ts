@@ -7,7 +7,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { adminProcedure, router } from "../_core/trpc";
-import { listUsers, adminCreateUser, updateUserRole, deleteUser } from "../services/authService";
+import { listUsers, adminCreateUser, updateUserRole, deleteUser, adminResetPassword } from "../services/authService";
 
 export const usersRouter = router({
   list: adminProcedure.query(() => listUsers()),
@@ -28,6 +28,16 @@ export const usersRouter = router({
       }
       const { passwordHash: _omit, ...safe } = result.user as any;
       return { success: true, user: safe };
+    }),
+
+  resetPassword: adminProcedure
+    .input(z.object({ id: z.number().int().positive(), newPassword: z.string().min(8, "Senha deve ter pelo menos 8 caracteres") }))
+    .mutation(async ({ input }) => {
+      const result = await adminResetPassword(input.id, input.newPassword);
+      if (!result.success) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: result.error || "Erro ao redefinir senha" });
+      }
+      return { success: true };
     }),
 
   updateRole: adminProcedure
