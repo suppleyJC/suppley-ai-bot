@@ -1,6 +1,6 @@
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useEffect, lazy, Suspense } from "react";
+import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -105,35 +105,6 @@ function Router() {
 }
 
 function App() {
-  // Apply watermark hiding preference on app load
-  useEffect(() => {
-    const hideWatermark = localStorage.getItem('hideWatermark') === 'true';
-    if (hideWatermark) {
-      const styleId = 'watermark-hide-style';
-      let styleEl = document.getElementById(styleId) as HTMLStyleElement;
-      if (!styleEl) {
-        styleEl = document.createElement('style');
-        styleEl.id = styleId;
-        document.head.appendChild(styleEl);
-      }
-      styleEl.textContent = `
-        /* Hide Manus watermark/badge */
-        [class*="manus"], [id*="manus"],
-        [class*="watermark"], [id*="watermark"],
-        [class*="badge"][class*="made"],
-        div[style*="Made with"],
-        a[href*="manus.im"],
-        .manus-badge, .manus-watermark,
-        [data-manus], [data-watermark] {
-          display: none !important;
-          visibility: hidden !important;
-          opacity: 0 !important;
-          pointer-events: none !important;
-        }
-      `;
-    }
-  }, []);
-
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">

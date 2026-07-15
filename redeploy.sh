@@ -51,6 +51,7 @@ IDEMPOTENT_MIGRATIONS=(
   "drizzle/0045_drop_market_reference_tables.sql"
   "drizzle/0046_marcos_granulares.sql"
   "drizzle/0047_operacao_rota.sql"
+  "drizzle/0048_drop_openai_key.sql"
 )
 
 echo "╔════════════════════════════════════════════════════════════╗"

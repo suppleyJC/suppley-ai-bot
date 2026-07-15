@@ -2,7 +2,6 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import * as db from "../db";
 import { TRPCError } from "@trpc/server";
-import * as openaiService from "../services/openaiService";
 import { runExcambia } from "../agent/orchestrator";
 
 export const excambiaRouter = router({
@@ -25,45 +24,6 @@ agentChat: protectedProcedure
     });
     return { reply: out.reply, toolsUsed: out.toolsUsed, toolResults: out.toolResults };
   }),
-
-// OpenAI API Key Management
-hasApiKey: protectedProcedure.query(async ({ ctx }) => {
-  return openaiService.hasOpenAIApiKey(ctx.user.id);
-}),
-
-validateApiKey: protectedProcedure
-  .input(z.object({ apiKey: z.string().min(1) }))
-  .mutation(async ({ input }) => {
-    return openaiService.validateOpenAIApiKey(input.apiKey);
-  }),
-
-saveApiKey: protectedProcedure
-  .input(z.object({ apiKey: z.string().min(1) }))
-  .mutation(async ({ ctx, input }) => {
-    // First validate the key
-    const validation = await openaiService.validateOpenAIApiKey(input.apiKey);
-    if (!validation.valid) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: validation.error || "API key inválida",
-      });
-    }
-    
-    // Save the key
-    const saved = await openaiService.saveOpenAIApiKey(ctx.user.id, input.apiKey);
-    if (!saved) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Erro ao salvar API key",
-      });
-    }
-    
-    return { success: true, models: validation.models };
-  }),
-
-removeApiKey: protectedProcedure.mutation(async ({ ctx }) => {
-  return openaiService.removeOpenAIApiKey(ctx.user.id);
-}),
 
 // Chat History Persistence
 getChatHistory: protectedProcedure

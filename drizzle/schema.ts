@@ -262,10 +262,7 @@ export const companySettings = mysqlTable("company_settings", {
   defaultMarkupPercent: int("defaultMarkupPercent").default(3000).notNull(),
   defaultCustomsBrokerCents: bigint("defaultCustomsBrokerCents", { mode: "number" }).default(150000).notNull(), // R$ 1.500,00
   defaultStorageCents: bigint("defaultStorageCents", { mode: "number" }).default(50000).notNull(), // R$ 500,00
-  
-  // OpenAI API Key for dedicated Excambia integration
-  openaiApiKey: varchar("openaiApiKey", { length: 255 }),
-  
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
