@@ -29,6 +29,8 @@ import { buscarDocumentoOperacaoTool } from "./buscarDocumentoOperacao";
 import { analiseMercadoTool } from "./analiseMercado";
 import { estatisticasComexTool } from "./estatisticasComex";
 import { mapearMercadoGlobalTool } from "./mapearMercadoGlobal";
+import { preverPrecosTool } from "./preverPrecos";
+import { calcularCustoLogisticoTool } from "./calcularCustoLogistico";
 import { precificarReferenciaTool } from "./precificarReferencia";
 import { registrarMemoriaTool } from "./registrarMemoria";
 import { registrarResultadoOperacaoTool } from "./registrarResultadoOperacao";
@@ -70,6 +72,10 @@ export const BASE_TOOLS: AgentTool[] = [
   estatisticasComexTool,
   // Mapa do mercado global de suprimento — líderes, emergentes e preço por país
   mapearMercadoGlobalTool,
+  // Motor preditivo — projeção de câmbio e preço do NCM com banda de confiança
+  preverPrecosTool,
+  // Fretamento em números — demurrage escalonada, LCL×FCL com breakeven, THC
+  calcularCustoLogisticoTool,
   // Preço de referência: base própria a valor presente × média oficial → competitivo
   precificarReferenciaTool,
   // Memória persistente — a Excambia grava aprendizados duráveis do usuário/empresa

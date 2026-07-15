@@ -193,6 +193,87 @@ async function queryComex(fluxo: Fluxo, ncm8: string, from: string, to: string, 
   return [];
 }
 
+// ---------------------------------------------------------------------------
+// SÉRIE MENSAL do preço médio (US$/kg) por NCM — insumo da análise PREDITIVA.
+// ---------------------------------------------------------------------------
+
+export interface PontoMensalComex {
+  ym: string;              // "YYYY-MM"
+  fobUsd: number;
+  kg: number;
+  precoMedioUsdKg: number | null;
+}
+
+/** Extrai "YYYY-MM" de uma linha mensal (tolerante a variações de schema). */
+function ymDe(r: ComexRow): string | null {
+  const ano = (r as any).year ?? (r as any).coAno ?? (r as any).ano;
+  const mes = (r as any).monthNumber ?? (r as any).coMes ??
+    (r as any).month ?? (r as any).mes;
+  const a = Number(ano);
+  const m = Number(mes);
+  if (Number.isFinite(a) && a > 1990 && Number.isFinite(m) && m >= 1 && m <= 12) {
+    return `${a}-${String(m).padStart(2, "0")}`;
+  }
+  // Alguns schemas devolvem "period"/"date" como "YYYY-MM" direto.
+  const p = String((r as any).period ?? (r as any).date ?? "");
+  return /^\d{4}-\d{2}/.test(p) ? p.slice(0, 7) : null;
+}
+
+/** Agregação pura (testável): linhas mensais → série ordenada de US$/kg. */
+export function agregarSerieMensal(rows: ComexRow[]): PontoMensalComex[] {
+  const porMes = new Map<string, { fob: number; kg: number }>();
+  for (const r of rows) {
+    const ym = ymDe(r);
+    if (!ym) continue;
+    const acc = porMes.get(ym) ?? { fob: 0, kg: 0 };
+    acc.fob += num(r.metricFOB);
+    acc.kg += num(r.metricKG);
+    porMes.set(ym, acc);
+  }
+  return Array.from(porMes.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ym, { fob, kg }]) => ({
+      ym, fobUsd: fob, kg,
+      precoMedioUsdKg: kg > 0 ? fob / kg : null,
+    }));
+}
+
+/**
+ * Série MENSAL de preço médio de importação (US$/kg) do NCM nos últimos
+ * `meses` (default 24, respeitando a defasagem de consolidação). Falha
+ * graciosa (lista vazia).
+ */
+export async function serieMensalPrecoNcm(input: {
+  ncm: string;
+  fluxo?: Fluxo;
+  meses?: number;
+}): Promise<PontoMensalComex[]> {
+  const fluxo: Fluxo = input.fluxo ?? "import";
+  const ncm8 = (input.ncm || "").replace(/\D/g, "").slice(0, 8);
+  if (ncm8.length !== 8) return [];
+
+  const meses = Math.min(48, Math.max(6, input.meses ?? 24));
+  const now = new Date();
+  const to = ymMinus(now, DEFASAGEM_MESES);
+  const from = ymMinus(now, DEFASAGEM_MESES + meses - 1);
+
+  // Mesmos dois formatos de body, com monthDetail LIGADO.
+  const bodies = bodiesComex(fluxo, ncm8, from, to, false).map((b) => ({
+    ...(b as Record<string, unknown>),
+    monthDetail: true,
+  }));
+  for (const body of bodies) {
+    try {
+      const rows = await postComex(body);
+      const serie = agregarSerieMensal(rows);
+      if (serie.length >= 4) return serie;
+    } catch {
+      /* tenta o próximo formato */
+    }
+  }
+  return [];
+}
+
 /**
  * Consulta o Comex Stat para um NCM: importação (padrão) ou exportação dos
  * últimos 12 meses, comparados com os 12 meses anteriores. Falha graciosa

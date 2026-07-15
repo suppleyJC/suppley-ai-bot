@@ -35,7 +35,7 @@ Este documento é o mapa vivo da evolução. Status: ✅ entregue · 🔨 parcia
 | Benchmark oficial por NCM (preço médio, origens, tendência) | ✅ | `estatisticas_comex` |
 | Timing de compra (câmbio BCB + commodities FRED → janela) | ✅ | `analise_mercado` |
 | **Mapa do mercado global de suprimento (líderes + emergentes + US$/kg por país, correlacionado com origens BR)** | ✅ | `mapear_mercado_global` |
-| Análise preditiva de preços (série histórica → projeção com intervalo) | ⬜ | evoluir `purchaseTimingService` com regressão/sazonalidade |
+| **Análise preditiva de preços (regressão + sazonalidade + banda ~80%: câmbio PTAX e US$/kg mensal do NCM → custo BRL/kg projetado)** | ✅ | `previsaoService` + `prever_precos` |
 | Correlação macro (juros/frete/commodity → custo do item) | 🔨 | sinais existem em `marketIntelligenceService`; falta o modelo de correlação |
 | Alertas proativos (janela de compra abre → notifica sem pergunta) | ⬜ | requer scheduler + push |
 
@@ -52,7 +52,7 @@ Este documento é o mapa vivo da evolução. Status: ✅ entregue · 🔨 parcia
 | **Regimes especiais (drawback, admissão temporária, RECOF…) como alavancas** | ✅ | core regulatório no system prompt |
 | **Fretamento (incoterms com fronteira de custo/risco, LCL×FCL com ponto de virada, demurrage/detention, THC, AFRMM)** | ✅ | core regulatório + `calcular_cubagem` |
 | Valoração aduaneira (AVA/GATT, royalties na base) | ✅ | core regulatório no system prompt |
-| Calculadora dedicada de demurrage/THC/frete por rota (números, não só doutrina) | ⬜ | nova tool determinística com tabelas por porto |
+| **Calculadora de fretamento em números (demurrage escalonada, LCL×FCL com breakeven, THC por porto)** | ✅ | `custoLogisticoService` + `calcular_custo_logistico` |
 | Base viva de ex-tarifários e antidumping (sync periódico GECEX) | ⬜ | job de ingestão + tabela própria |
 | Radar de mudança legislativa (RSS/DOU → resumo no chat) | ⬜ | pipeline de ingestão |
 
