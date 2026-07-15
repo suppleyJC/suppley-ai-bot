@@ -36,8 +36,8 @@ Este documento é o mapa vivo da evolução. Status: ✅ entregue · 🔨 parcia
 | Timing de compra (câmbio BCB + commodities FRED → janela) | ✅ | `analise_mercado` |
 | **Mapa do mercado global de suprimento (líderes + emergentes + US$/kg por país, correlacionado com origens BR)** | ✅ | `mapear_mercado_global` |
 | **Análise preditiva de preços (regressão + sazonalidade + banda ~80%: câmbio PTAX e US$/kg mensal do NCM → custo BRL/kg projetado)** | ✅ | `previsaoService` + `prever_precos` |
-| Correlação macro (juros/frete/commodity → custo do item) | 🔨 | sinais existem em `marketIntelligenceService`; falta o modelo de correlação |
-| Alertas proativos (janela de compra abre → notifica sem pergunta) | ⬜ | requer scheduler + push |
+| **Correlação macro/micro (câmbio, commodities, Selic, IPCA, IGP-M, INCC → custo do item, com lead-lag e beta; leitura mercado interno × importado)** | ✅ | `correlacaoService` + `correlacionar_economia` |
+| Alertas proativos (janela de compra abre → notifica sem pergunta) | ⏸ | adiado por decisão de produto — análise apenas sob demanda |
 
 ## Pilar 3 — Core fiscal, aduaneiro e logístico
 
@@ -53,8 +53,9 @@ Este documento é o mapa vivo da evolução. Status: ✅ entregue · 🔨 parcia
 | **Fretamento (incoterms com fronteira de custo/risco, LCL×FCL com ponto de virada, demurrage/detention, THC, AFRMM)** | ✅ | core regulatório + `calcular_cubagem` |
 | Valoração aduaneira (AVA/GATT, royalties na base) | ✅ | core regulatório no system prompt |
 | **Calculadora de fretamento em números (demurrage escalonada, LCL×FCL com breakeven, THC por porto)** | ✅ | `custoLogisticoService` + `calcular_custo_logistico` |
-| Base viva de ex-tarifários e antidumping (sync periódico GECEX) | ⬜ | job de ingestão + tabela própria |
-| Radar de mudança legislativa (RSS/DOU → resumo no chat) | ⬜ | pipeline de ingestão |
+| **Base viva de defesa comercial (sync GECEX sob demanda → trade_barriers com valor/vigência/resolução)** | ✅ | `barreiraSyncService` + `sincronizar_barreiras` |
+| **Radar legislativo sob demanda (DOU/GECEX/RFB/SECEX → boletim norma→mudança→impacto)** | ✅ | `radar_legislativo` |
+| Sync periódico automático da base de barreiras (cron) | ⏸ | adiado — sync sob demanda por decisão de produto |
 
 ## Pilar 4 — Persona adaptativa (do novato ao expert)
 

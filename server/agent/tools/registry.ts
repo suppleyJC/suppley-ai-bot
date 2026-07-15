@@ -31,6 +31,9 @@ import { estatisticasComexTool } from "./estatisticasComex";
 import { mapearMercadoGlobalTool } from "./mapearMercadoGlobal";
 import { preverPrecosTool } from "./preverPrecos";
 import { calcularCustoLogisticoTool } from "./calcularCustoLogistico";
+import { correlacionarEconomiaTool } from "./correlacionarEconomia";
+import { sincronizarBarreirasTool } from "./sincronizarBarreiras";
+import { radarLegislativoTool } from "./radarLegislativo";
 import { precificarReferenciaTool } from "./precificarReferencia";
 import { registrarMemoriaTool } from "./registrarMemoria";
 import { registrarResultadoOperacaoTool } from "./registrarResultadoOperacao";
@@ -76,6 +79,12 @@ export const BASE_TOOLS: AgentTool[] = [
   preverPrecosTool,
   // Fretamento em números — demurrage escalonada, LCL×FCL com breakeven, THC
   calcularCustoLogisticoTool,
+  // Correlação macro/micro — drivers do custo (câmbio, commodities, Selic, INCC)
+  correlacionarEconomiaTool,
+  // Base viva de defesa comercial — sync GECEX (antidumping/salvaguarda vigentes)
+  sincronizarBarreirasTool,
+  // Radar legislativo — mudanças normativas recentes (DOU/GECEX/RFB/SECEX)
+  radarLegislativoTool,
   // Preço de referência: base própria a valor presente × média oficial → competitivo
   precificarReferenciaTool,
   // Memória persistente — a Excambia grava aprendizados duráveis do usuário/empresa
