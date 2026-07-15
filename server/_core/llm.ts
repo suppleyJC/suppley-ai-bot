@@ -51,6 +51,13 @@ export type Message = {
   tool_call_id?: string;
   /** Presente em mensagens do assistente que pediram ferramentas (function calling). */
   tool_calls?: ToolCall[];
+  /**
+   * Blocos de raciocínio (extended thinking) da Anthropic, CRUS e assinados.
+   * Quando um turno com thinking pede tools, a API exige que esses blocos sejam
+   * devolvidos INTACTOS na mensagem do assistente do turno seguinte. Preencha
+   * com o que veio em InvokeResult.choices[0].message.thinking_blocks.
+   */
+  thinking_blocks?: unknown[];
 };
 
 export type Tool = {
@@ -98,6 +105,16 @@ export type InvokeParams = {
   webSearch?: boolean;
   /** Limite de buscas por chamada (default 5). */
   webSearchMaxUses?: number;
+  /**
+   * EXTENDED THINKING (cadeia de pensamento nativa da Anthropic): o modelo
+   * raciocina em blocos internos antes de responder — qualidade muito superior
+   * em análises complexas (viabilidade multi-cenário, correlação de mercado,
+   * planejamento fiscal). O budget é o teto de tokens de raciocínio.
+   * Restrições da API: incompatível com tool_choice FORÇADO (use "auto") e o
+   * max_tokens deve ser MAIOR que o budget. Com tools, os blocos de thinking
+   * retornados devem ser replayados intactos (ver Message.thinking_blocks).
+   */
+  thinking?: { budgetTokens: number };
 };
 
 /** IDs de modelo disponíveis para roteamento por complexidade. */
@@ -126,6 +143,8 @@ export type InvokeResult = {
       role: Role;
       content: string | Array<TextContent | ImageContent | FileContent | DocumentContent | ImageBase64Content>;
       tool_calls?: ToolCall[];
+      /** Blocos de extended thinking CRUS (replay obrigatório no loop de tools). */
+      thinking_blocks?: unknown[];
     };
     finish_reason: string | null;
   }>;
@@ -279,6 +298,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     output_schema,
     webSearch,
     webSearchMaxUses,
+    thinking,
   } = params;
 
   // A Anthropic não tem "response_format: json_schema" como a OpenAI. Para obter
@@ -324,6 +344,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
     if (message.role === "assistant" && message.tool_calls && message.tool_calls.length > 0) {
       const blocks: Array<Record<string, unknown>> = [];
+      // REPLAY do extended thinking: blocos assinados do turno anterior devem
+      // voltar PRIMEIRO e intactos, senão a API rejeita o tool loop com thinking.
+      if (message.thinking_blocks?.length) {
+        blocks.push(...(message.thinking_blocks as Array<Record<string, unknown>>));
+      }
       const text = asPlainText(message.content);
       if (text.trim().length > 0) {
         blocks.push({ type: "text", text });
@@ -361,11 +386,21 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   })) || undefined;
 
   // Preparar payload para Anthropic
+  const requestedMax = max_tokens || maxTokens || 4096;
   const payload: Record<string, unknown> = {
     model: model || MODELS.smart,
-    max_tokens: max_tokens || maxTokens || 4096,
+    max_tokens: requestedMax,
     messages: anthropicMessages,
   };
+
+  // Extended thinking: exige max_tokens > budget e tool_choice não-forçado.
+  // Com schema estruturado (tool forçada), thinking é silenciosamente ignorado.
+  const thinkingEnabled = !!thinking && !structuredSchema;
+  if (thinkingEnabled) {
+    const budget = Math.max(1024, thinking!.budgetTokens);
+    payload.thinking = { type: "enabled", budget_tokens: budget };
+    if (requestedMax <= budget) payload.max_tokens = budget + 8000;
+  }
 
   if (systemPrompt) {
     // Prompt caching: um breakpoint no bloco de system cacheia TOOLS + SYSTEM
@@ -427,13 +462,20 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   }
 
   // Chamar API Anthropic
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "x-api-key": ENV.anthropicApiKey!,
+    "anthropic-version": "2023-06-01",
+  };
+  // Interleaved thinking: permite raciocinar ENTRE chamadas de tool (analisar o
+  // resultado de uma tool antes de decidir a próxima) — essencial p/ análises
+  // multi-fonte (mercado → comex → cálculo).
+  if (thinkingEnabled && payload.tools) {
+    headers["anthropic-beta"] = "interleaved-thinking-2025-05-14";
+  }
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": ENV.anthropicApiKey!,
-      "anthropic-version": "2023-06-01",
-    },
+    headers,
     body: JSON.stringify(payload),
   });
 
@@ -469,6 +511,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       },
     })) || [];
 
+  // Blocos de thinking CRUS (assinados) — o chamador replaya no próximo turno.
+  const thinkingBlocks = (result.content ?? []).filter(
+    (block: any) => block.type === "thinking" || block.type === "redacted_thinking",
+  );
+
   // Concatena TODOS os blocos de texto (a pesquisa web devolve a resposta em
   // múltiplos blocos com citações; pegar só o primeiro perderia conteúdo).
   let textContent = (result.content ?? [])
@@ -499,6 +546,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
           role: "assistant",
           content: textContent,
           ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
+          ...(thinkingBlocks.length > 0 && { thinking_blocks: thinkingBlocks }),
         },
         finish_reason: result.stop_reason === "tool_use" ? "tool_calls" : result.stop_reason,
       },

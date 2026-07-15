@@ -12,7 +12,7 @@
  *  - Limite de gasto por sessão (guardrail).
  *  - Roda no Claude (invokeLLM de _core/llm.ts). Sem OpenAI.
  */
-import { invokeLLM, type Message } from "../_core/llm";
+import { invokeLLM, MODELS, type Message } from "../_core/llm";
 import { getToolSchemas, runTool } from "./tools";
 import type { AnexoTurno, ToolContext } from "./tools/types";
 import { checkBudget } from "./guardrails";
@@ -50,6 +50,7 @@ FERRAMENTAS DISPONÍVEIS (operação e registro):
 INTELIGÊNCIA DE MERCADO (apoio à decisão):
 - analise_mercado: lê dados OFICIAIS (câmbio BCB + commodities FRED), deriva tendências e devolve recomendações — melhor momento para importar, tendência do câmbio, antecipar/adiar compra, reforço de estoque, alertas de custo e oportunidades. Use quando perguntarem sobre câmbio, commodities, timing de compra ou "vale a pena importar agora". É apoio à decisão — para custo definitivo, use montar_calculo.
 - estatisticas_comex: estatísticas OFICIAIS do Comex Stat (MDIC/SECEX) por NCM — quanto o Brasil importou/exportou (US$ e kg), PREÇO MÉDIO oficial em US$/kg, principais países de origem e tendência. Use para fazer BENCHMARK do FOB cotado pelo fornecedor contra a média oficial de importação ("esse preço está caro ou na média do país?"), ver de onde o Brasil importa esse item e se o preço vem subindo. Precisa da NCM (use classificar_ncm antes se não tiver). É apoio à decisão — não substitui o motor.
+- mapear_mercado_global: MAPA DO MERCADO DE SUPRIMENTO GLOBAL por NCM — países LÍDERES em exportação, mercados EM CRESCIMENTO (emergentes no produto), preço médio de exportação por país (US$/kg) e share global, correlacionado com as origens atuais das importações brasileiras. Use para "de onde mais posso importar", "que mercado está crescendo neste produto", diversificação de origem, risco de concentração numa origem e detecção de origem alternativa mais barata. Combine com analise_mercado (timing) e estatisticas_comex (benchmark BR) para a análise completa: ORIGEM (quem cresce e a que preço) × TIMING (câmbio/commodities) × PREÇO (benchmark) — este cruzamento é o seu diferencial analítico.
 
 PESQUISA WEB (inteligência de mercado ampla):
 - Você tem acesso a PESQUISA NA WEB. Use-a para responder dúvidas atualizadas sobre legislação e parte fiscal (TEC/TIPI, ICMS, benefícios estaduais, normativas da Receita), logística (fretes, rotas, portos, prazos), mercado financeiro (câmbio, juros) e COMMODITIES que impactam o preço dos insumos (aço, alumínio, plásticos, etc.).
@@ -171,6 +172,22 @@ PRECISÃO FISCAL E BARREIRAS (regra dura — compliance é papel NATIVO do siste
 - SILENT CHECK DE BARREIRAS (duas camadas): (1ª) o montar_calculo JÁ DETECTA automaticamente antidumping, medidas compensatórias, salvaguardas e CIDE na base estruturada (por NCM+origem) e devolve as linhas "🛑 BARREIRA" com impacto estimado — EVIDENCIE cada uma na resposta, com o valor quando houver; quando a base disser "valor a confirmar", confirme VOCÊ o valor vigente pela pesquisa web (Resolução GECEX/CAMEX) antes de fechar números. (2ª) Complete com a pesquisa web o que a base estruturada não cobre: norma técnica/INMETRO (ex.: NBR de escoramento) e anuências (Anvisa, Inmetro, Exército…). Apresente tudo de forma AFIRMATIVA e consultiva: "Esta NCM está sujeita a X para origem Y — já considerei/recomendo Z". NUNCA como dúvida terceirizada ("checar antidumping", "verificar com despachante"). O valor de antidumping NÃO está embutido no custo do motor — some-o explicitamente ao custo final apresentado quando existir.
 - ENCERRAMENTO CONSULTIVO: feche respostas de precificação/estimativa oferecendo o start da cotação formal (RFQ aos fornecedores homologados) — números de referência apoiam a decisão; o compromisso vem da cotação real.
 
+PERSONA ADAPTATIVA (detecte o nível técnico e module a resposta — mesma verdade, tradução diferente):
+- DETECÇÃO (primeiros turnos): observe o vocabulário. Quem pergunta "quanto custa trazer produto da China?" é NOVATO; quem fala em "ex-tarifário, canal cinza, DUIMP, drawback suspensão" é EXPERT (despachante, trader, diretor de supply). Na dúvida, comece intermediário e ajuste pela reação.
+- PERSISTÊNCIA: ao formar convicção sobre o nível (novato/intermediario/expert), grave com registrar_memoria (contextType='perfil', key='perfil_tecnico', value='novato'|'intermediario'|'expert' + 1 linha de evidência). Se a memória já traz o perfil, aplique-o desde a primeira resposta.
+- NOVATO (nunca importou): tom didático e encorajador. Explique cada jargão NA PRIMEIRA VEZ que usar ("NCM — o código fiscal que classifica seu produto na alfândega"). Guie passo a passo, um bloco por vez, terminando com a próxima ação concreta. Traga a complexidade de forma palatável — nunca esconda custos ou riscos, traduza-os. Proibido despejar tabela técnica sem leitura em linguagem simples.
+- INTERMEDIÁRIO: profissional direto; jargão comum sem explicação (FOB, NCM, DI), jargão avançado com meia explicação. Foco em decisão.
+- EXPERT (despachante/trader/diretor): tom técnico e analítico de par para par. Cite base legal quando relevante (lei, decreto, IN, Resolução GECEX), use a terminologia plena (VMLE/VMLD, parametrização, canal, ex-tarifário, ICMS-ST, regime aduaneiro especial) e vá direto à análise de risco e às alavancas. Zero didatismo.
+- Em TODOS os níveis: os números saem do motor; o que muda é a TRADUÇÃO, nunca o rigor.
+
+CORE REGULATÓRIO (conhecimento profundo que você aplica ativamente — sempre com validade temporal):
+- CANAIS DE CONFERÊNCIA ADUANEIRA (parametrização da DI/DUIMP): VERDE = desembaraço automático; AMARELO = conferência documental; VERMELHO = documental + verificação física; CINZA = suspeita de fraude/subfaturamento (procedimento especial, IN RFB 1169/2011). Fatores que elevam o risco de parametrização: importador novo/baixo histórico, NCM sensível, preço muito abaixo da média oficial (use estatisticas_comex como proxy), origem sensível, divergência documental. Para experts, inclua essa análise de risco ao fechar uma operação; para novatos, traduza ("a Receita pode segurar a carga para inspeção — o cronograma deve prever isso").
+- MERCOSUL E TEC: a TEC é a tarifa externa comum; LETEC (lista de exceções) permite alíquotas diferentes; ex-tarifário (Resolução GECEX) reduz II de bens de capital/informática sem produção nacional — quando o produto for BK/BIT, verifique pela web se há ex-tarifário vigente e cite a resolução. Origem Mercosul/acordos (ALADI, ACE): preferência tarifária exige CERTIFICADO DE ORIGEM válido — sem CO, a preferência cai. Intrazona (AR/PY/UY) o II tende a 0% com CO; impostos internos permanecem.
+- REGIMES ADUANEIROS ESPECIAIS (alavancas de otimização — ofereça quando o perfil da operação encaixar): drawback (suspensão/isenção p/ insumos de exportação), admissão temporária (uso econômico com tributação proporcional), entreposto aduaneiro, RECOF/RECOF-SPED, RETAERO/REPETRO/REIDI (setoriais). Ao identificar padrão exportador no cliente, provoque a análise de drawback — economia direta de II/IPI/PIS/COFINS.
+- FRETAMENTO E LOGÍSTICA INTERNACIONAL: incoterms com precisão de fronteira de custo/risco (EXW/FCA/FAS/FOB × CFR/CIF/CPT/CIP × DAP/DPU/DDP — em DDP o vendedor assume tributos; raríssimo e caro no Brasil). LCL × FCL: LCL paga por w/m (o MAIOR entre tonelada e m³) + taxas de desconsolidação; a partir de ~13-15 m³ o FCL 20' costuma ganhar — use calcular_cubagem para a virada exata. DEMURRAGE/DETENTION: free time típico 7-14 dias; estouro custa caro por dia por contêiner — em operação com desembaraço arriscado (canal vermelho possível), aponte o risco de demurrage no plano. THC/capatazia na origem e destino, ISPS, taxas de BL, AFRMM (25% sobre frete marítimo — o motor já aplica; aéreo/rodoviário não têm). Breakbulk/projeto para carga fora de gabarito.
+- VALORAÇÃO ADUANEIRA (AVA/GATT): a base do II é o VALOR ADUANEIRO (mercadoria + frete + seguro internacionais); subfaturamento = canal cinza + multa. Royalties/assistência técnica podem integrar a base — alerta para experts.
+- VALIDADE TEMPORAL DO CONHECIMENTO: alíquotas, ex-tarifários, antidumping e benefícios estaduais MUDAM por resolução — para números vigentes, confirme pela pesquisa web (GECEX/CAMEX, RFB, SEFAZ) e cite fonte e data. Sua memória dá o MAPA; a web dá o número do dia; o motor dá o cálculo.
+
 REGRAS IMPORTANTES:
 - Você NÃO calcula impostos de cabeça. Para qualquer cálculo de viabilidade, custo ou margem, use montar_calculo (motor certificado). Nunca invente alíquotas.
 - A NCM sugerida é uma recomendação: peça confirmação antes de usá-la num cálculo definitivo.
@@ -216,7 +233,7 @@ export type StreamChunk =
   | { type: "tool_result"; name: string; ok: boolean; summary: string }
   | { type: "reply"; reply: string; toolsUsed: string[]; toolResults: OrchestratorOutput["toolResults"] };
 
-const MAX_TURNS = 6; // teto de idas-e-voltas com tools por mensagem
+const MAX_TURNS = 8; // teto de idas-e-voltas com tools por mensagem (análises multi-fonte usam mais passos)
 
 /**
  * Sanitiza o histórico para a API da Anthropic, que rejeita blocos de texto
@@ -239,6 +256,17 @@ async function buildSystemContent(userId: number, operacaoId?: number): Promise<
   try {
     const ctx = await getLearningContext(userId); // já ordenado por importância desc
     const top = ctx.filter((c) => c.value?.trim()).slice(0, 20);
+
+    // PERSONA ATIVA: se o perfil técnico já foi aprendido, vira diretriz de
+    // primeira linha — a resposta já nasce calibrada (novato/intermediario/expert).
+    const perfil = top.find((c) => c.key === "perfil_tecnico")?.value?.trim();
+    if (perfil) {
+      prompt +=
+        `\n\n## PERFIL ATIVO DESTE USUÁRIO: ${perfil.toUpperCase()}\n` +
+        `Aplique a persona correspondente (seção PERSONA ADAPTATIVA) desde a primeira ` +
+        `palavra. Se a conversa evidenciar que o nível mudou, atualize via registrar_memoria.`;
+    }
+
     if (top.length) {
       const linhas = top.map((c) => `- [${c.contextType}] ${c.key}: ${c.value}`).join("\n");
       prompt +=
@@ -277,6 +305,80 @@ function sanitizeMessages(messages: Message[]): Message[] {
   });
 }
 
+// ---------------------------------------------------------------------------
+// GESTÃO DE CONTEXTO — conversas longas não podem degradar a Excambia.
+// Acima do limiar, o histórico antigo é DESTILADO (Haiku, barato) num resumo
+// estruturado que preserva decisões, números e pendências; os turnos recentes
+// ficam intactos. Best-effort: falhou o resumo → truncagem simples.
+// ---------------------------------------------------------------------------
+const COMPACT_THRESHOLD_CHARS = 60_000; // ~15k tokens de histórico
+const COMPACT_KEEP_RECENT = 12;         // turnos recentes preservados na íntegra
+
+function tamanhoDaConversa(messages: Message[]): number {
+  let total = 0;
+  for (const m of messages) {
+    total += typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length;
+  }
+  return total;
+}
+
+async function compactarHistorico(messages: Message[]): Promise<Message[]> {
+  if (messages.length <= COMPACT_KEEP_RECENT) return messages;
+  if (tamanhoDaConversa(messages) < COMPACT_THRESHOLD_CHARS) return messages;
+
+  const antigos = messages.slice(0, messages.length - COMPACT_KEEP_RECENT);
+  const recentes = messages.slice(messages.length - COMPACT_KEEP_RECENT);
+
+  const texto = antigos
+    .map((m) => {
+      const c = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+      return `${m.role}: ${c.slice(0, 2000)}`;
+    })
+    .join("\n---\n");
+
+  try {
+    const r = await invokeLLM({
+      model: MODELS.fast,
+      maxTokens: 1500,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Destile a conversa a seguir num resumo OPERACIONAL para a IA continuar o atendimento. " +
+            "Preserve: decisões tomadas, números acordados (preços, quantidades, NCM, câmbio, margens), " +
+            "documentos citados, pendências abertas e preferências do usuário. Sem floreio.",
+        },
+        { role: "user", content: texto.slice(0, 100_000) },
+      ],
+    });
+    const resumo = typeof r.choices?.[0]?.message?.content === "string" ? r.choices[0].message.content : "";
+    if (!resumo.trim()) throw new Error("resumo vazio");
+    return [
+      { role: "user", content: `[RESUMO DA CONVERSA ANTERIOR — contexto destilado]\n${resumo}` },
+      { role: "assistant", content: "Contexto anterior assimilado. Seguindo." },
+      ...recentes,
+    ];
+  } catch {
+    // Fallback: mantém só os recentes (a memória persistente cobre o resto).
+    return recentes;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EXTENDED THINKING ADAPTATIVO — análises complexas ganham cadeia de pensamento
+// nativa (raciocínio profundo entre tools); o dia a dia segue rápido e barato.
+// ---------------------------------------------------------------------------
+const THINKING_BUDGET = 6_000;
+const PADRAO_COMPLEXO =
+  /viabilidade|vale a pena|analis|compar|estratég|cenário|proje[çt]|prev[eiê]|tend[êe]nci|risco|planejamento|reforma|diversific|melhor (origem|país|momento|fornecedor)|de onde (importar|comprar)|target|alvo|margem|simul|otimiz|estrutura[çr]|drawback|ex-?tarif|canal (cinza|vermelho)|demurrage|solve/i;
+
+function precisaRaciocinioProfundo(messages: Message[]): boolean {
+  const ultima = [...messages].reverse().find((m) => m.role === "user");
+  if (!ultima) return false;
+  const texto = typeof ultima.content === "string" ? ultima.content : JSON.stringify(ultima.content);
+  return texto.length > 600 || PADRAO_COMPLEXO.test(texto);
+}
+
 export async function runExcambia(input: OrchestratorInput): Promise<OrchestratorOutput> {
   const ctx: ToolContext = {
     userId: input.userId,
@@ -289,11 +391,16 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
   const toolsUsed: string[] = [];
   const toolResults: OrchestratorOutput["toolResults"] = [];
 
-  // monta a conversa com o system prompt da Excambia
+  // monta a conversa com o system prompt da Excambia (histórico compactado se longo)
   const conversation: Message[] = [
     { role: "system", content: await buildSystemContent(input.userId, input.operacaoId) },
-    ...sanitizeMessages(input.messages),
+    ...(await compactarHistorico(sanitizeMessages(input.messages))),
   ];
+
+  // Cadeia de pensamento nativa nas análises complexas (uma decisão por mensagem).
+  const thinking = precisaRaciocinioProfundo(input.messages)
+    ? { budgetTokens: THINKING_BUDGET }
+    : undefined;
 
   let turns = 0;
   let llmCalls = 0;
@@ -314,6 +421,7 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
       tool_choice: toolSchemas.length > 0 ? "auto" : undefined,
       // Pesquisa web nativa (legislação, fiscal, logística, mercado, commodities).
       webSearch: true,
+      thinking,
       // Teto de saída alto: catalogar uma cotação grande gera argumentos de
       // tool com dezenas de itens — com o default (4096) o JSON era cortado.
       maxTokens: 16000,
@@ -329,12 +437,13 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
     }
 
     // Anexa a mensagem do assistente (que pediu tools) ao histórico.
-    // IMPORTANTE: precisa carregar os tool_calls para a Anthropic conseguir
-    // casar cada tool_result com seu tool_use no próximo turno.
+    // IMPORTANTE: precisa carregar os tool_calls (e os thinking_blocks, quando
+    // houver) para a Anthropic casar cada tool_result com seu tool_use.
     conversation.push({
       role: "assistant",
       content: typeof choice?.content === "string" ? choice.content : "",
       tool_calls: toolCalls,
+      thinking_blocks: choice?.thinking_blocks,
     } as Message);
 
     // Executa cada tool pedida e devolve o resultado ao modelo
@@ -388,8 +497,13 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
 
   const conversation: Message[] = [
     { role: "system", content: await buildSystemContent(input.userId, input.operacaoId) },
-    ...sanitizeMessages(input.messages),
+    ...(await compactarHistorico(sanitizeMessages(input.messages))),
   ];
+
+  // Cadeia de pensamento nativa nas análises complexas (uma decisão por mensagem).
+  const thinking = precisaRaciocinioProfundo(input.messages)
+    ? { budgetTokens: THINKING_BUDGET }
+    : undefined;
 
   let turns = 0;
   let llmCalls = 0;
@@ -409,7 +523,10 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
     }
     llmCalls++;
 
-    yield { type: "thinking", content: "Pensando..." };
+    yield {
+      type: "thinking",
+      content: thinking ? "Analisando em profundidade..." : "Pensando...",
+    };
 
     // A Excambia CONCLUI o raciocínio em segundo plano (só o indicador de
     // atividade aparece — nenhum texto vaza entre as ferramentas). A resposta
@@ -422,6 +539,7 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
       tool_choice: toolSchemas.length > 0 ? "auto" : undefined,
       // Pesquisa web nativa (legislação, fiscal, logística, mercado, commodities).
       webSearch: true,
+      thinking,
       // Teto de saída alto: catalogar uma cotação grande gera argumentos de
       // tool com dezenas de itens — com o default (4096) o JSON era cortado.
       maxTokens: 16000,
@@ -446,6 +564,7 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
       role: "assistant",
       content: typeof choice?.content === "string" ? choice.content : "",
       tool_calls: toolCalls,
+      thinking_blocks: choice?.thinking_blocks,
     } as Message);
 
     // Executa cada tool e emite evento

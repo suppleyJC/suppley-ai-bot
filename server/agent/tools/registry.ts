@@ -28,6 +28,7 @@ import { consultarOperacaoTool } from "./consultarOperacao";
 import { buscarDocumentoOperacaoTool } from "./buscarDocumentoOperacao";
 import { analiseMercadoTool } from "./analiseMercado";
 import { estatisticasComexTool } from "./estatisticasComex";
+import { mapearMercadoGlobalTool } from "./mapearMercadoGlobal";
 import { precificarReferenciaTool } from "./precificarReferencia";
 import { registrarMemoriaTool } from "./registrarMemoria";
 import { registrarResultadoOperacaoTool } from "./registrarResultadoOperacao";
@@ -67,6 +68,8 @@ export const BASE_TOOLS: AgentTool[] = [
   analiseMercadoTool,
   // Estatísticas oficiais de comércio exterior por NCM (Comex Stat / MDIC-SECEX)
   estatisticasComexTool,
+  // Mapa do mercado global de suprimento — líderes, emergentes e preço por país
+  mapearMercadoGlobalTool,
   // Preço de referência: base própria a valor presente × média oficial → competitivo
   precificarReferenciaTool,
   // Memória persistente — a Excambia grava aprendizados duráveis do usuário/empresa
