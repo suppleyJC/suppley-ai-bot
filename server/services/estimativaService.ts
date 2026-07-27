@@ -20,7 +20,13 @@ import { getStateIcmsInternalRate, getStateName } from "./statePricingService";
 import { getStateImportBenefit } from "./stateBenefits";
 import { consultarTtce, ttceEnabled } from "./ttceService";
 import { isMercosulCountry } from "./taxCalculationService";
-import { converterItem, custoPorCanonica, type ConversaoItem } from "./unitConversionService";
+import {
+  converterItem,
+  custoPorCanonica,
+  custoPorMetro,
+  extrairComprimentoM,
+  type ConversaoItem,
+} from "./unitConversionService";
 import { detectarBarreiras, formatarBarreira, type BarreiraDetectada } from "./tradeBarrierService";
 
 export interface EstimativaProductInput {
@@ -35,6 +41,12 @@ export interface EstimativaProductInput {
   unitPrice: number;
   /** Peso bruto TOTAL do item em kg (T.G.W). Habilita custo por kg. */
   pesoTotalKg?: number;
+  /**
+   * Comprimento por PEÇA em metros (bens lineares: rodapé, perfil, tubo, cabo).
+   * Habilita o custo por METRO na planilha — a unidade em que o mercado cota.
+   * Se ausente, tenta-se extrair do nome do produto (ex.: "Rodapé ... (2,4m)").
+   */
+  comprimentoPorUnidadeM?: number;
   /** Override de alíquotas (fração: 12,6% = 0.126). Se ausente, busca por NCM. */
   iiRateOverride?: number;
   ipiRateOverride?: number;
@@ -67,8 +79,8 @@ export interface EstimativaInput {
    */
   paisOrigem?: string;
   /**
-   * Modal logístico. AFRMM (25% do frete) só incide no modal marítimo;
-   * para aéreo/rodoviário/ferroviário o AFRMM é zerado automaticamente.
+   * Modal logístico. AFRMM (8% do frete — Lei 14.301/2022) só incide no modal
+   * marítimo; para aéreo/rodoviário/ferroviário o AFRMM é zerado automaticamente.
    */
   modal?: ModalLogistico;
 
@@ -147,6 +159,10 @@ export interface ItemUnidadeInsight {
   custoCanonico: { valor: number; unidade: string } | null;
   /** FOB unitário na unidade canônica (USD). */
   fobCanonico: { valor: number; unidade: string } | null;
+  /** Custo líquido por METRO (bens lineares com comprimento conhecido). */
+  custoMetro: { valor: number; unidade: "m" } | null;
+  /** FOB por METRO (moeda da cotação). */
+  fobMetro: { valor: number; unidade: "m" } | null;
 }
 
 export interface EstimativaResult extends EngineResult {
@@ -194,6 +210,35 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
         }
         iiRate ??= rates.iiRate / 10000;   // bp → fração
         ipiRate ??= rates.ipiRate / 10000;
+
+        // GUARDA ANTI-SILÊNCIO: NCM presente na tabela mas com alíquotas de
+        // placeholder. A carga da TIPI (drizzle/seed_tipi.sql) grava II/PIS/
+        // COFINS zerados (notes='TIPI') até a carga da TEC (scripts/load-ncm.sh)
+        // sobrescrever o II real. Sem este aviso, um II 0% indevido passa em
+        // silêncio e o custo sai subestimado (caso real: WPC Skirting).
+        const notesRaw = (rates.notes ?? "").trim();
+        const cargaParcialTipi =
+          /^TIPI$/i.test(notesRaw) || (rates.pisRate === 0 && rates.cofinsRate === 0);
+        if (cargaParcialTipi && p.iiRateOverride === undefined) {
+          ncmWarnings.push(
+            `🛑 NCM ${p.ncmCode} (${p.productName}): a base local tem apenas a carga PARCIAL ` +
+            `da TIPI para este código — II/PIS/COFINS constam ZERADOS (placeholder), o que ` +
+            `SUBESTIMA o custo. NÃO use este cálculo para decisão: rode a carga da TEC ` +
+            `(scripts/load-ncm.sh), limpe o cache de NCM e recalcule, ou informe o II via override.`,
+          );
+        } else if (
+          rates.iiRate === 0 &&
+          rates.ipiRate === 0 &&
+          !isMercosul &&
+          p.iiRateOverride === undefined &&
+          p.ipiRateOverride === undefined
+        ) {
+          ncmWarnings.push(
+            `NCM ${p.ncmCode} (${p.productName}): II 0% e IPI 0% simultâneos na base. ` +
+            `Zero pode ser legítimo (ex-tarifário, bens sem similar nacional), mas também é a ` +
+            `assinatura de carga incompleta — confirme na TEC/TIPI antes de fechar a operação.`,
+          );
+        }
 
         // Ex-Tarifário vigente: reduz II/IPI (aplica a menor alíquota).
         const ex = await getActiveNcmException(ncmClean);
@@ -263,10 +308,15 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
     // deriva o peso total quando a própria unidade é de peso (2 ton → 2000 kg)
     // — habilita o custo/kg sem o usuário repetir o peso. A quantidade/preço
     // originais seguem intactos para o motor (paridade de planilha).
+    // Bens lineares: metros por peça explícito ou extraído do nome do produto
+    // ("Rodapé WPC ... (2,4m)") — habilita o custo/m, a unidade de mercado.
+    const metrosPorUnidade =
+      p.comprimentoPorUnidadeM ?? extrairComprimentoM(p.productName);
     const conv = converterItem({
       quantity: p.quantity,
       unit: p.unit,
       itensPorEmbalagem: p.itensPorEmbalagem,
+      metrosPorUnidade,
     });
     conversoes.push(conv);
     const pesoTotalKg = p.pesoTotalKg ?? conv.pesoTotalKgDerivado ?? undefined;
@@ -316,6 +366,23 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
     expediente: taxaExpedienteBrl,
     portoCode: input.portoCode ?? null,
   };
+
+  // Despesas locais NÃO COTADAS ≠ despesas de R$ 0. Sem porto informado e sem
+  // valores, elas entram zeradas e o custo final sai subestimado (~R$ 1/m em
+  // cargas típicas) — a planilha precisa dizer isso em vez de silenciar.
+  const despesasNaoCotadas: string[] = [];
+  if (!input.portoCode) {
+    if (input.liberacaoBlBrl == null) despesasNaoCotadas.push("liberação de BL");
+    if (input.armazenagemBrl == null) despesasNaoCotadas.push("armazenagem");
+  }
+  if (input.freteInternoBrl == null) despesasNaoCotadas.push("frete interno");
+  if (despesasNaoCotadas.length) {
+    ncmWarnings.push(
+      `Despesas locais NÃO COTADAS lançadas como R$ 0: ${despesasNaoCotadas.join(", ")}. ` +
+      `O custo final está subestimado nesse componente — informe o porto (portoCode) ou os ` +
+      `valores cotados pelo despachante para fechar o comparativo.`,
+    );
+  }
 
   // ---- Montar globais ----
   const saleDefaults = SALE_TAX_DEFAULTS[input.taxRegime];
@@ -433,6 +500,17 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
       : undefined,
   };
 
+  // Transparência da alíquota vigente: 10,25% ≠ erro — é 9,65% + LC 224/2025.
+  // Sem esta nota, comparativos com cotações de terceiros a 9,65% parecem
+  // apontar um motor "descalibrado" quando a diferença é base legal.
+  if (input.cofinsImportRateOverride === undefined && (input.applyCofinsLc224 ?? true)) {
+    ncmWarnings.push(
+      "COFINS-Importação aplicada a 10,25% = 9,65% (Lei 10.865/2004, art. 8º) + 0,6% " +
+      "(LC 224/2025, vigência 2026). Cotações de terceiros ainda a 9,65% não refletem a " +
+      "LC 224/2025 — para paridade com planilhas antigas, use applyCofinsLc224=false.",
+    );
+  }
+
   const result = calculateImportCost(globals, items);
 
   // BARREIRAS COMERCIAIS (Pilar 2): detecção estruturada por NCM+origem em
@@ -473,6 +551,8 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
       conversao: conv,
       custoCanonico: custoPorCanonica(it.netTotalCost, conv),
       fobCanonico: custoPorCanonica(it.totalFob, conv),
+      custoMetro: custoPorMetro(it.netTotalCost, conv),
+      fobMetro: custoPorMetro(it.totalFob, conv),
     };
   });
 

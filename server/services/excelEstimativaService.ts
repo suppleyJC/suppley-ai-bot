@@ -206,6 +206,7 @@ export async function generateEstimativaExcel(
     const unidades = (result as { unidades?: Array<{
       conversao?: { descricao?: string | null };
       custoCanonico?: { valor: number; unidade: string } | null;
+      custoMetro?: { valor: number; unidade: string } | null;
     }> }).unidades;
 
     const h0 = 13;
@@ -220,12 +221,20 @@ export async function generateEstimativaExcel(
       set(rs, `C${r}`, it.quantity, { size: 10, fmt: NUM2, al: "right", border: true });
       set(rs, `D${r}`, it.unit || "un", { size: 10, al: "center", border: true });
       set(rs, `E${r}`, it.netUnitCost, { size: 10, fmt: BRL2, al: "right", border: true, bold: true });
-      const canon = u?.custoCanonico
-        ? `R$ ${u.custoCanonico.valor.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}/${u.custoCanonico.unidade}`
-        : it.netCostPerKg > 0
-          ? `R$ ${it.netCostPerKg.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}/kg`
-          : "—";
-      set(rs, `F${r}`, canon, { size: 10, al: "right", border: true });
+      // Custo na unidade de MERCADO: bens lineares mostram R$/m em primeiro
+      // lugar (é como concorrentes e fornecedores cotam — comparação direta,
+      // sem conversão manual de caixa/peça para metro).
+      const partes: string[] = [];
+      if (u?.custoMetro) {
+        partes.push(`R$ ${u.custoMetro.valor.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}/m`);
+      }
+      if (u?.custoCanonico) {
+        partes.push(`R$ ${u.custoCanonico.valor.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}/${u.custoCanonico.unidade}`);
+      }
+      if (!partes.length && it.netCostPerKg > 0) {
+        partes.push(`R$ ${it.netCostPerKg.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}/kg`);
+      }
+      set(rs, `F${r}`, partes.join("  ·  ") || "—", { size: 10, al: "right", border: true });
     });
 
     // Conversões aplicadas + nota de fonte.

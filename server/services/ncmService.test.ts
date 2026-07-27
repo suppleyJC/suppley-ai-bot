@@ -80,6 +80,38 @@ describe("NCM Service", () => {
     });
   });
 
+  describe("tokenizarBuscaNcm", () => {
+    it("quebra o nome real do rodapé em termos que casam com a TEC", async () => {
+      const ncmService = await import("./ncmService");
+      const termos = ncmService.tokenizarBuscaNcm(
+        "WPC Skirting / Rodapé WPC com acabamento PVC (2,4m)",
+      );
+      expect(termos).toContain("rodapé");
+      expect(termos).toContain("skirting");
+      expect(termos).toContain("pvc");
+      // medidas e stopwords não viram termo de busca
+      expect(termos).not.toContain("com");
+      expect(termos).not.toContain("acabamento");
+      expect(termos.join(" ")).not.toMatch(/\d/);
+    });
+
+    it("descarta termos curtos, deduplica e limita a 6 termos", async () => {
+      const ncmService = await import("./ncmService");
+      const termos = ncmService.tokenizarBuscaNcm("aa de pvc pvc tubo");
+      expect(termos).toEqual(expect.arrayContaining(["pvc", "tubo"]));
+      expect(termos.filter((t: string) => t === "pvc")).toHaveLength(1);
+      expect(termos.length).toBeLessThanOrEqual(6);
+      expect(termos).not.toContain("aa");
+      expect(termos).not.toContain("de");
+    });
+
+    it("query vazia ou só medidas retorna lista vazia", async () => {
+      const ncmService = await import("./ncmService");
+      expect(ncmService.tokenizarBuscaNcm("")).toEqual([]);
+      expect(ncmService.tokenizarBuscaNcm("2,4m 10mm 3x25kg")).toEqual([]);
+    });
+  });
+
   describe("clearNCMCaches", () => {
     it("should clear caches without errors", async () => {
       const ncmService = await import("./ncmService");

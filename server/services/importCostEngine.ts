@@ -387,7 +387,8 @@ export function calculateImportCost(
   const afrmmTotal = globals.afrmmTotalBrl ?? freightTotalBrl * DEFAULT_AFRMM_RATE;
   if (globals.afrmmTotalBrl === undefined) {
     warnings.push(
-      `AFRMM calculado automaticamente como 25% do frete (R$ ${afrmmTotal.toFixed(2)}). ` +
+      `AFRMM calculado automaticamente como ${(DEFAULT_AFRMM_RATE * 100).toFixed(0)}% do ` +
+      `frete (R$ ${afrmmTotal.toFixed(2)} — Lei 14.301/2022, longo curso). ` +
       `Aplicável apenas ao modal marítimo — informe 0 para outros modais.`
     );
   }

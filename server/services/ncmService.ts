@@ -263,6 +263,33 @@ export async function importNCMsFromSiscomex(filePath?: string): Promise<{
 /**
  * Busca NCMs por código ou descrição (com cache de 5 min)
  */
+/** Palavras sem valor classificatório — não viram termo de busca. */
+const NCM_STOPWORDS = new Set([
+  "com", "sem", "para", "por", "das", "dos", "the", "and", "una", "uma",
+  "que", "nao", "não", "tipo", "modelo", "item", "unidade", "unidades",
+  "outros", "outras", "acabamento",
+]);
+
+/**
+ * Quebra o nome do produto em termos de busca relevantes.
+ * "WPC Skirting / Rodapé WPC com acabamento PVC (2,4m)" →
+ * ["skirting", "rodapé", "wpc", "pvc"] — cada termo busca sozinho; o nome
+ * inteiro num único LIKE nunca casa com descrição de NCM e deixava a IA
+ * classificar sem nenhum candidato do banco.
+ */
+export function tokenizarBuscaNcm(query: string): string[] {
+  const brutos = query
+    .toLowerCase()
+    // remove medidas ("2,4m", "10mm", "3x25kg") — nunca aparecem na TEC
+    .replace(/\d+(?:[.,]\d+)?\s*(?:mm|cm|m|km|kg|g|l|ml|un|pcs?|x)?\b/gi, " ")
+    .split(/[^a-zÀ-ſ]+/)
+    .filter((t) => t.length >= 3 && !NCM_STOPWORDS.has(t));
+  // dedup preservando ordem; termos mais longos primeiro (mais específicos)
+  return Array.from(new Set(brutos))
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 6);
+}
+
 export async function searchNCMs(query: string, limit: number = 20): Promise<any[]> {
   const db = await getDb();
   if (!db) return [];
@@ -288,18 +315,30 @@ export async function searchNCMs(query: string, limit: number = 20): Promise<any
         .where(like(ncmTaxRates.ncmCode, `${cleanQuery}%`))
         .limit(limit);
     } else {
-      // Busca por descrição (LIKE %text%)
-      // Limitar a 20 resultados para evitar full table scan lento
-      results = await db
+      // Busca por descrição TOKENIZADA: um LIKE por termo relevante, ranqueado
+      // pelo nº de termos que casam. O LIKE com a frase inteira retornava vazio
+      // para qualquer nome de produto real.
+      const termos = tokenizarBuscaNcm(cleanQuery);
+      const condicoes = [
+        like(ncmTaxRates.ncmCode, `${cleanQuery}%`),
+        ...termos.map((t) => like(ncmTaxRates.description, `%${t}%`)),
+      ];
+      const brutos = await db
         .select()
         .from(ncmTaxRates)
-        .where(
-          or(
-            like(ncmTaxRates.ncmCode, `${cleanQuery}%`),
-            like(ncmTaxRates.description, `%${cleanQuery}%`)
-          )
-        )
-        .limit(Math.min(limit, 20));
+        .where(or(...condicoes))
+        .limit(200);
+
+      // Ranqueia: mais termos casados primeiro (empate → código menor, estável)
+      const rank = (r: any) => {
+        const d = (r.description ?? "").toLowerCase();
+        return termos.reduce((n, t) => n + (d.includes(t) ? 1 : 0), 0);
+      };
+      results = brutos
+        .map((r) => ({ r, score: rank(r) }))
+        .sort((a, b) => b.score - a.score || a.r.ncmCode.localeCompare(b.r.ncmCode))
+        .slice(0, Math.min(limit, 30))
+        .map((x) => x.r);
     }
 
     searchCache.set(cacheKey, results);
