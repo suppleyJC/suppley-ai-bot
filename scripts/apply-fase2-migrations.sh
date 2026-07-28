@@ -20,13 +20,13 @@
 # USO (no servidor, dentro de /opt/suppley/suppley-ai-bot):
 #   bash scripts/apply-fase2-migrations.sh
 #
-# Variáveis (opcionais — defaults batem com o docker-compose.prod.yml):
-#   DB_CONTAINER (suppley_db) | DB_USER (suppley) | DB_PASSWORD | DB_NAME (suppley_calc)
+# Variáveis (opcionais — defaults batem com o docker-compose.yml):
+#   DB_CONTAINER (suppley-mysql) | DB_USER (suppley) | DB_PASSWORD | DB_NAME (suppley_calc)
 set -euo pipefail
 
-DB_CONTAINER="${DB_CONTAINER:-suppley_db}"
+DB_CONTAINER="${DB_CONTAINER:-suppley-mysql}"
 DB_USER="${DB_USER:-suppley}"
-DB_PASSWORD="${DB_PASSWORD:-SuppleyDb2024}"
+DB_PASSWORD="${DB_PASSWORD:-changeme}"
 DB_NAME="${DB_NAME:-suppley_calc}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

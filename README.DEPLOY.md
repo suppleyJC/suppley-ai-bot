@@ -79,10 +79,10 @@ docker images suppley-app
 export $(cat .env.production | xargs)
 
 # Iniciar serviços
-docker-compose -f docker-compose.prod.yml up -d
+docker-compose up -d
 
 # Verificar logs
-docker-compose -f docker-compose.prod.yml logs -f app
+docker-compose logs -f app
 
 # Aguardar ~30s para app iniciar
 sleep 10
@@ -140,11 +140,35 @@ chmod +x scripts/deploy.sh
 ### ✅ Etapa D: CI/CD + Docker + Observabilidade
 - `.github/workflows/test-build.yml`: type check + build automático
 - `Dockerfile`: multi-stage, seguro, user não-root
-- `docker-compose.prod.yml`: MySQL + app com health checks
+- `docker-compose.yml`: MySQL + app com health checks
 - `scripts/deploy.sh`: automação de deploy
 - `server/_core/logger.ts`: logs estruturados (JSON em prod)
 
 **Commit:** `e6eb9be`
+
+---
+
+## 🗄️ Stack de produção (fonte única da verdade)
+
+| Item | Valor |
+|---|---|
+| Compose | `docker-compose.yml` (único — não crie variantes) |
+| App | container `suppley-ai-bot`, porta 3000 |
+| Banco | container `suppley-mysql`, database `suppley_calc` |
+| **Volume de dados** | **`suppley-ai-bot_db-data`** |
+| Env | `.env.production` → copiado para `.env` pelo `deploy.sh` |
+
+Conferir a qualquer momento em que volume o banco está montado:
+
+```bash
+docker inspect suppley-mysql --format '{{range .Mounts}}{{.Name}}{{end}}'
+# esperado: suppley-ai-bot_db-data
+```
+
+> Já houve um `docker-compose.prod.yml` paralelo apontando para outro volume
+> (`suppley_mysql_data`, base antiga e incompleta). O deploy passava no health
+> check e a plataforma aparecia vazia, porque o `/health` não consulta o banco.
+> O arquivo foi removido e o `deploy.sh` agora valida o nº de tabelas no fim.
 
 ---
 
@@ -162,20 +186,19 @@ echo "ANTHROPIC_API_KEY=sk-ant-xxx" >> .env.production
 ### Erro: "Cannot connect to database"
 ```bash
 # Verificar MySQL container
-docker-compose -f docker-compose.prod.yml ps
+docker-compose ps
 
 # Verificar logs MySQL
-docker-compose -f docker-compose.prod.yml logs mysql
+docker-compose logs mysql
 
-# Reconectar
-docker-compose -f docker-compose.prod.yml down -v
-docker-compose -f docker-compose.prod.yml up -d
+# Reconectar (NUNCA use "down -v" aqui: o -v APAGA o volume com todos os dados)
+docker-compose restart mysql app
 ```
 
 ### App inicia mas não responde
 ```bash
 # Verificar logs
-docker-compose -f docker-compose.prod.yml logs app
+docker-compose logs app
 
 # Health check manual
 curl -v http://localhost:3000/health
@@ -210,10 +233,14 @@ docker build -t suppley-app:latest . 2>&1 | tail -50
 
 ## 📞 Support
 
-- **Logs locais:** `docker-compose -f docker-compose.prod.yml logs -f`
+- **Logs locais:** `docker-compose logs -f`
 - **Verificar health:** `curl https://calculasuppley.com.br/health`
-- **Parar tudo:** `docker-compose -f docker-compose.prod.yml down`
-- **Remover dados:** `docker-compose -f docker-compose.prod.yml down -v`
+- **Parar tudo:** `docker-compose down` (preserva os dados)
+- **Backup do banco:** `docker exec suppley-mysql sh -c 'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction suppley_calc' | gzip > backup.sql.gz`
+
+> ⚠️ **Nunca** rode `docker-compose down -v` nem `docker volume prune` neste servidor.
+> O `-v` apaga o volume `suppley-ai-bot_db-data`, onde ficam conversas, proformas,
+> ativos e a base de NCM. Não há como desfazer.
 
 ---
 

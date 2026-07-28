@@ -55,7 +55,7 @@ O script imprime, ao final, uma checagem confirmando que `operacoes.prioridade`
 e as 3 tabelas novas existem (cada item deve retornar `1`).
 
 > As variáveis de conexão (DB_CONTAINER/DB_USER/DB_PASSWORD/DB_NAME) têm
-> defaults iguais aos do `docker-compose.prod.yml`. Se o seu `.env.production`
+> defaults iguais aos do `docker-compose.yml`. Se o seu `.env.production`
 > usa outra senha, exporte `DB_PASSWORD=...` antes de rodar.
 
 ## Passo 3 — Deploy do código

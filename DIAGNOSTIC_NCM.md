@@ -194,8 +194,8 @@ docker exec suppley_db mysql -u suppley -pSuppleyDb2024 suppley_calc \
 
 4. Como último recurso, reiniciar tudo:
    ```bash
-   docker-compose -f docker-compose.prod.yml down
-   docker-compose -f docker-compose.prod.yml up -d
+   docker-compose down
+   docker-compose up -d
    # Aguarde 60s para MySQL inicializar
    bash scripts/load-ncm.sh
    ```
