@@ -39,12 +39,28 @@ fi
 
 # 3. Carregar .env (deve existir no servidor) — antes do build, porque o compose
 # lê as variáveis do .env para resolver imagem, senhas e volumes.
-if [ -f .env.production ]; then
-    cp .env.production .env
-else
+if [ ! -f .env.production ]; then
     echo "❌ Erro: arquivo .env.production não encontrado"
     exit 1
 fi
+
+# O cp sobrescreve o .env. Variáveis que existam SÓ no .env (credencial posta à
+# mão no servidor) sumiriam em silêncio e a funcionalidade quebraria no deploy
+# seguinte — foi assim que as chaves do S3 se perderam. Vira erro, listando
+# apenas os NOMES das variáveis.
+if [ -f .env ]; then
+    PERDIDAS=$(comm -23 \
+        <(grep -oE '^[A-Z0-9_]+=.+' .env            | cut -d= -f1 | sort -u) \
+        <(grep -oE '^[A-Z0-9_]+=.+' .env.production | cut -d= -f1 | sort -u))
+    if [ -n "$PERDIDAS" ]; then
+        echo "❌ Estas variáveis estão no .env e seriam perdidas ao copiar o .env.production:"
+        echo "$PERDIDAS" | sed 's/^/   - /'
+        echo "   Leve-as para o .env.production (com valor preenchido) e rode de novo."
+        exit 1
+    fi
+fi
+
+cp .env.production .env
 
 # 4. Build com Docker (pelo compose, para não subir imagem antiga em cache)
 echo "🔨 Fazendo build..."
