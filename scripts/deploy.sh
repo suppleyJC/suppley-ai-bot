@@ -18,6 +18,7 @@ COMPOSE_FILE="docker-compose.yml"
 # Serviço de banco e nº mínimo de tabelas esperado — usados na verificação
 # pós-deploy que detecta "subiu no banco errado".
 DB_CONTAINER="suppley-mysql"
+APP_CONTAINER="suppley-ai-bot"
 MIN_TABELAS=55
 
 echo "🚀 Iniciando deploy para $ENVIRONMENT"
@@ -66,13 +67,19 @@ cp .env.production .env
 echo "🔨 Fazendo build..."
 docker-compose -f "$COMPOSE_FILE" build app
 
-# 5. Parar apenas o app — o banco continua de pé, com os dados
-echo "🛑 Parando app anterior..."
-docker-compose -f "$COMPOSE_FILE" stop app 2>/dev/null || true
+# 5. Garantir o banco de pé SEM recriá-lo.
+# O docker-compose 1.29.2 deste servidor quebra ao RECRIAR container com volume
+# ("KeyError: 'ContainerConfig'" — incompatibilidade com o formato de imagem do
+# Docker atual). Subir sem --force-recreate não entra nesse caminho de código.
+echo "🗄️  Garantindo o banco..."
+docker-compose -f "$COMPOSE_FILE" up -d --no-deps db
 
-# 6. Iniciar containers (NUNCA use "down -v": apaga o volume de dados)
-echo "▶️  Iniciando containers..."
-docker-compose -f "$COMPOSE_FILE" up -d
+# 6. Recriar SÓ o app, criando do zero em vez de recriar (mesmo motivo acima).
+# Remover e criar também é o que garante que o .env novo entre no container.
+# NUNCA use "down -v" aqui: apaga o volume de dados.
+echo "▶️  Subindo o app..."
+docker rm -f "$APP_CONTAINER" 2>/dev/null || true
+docker-compose -f "$COMPOSE_FILE" up -d --no-deps app
 
 # 7. Aguardar health check
 echo "⏳ Aguardando aplicação iniciar..."
