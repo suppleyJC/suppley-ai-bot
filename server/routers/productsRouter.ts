@@ -4,6 +4,9 @@ import * as db from "../db";
 import { TRPCError } from "@trpc/server";
 import { normalizeProductName } from "../services/priceComparisonService";
 
+/** Administrador (conta central) tem visibilidade total; usuário comum, só o que lançou. */
+const isAdmin = (ctx: { user: { role?: string | null } }) => ctx.user.role === "admin";
+
 /** Campos de classificação compartilhados entre create/update. */
 const classificationFields = {
   categoria: z.string().optional(),
@@ -16,7 +19,7 @@ const classificationFields = {
 
 export const productsRouter = router({
 list: protectedProcedure.query(async ({ ctx }) => {
-  const products = await db.getProductsByUser(ctx.user.id);
+  const products = await db.getProductsByUser(ctx.user.id, isAdmin(ctx));
 
   // Enriquece cada produto com a ÚLTIMA cotação registrada no histórico de
   // proformas (casando por nome normalizado — mesma lógica do histórico de
@@ -24,7 +27,7 @@ list: protectedProcedure.query(async ({ ctx }) => {
   // PDF, sem digitação manual. Best-effort: se não houver histórico, vem null.
   let items: Awaited<ReturnType<typeof db.getProformaItemsWithContext>> = [];
   try {
-    items = await db.getProformaItemsWithContext(ctx.user.id);
+    items = await db.getProformaItemsWithContext(ctx.user.id, undefined, isAdmin(ctx));
   } catch {
     items = [];
   }
@@ -56,7 +59,7 @@ list: protectedProcedure.query(async ({ ctx }) => {
 get: protectedProcedure
   .input(z.object({ id: z.number() }))
   .query(async ({ ctx, input }) => {
-    const product = await db.getProductById(input.id, ctx.user.id);
+    const product = await db.getProductById(input.id, ctx.user.id, isAdmin(ctx));
     if (!product) throw new TRPCError({ code: "NOT_FOUND" });
     return product;
   }),

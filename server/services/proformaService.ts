@@ -841,12 +841,17 @@ export async function distributeProformaToBase(
 // 4) LEITURA
 // ============================================================
 
-export async function listProformas(userId: number, filters?: { status?: string; industriaId?: number }) {
-  return db.getProformasByUser(userId, filters);
+/** admin = conta central: enxerga as proformas lançadas por qualquer usuário. */
+export async function listProformas(
+  userId: number,
+  filters?: { status?: string; industriaId?: number },
+  admin = false,
+) {
+  return db.getProformasByUser(userId, filters, admin);
 }
 
-export async function getProformaDetail(userId: number, proformaId: number) {
-  const proforma = await db.getProformaById(proformaId, userId);
+export async function getProformaDetail(userId: number, proformaId: number, admin = false) {
+  const proforma = await db.getProformaById(proformaId, userId, admin);
   if (!proforma) return null;
   const items = await db.getProformaItems(proformaId);
 

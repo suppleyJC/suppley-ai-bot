@@ -2,6 +2,7 @@ import { eq, desc, and } from "drizzle-orm";
 import {
   proformas, InsertProforma, Proforma,
   proformaItems, InsertProformaItem, ProformaItem,
+  users,
 } from "../../drizzle/schema";
 import { getDb } from "./connection";
 
@@ -27,16 +28,33 @@ export async function updateProforma(
   return true;
 }
 
+/**
+ * Lista proformas. O administrador (conta central) enxerga as de TODOS os
+ * usuários — mesmo contrato de conversaDb.listConversas — e recebe donoNome
+ * quando o registro é de outra pessoa, para saber quem lançou.
+ */
 export async function getProformasByUser(
   userId: number,
-  filters?: { status?: string; industriaId?: number }
-): Promise<Proforma[]> {
+  filters?: { status?: string; industriaId?: number },
+  admin = false
+): Promise<Array<Proforma & { donoNome: string | null }>> {
   const db = await getDb();
   if (!db) return [];
-  const conditions = [eq(proformas.userId, userId)];
+  const conditions = [admin ? undefined : eq(proformas.userId, userId)];
   if (filters?.status) conditions.push(eq(proformas.status, filters.status as any));
   if (filters?.industriaId) conditions.push(eq(proformas.industriaId, filters.industriaId));
-  return db.select().from(proformas).where(and(...conditions)).orderBy(desc(proformas.createdAt));
+
+  const rows = await db
+    .select({ p: proformas, donoNome: users.name, donoEmail: users.email })
+    .from(proformas)
+    .leftJoin(users, eq(users.id, proformas.userId))
+    .where(and(...conditions))
+    .orderBy(desc(proformas.createdAt));
+
+  return rows.map(({ p, donoNome, donoEmail }) => ({
+    ...p,
+    donoNome: admin && p.userId !== userId ? (donoNome || donoEmail || `usuário #${p.userId}`) : null,
+  }));
 }
 
 /**
@@ -69,10 +87,17 @@ export async function getProformasForDuplicateCheck(userId: number): Promise<
     .where(eq(proformas.userId, userId));
 }
 
-export async function getProformaById(id: number, userId: number): Promise<Proforma | null> {
+export async function getProformaById(
+  id: number,
+  userId: number,
+  admin = false
+): Promise<Proforma | null> {
   const db = await getDb();
   if (!db) return null;
-  const [row] = await db.select().from(proformas).where(and(eq(proformas.id, id), eq(proformas.userId, userId)));
+  const [row] = await db
+    .select()
+    .from(proformas)
+    .where(and(eq(proformas.id, id), admin ? undefined : eq(proformas.userId, userId)));
   return row || null;
 }
 
@@ -155,12 +180,13 @@ export interface ProformaItemWithContext {
  */
 export async function getProformaItemsWithContext(
   userId: number,
-  filters?: { industriaId?: number }
+  filters?: { industriaId?: number },
+  admin = false
 ): Promise<ProformaItemWithContext[]> {
   const db = await getDb();
   if (!db) return [];
 
-  const conditions = [eq(proformas.userId, userId)];
+  const conditions = [admin ? undefined : eq(proformas.userId, userId)];
   if (filters?.industriaId) conditions.push(eq(proformas.industriaId, filters.industriaId));
 
   const rows = await db

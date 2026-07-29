@@ -3,23 +3,26 @@ import { z } from "zod";
 import * as db from "../db";
 import { TRPCError } from "@trpc/server";
 
+/** Administrador (conta central) tem visibilidade total; usuário comum, só o que lançou. */
+const isAdmin = (ctx: { user: { role?: string | null } }) => ctx.user.role === "admin";
+
 export const industriesRouter = router({
 list: protectedProcedure.query(async ({ ctx }) => {
-  return db.getIndustriesByUser(ctx.user.id);
+  return db.getIndustriesByUser(ctx.user.id, isAdmin(ctx));
 }),
 
 // Lista filtrada por tipo de entidade (fornecedor × comprador)
 listByType: protectedProcedure
   .input(z.object({ tipoEntidade: z.enum(["fornecedor", "comprador"]) }))
   .query(async ({ ctx, input }) => {
-    return db.getIndustriesByUserAndType(ctx.user.id, input.tipoEntidade);
+    return db.getIndustriesByUserAndType(ctx.user.id, input.tipoEntidade, isAdmin(ctx));
   }),
 
 // Conta entidades por tipo (para badges/headers)
 countByType: protectedProcedure
   .input(z.object({ tipoEntidade: z.enum(["fornecedor", "comprador"]) }))
   .query(async ({ ctx, input }) => {
-    return db.countIndustriesByType(ctx.user.id, input.tipoEntidade);
+    return db.countIndustriesByType(ctx.user.id, input.tipoEntidade, isAdmin(ctx));
   }),
 
 // Busca filtrada por tipo
@@ -35,7 +38,7 @@ searchByType: protectedProcedure
 get: protectedProcedure
   .input(z.object({ id: z.number() }))
   .query(async ({ ctx, input }) => {
-    const industry = await db.getIndustryById(input.id, ctx.user.id);
+    const industry = await db.getIndustryById(input.id, ctx.user.id, isAdmin(ctx));
     if (!industry) throw new TRPCError({ code: "NOT_FOUND" });
     return industry;
   }),
@@ -143,7 +146,7 @@ bySector: protectedProcedure
   }),
 
 stats: protectedProcedure.query(async ({ ctx }) => {
-  return db.getIndustryStats(ctx.user.id);
+  return db.getIndustryStats(ctx.user.id, isAdmin(ctx));
 }),
 
 // Contatos
@@ -208,7 +211,7 @@ products: router({
   list: protectedProcedure
     .input(z.object({ industryId: z.number() }))
     .query(async ({ ctx, input }) => {
-      return db.getProductsByIndustry(input.industryId, ctx.user.id);
+      return db.getProductsByIndustry(input.industryId, ctx.user.id, isAdmin(ctx));
     }),
 
   create: protectedProcedure

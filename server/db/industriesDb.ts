@@ -11,16 +11,20 @@ import { getDb } from "./connection";
 // INDUSTRIES - CRUD helpers
 // ============================================================
 
-export async function getIndustriesByUser(userId: number) {
+/** admin = conta central: enxerga os cadastros de qualquer usuário. */
+export async function getIndustriesByUser(userId: number, admin = false) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(industries).where(eq(industries.userId, userId)).orderBy(desc(industries.updatedAt));
+  return db.select().from(industries)
+    .where(admin ? undefined : eq(industries.userId, userId))
+    .orderBy(desc(industries.updatedAt));
 }
 
-export async function getIndustryById(id: number, userId: number) {
+export async function getIndustryById(id: number, userId: number, admin = false) {
   const db = await getDb();
   if (!db) return null;
-  const [industry] = await db.select().from(industries).where(and(eq(industries.id, id), eq(industries.userId, userId)));
+  const [industry] = await db.select().from(industries)
+    .where(and(eq(industries.id, id), admin ? undefined : eq(industries.userId, userId)));
   return industry || null;
 }
 
@@ -64,11 +68,11 @@ export async function getIndustriesBySector(userId: number, sector: string) {
   ).orderBy(desc(industries.overallRating));
 }
 
-export async function getIndustriesByUserAndType(userId: number, tipoEntidade: "fornecedor" | "comprador") {
+export async function getIndustriesByUserAndType(userId: number, tipoEntidade: "fornecedor" | "comprador", admin = false) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(industries).where(
-    and(eq(industries.userId, userId), eq(industries.tipoEntidade, tipoEntidade))
+    and(admin ? undefined : eq(industries.userId, userId), eq(industries.tipoEntidade, tipoEntidade))
   ).orderBy(desc(industries.updatedAt));
 }
 
@@ -84,11 +88,11 @@ export async function searchIndustriesByType(userId: number, tipoEntidade: "forn
   ).orderBy(desc(industries.overallRating));
 }
 
-export async function countIndustriesByType(userId: number, tipoEntidade: "fornecedor" | "comprador") {
+export async function countIndustriesByType(userId: number, tipoEntidade: "fornecedor" | "comprador", admin = false) {
   const db = await getDb();
   if (!db) return 0;
   const result = await db.select({ count: sql`COUNT(*)` }).from(industries).where(
-    and(eq(industries.userId, userId), eq(industries.tipoEntidade, tipoEntidade))
+    and(admin ? undefined : eq(industries.userId, userId), eq(industries.tipoEntidade, tipoEntidade))
   );
   return (result[0]?.count as number) || 0;
 }
@@ -128,11 +132,11 @@ export async function deleteIndustryContact(id: number) {
 // INDUSTRY PRODUCTS - CRUD helpers
 // ============================================================
 
-export async function getProductsByIndustry(industryId: number, userId: number) {
+export async function getProductsByIndustry(industryId: number, userId: number, admin = false) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(industryProducts).where(
-    and(eq(industryProducts.industryId, industryId), eq(industryProducts.userId, userId))
+    and(eq(industryProducts.industryId, industryId), admin ? undefined : eq(industryProducts.userId, userId))
   ).orderBy(desc(industryProducts.updatedAt));
 }
 
@@ -258,12 +262,14 @@ async function recalculateIndustryRating(industryId: number) {
 // INDUSTRY STATS
 // ============================================================
 
-export async function getIndustryStats(userId: number) {
+export async function getIndustryStats(userId: number, admin = false) {
   const db = await getDb();
   if (!db) return { total: 0, active: 0, prospect: 0, totalProducts: 0, avgRating: 0 };
-  
-  const allIndustries = await db.select().from(industries).where(eq(industries.userId, userId));
-  const allProducts = await db.select().from(industryProducts).where(eq(industryProducts.userId, userId));
+
+  const allIndustries = await db.select().from(industries)
+    .where(admin ? undefined : eq(industries.userId, userId));
+  const allProducts = await db.select().from(industryProducts)
+    .where(admin ? undefined : eq(industryProducts.userId, userId));
   
   const active = allIndustries.filter(i => i.status === "active").length;
   const prospect = allIndustries.filter(i => i.status === "prospect").length;

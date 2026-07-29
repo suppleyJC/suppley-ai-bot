@@ -15,6 +15,9 @@ import { startExtractionJob, getExtractionJob } from "../services/extractionJobS
  * do MySQL em "Failed query: <sql gigante>" — na tela isso trunca e esconde
  * o motivo (ex.: "Incorrect integer value: '24.5' for column 'moq'").
  */
+/** Administrador (conta central) tem visibilidade total; usuário comum, só o que lançou. */
+const isAdmin = (ctx: { user: { role?: string | null } }) => ctx.user.role === "admin";
+
 function causaRaiz(error: unknown): string {
   let atual: unknown = error;
   let msg = "desconhecido";
@@ -212,18 +215,18 @@ export const proformaRouter = router({
       }
     }),
 
-  // 4) Lista proformas
+  // 4) Lista proformas (usuário: as próprias; admin: as de todos, com donoNome)
   list: protectedProcedure
     .input(z.object({ status: z.string().optional(), industriaId: z.number().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      return proformaService.listProformas(ctx.user.id, input);
+      return proformaService.listProformas(ctx.user.id, input, isAdmin(ctx));
     }),
 
   // 5) Detalhe (proforma + itens)
   get: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
-      const detail = await proformaService.getProformaDetail(ctx.user.id, input.id);
+      const detail = await proformaService.getProformaDetail(ctx.user.id, input.id, isAdmin(ctx));
       if (!detail) throw new TRPCError({ code: "NOT_FOUND" });
       return detail;
     }),

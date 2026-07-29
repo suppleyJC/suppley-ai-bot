@@ -165,7 +165,8 @@ export default function Proformas() {
       if (filterStatus !== "all" && p.status !== filterStatus) return false;
       if (!q) return true;
       // numero já vem com prefixo "PF-"; o prefixo manual é só para o fallback pelo id.
-      const hay = [p.numero || `PF-${p.id}`, p.supplierName, p.supplierCountry, p.status]
+      // donoNome entra na busca para a conta central filtrar por quem lançou
+      const hay = [p.numero || `PF-${p.id}`, p.supplierName, p.supplierCountry, p.status, p.donoNome]
         .filter(Boolean).join(" ").toLowerCase();
       return hay.includes(q);
     });
@@ -875,6 +876,8 @@ export default function Proformas() {
                                 {p.supplierCountry && (
                                   <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{p.supplierCountry}</span>
                                 )}
+                                {/* visão de admin: identifica quem lançou a proforma */}
+                                {p.donoNome && <span className="text-violet-500">· {p.donoNome}</span>}
                               </div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">

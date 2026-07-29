@@ -510,6 +510,8 @@ export default function Products() {
         p.name, p.ncmCode, p.classe, classeEfetiva(p, classesReais), p.categoria, p.subcategoria,
         p.aplicacao, p.description, supplierName(p.supplierId),
         p.latestPrice?.supplierName, tags,
+        // conta central: permite buscar pelo usuário que cadastrou
+        p.donoNome,
       ].filter(Boolean).join(" ").toLowerCase();
       return haystack.includes(q);
     });
