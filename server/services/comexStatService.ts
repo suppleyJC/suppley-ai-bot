@@ -544,6 +544,21 @@ export function bodiesMercado(
   const detailId = detalhe === "uf" ? "state" : "country";
   const detailTexto = detalhe === "uf" ? "UF" : "País";
 
+  // Formato documentado (filters/details/metrics, NCM como número) — o ÚNICO
+  // que a sonda em scripts/smoke-comexstat.ts confirmou aplicar o filtro de
+  // NCM de fato contra a API real (12/2026). "portal" e "legado" abaixo
+  // devolvem consistentemente o agregado nacional, ignorando o filtro em
+  // silêncio (HTTP 200, sem erro) — por isso vêm depois, só como fallback
+  // caso a API mude de novo.
+  const documentado = {
+    flow: fluxo,
+    monthDetail: false,
+    period: { from, to },
+    filters: [{ filter: "ncm", values: ncms.map((n) => Number(n)) }],
+    details: [detailId],
+    metrics: ["metricFOB", "metricKG"],
+  };
+
   // Formato do portal atual (filterArray + flags de métrica booleanas).
   const portal = {
     flow: fluxo,
@@ -574,17 +589,7 @@ export function bodiesMercado(
     langDefault: "pt",
   };
 
-  // Formato enxuto (filters/details/metrics) — terceira variação conhecida.
-  const enxuto = {
-    flow: fluxo,
-    monthDetail: false,
-    period: { from, to },
-    filters: [{ filter: "ncm", values: ncms.map((n) => Number(n)) }],
-    details: [detalhe === "uf" ? "state" : "country"],
-    metrics: ["metricFOB", "metricKG"],
-  };
-
-  return [portal, legado, enxuto];
+  return [documentado, portal, legado];
 }
 
 /**

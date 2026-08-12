@@ -19,40 +19,42 @@ describe("bodiesMercado", () => {
   it("oferece as três variações conhecidas do schema, na ordem de preferência", () => {
     const corpos = bodiesMercado("import", NCMS, "2024-01", "2024-12", "pais");
     expect(corpos).toHaveLength(3);
-    // A primeira é a do portal atual — a que deve funcionar hoje.
-    expect(corpos[0]).toHaveProperty("filterArray");
-    expect(corpos[0]).toHaveProperty("metricFOB", true);
-    expect(corpos[0]).toHaveProperty("metricKG", true);
+    // A primeira é a "documentada" (filters/details/metrics) — a única que a
+    // sonda contra a API real confirmou aplicar o filtro de NCM (as demais
+    // devolvem o agregado nacional em silêncio, HTTP 200 sem erro).
+    expect(corpos[0]).toHaveProperty("filters");
+    expect(corpos[0]).toHaveProperty("details");
+    expect(corpos[0]).toHaveProperty("metrics", ["metricFOB", "metricKG"]);
   });
 
-  it("carrega TODAS as NCMs do recorte, como string de 8 dígitos", () => {
-    const [portal] = bodiesMercado("import", NCMS, "2024-01", "2024-12", "pais") as any[];
-    expect(portal.filterArray[0].idInput).toBe("ncm");
-    expect(portal.filterArray[0].item).toEqual(NCMS);
+  it("carrega TODAS as NCMs do recorte, como número (schema documentado espera número)", () => {
+    const [documentado] = bodiesMercado("import", NCMS, "2024-01", "2024-12", "pais") as any[];
+    expect(documentado.filters[0].filter).toBe("ncm");
     // Somar um mercado exige mandar a lista inteira numa consulta só.
-    expect(portal.filterArray[0].item).toHaveLength(2);
+    expect(documentado.filters[0].values).toEqual([73170010, 73170020]);
   });
 
   it("usa a dimensão de detalhe certa para país e para UF", () => {
     const [pais] = bodiesMercado("import", NCMS, "2024-01", "2024-12", "pais") as any[];
-    expect(pais.detailDatabase[0].id).toBe("country");
+    expect(pais.details).toEqual(["country"]);
 
     const [uf] = bodiesMercado("import", NCMS, "2024-01", "2024-12", "uf") as any[];
-    expect(uf.detailDatabase[0].id).toBe("state");
+    expect(uf.details).toEqual(["state"]);
   });
 
   it("propaga o período e o fluxo pedidos", () => {
-    const [portal] = bodiesMercado("export", NCMS, "2023-03", "2025-07", "pais") as any[];
-    expect(portal.flow).toBe("export");
-    expect(portal.period).toEqual({ from: "2023-03", to: "2025-07" });
+    const [documentado] = bodiesMercado("export", NCMS, "2023-03", "2025-07", "pais") as any[];
+    expect(documentado.flow).toBe("export");
+    expect(documentado.period).toEqual({ from: "2023-03", to: "2025-07" });
     // monthDetail desligado: o recorte é anual, não mensal.
-    expect(portal.monthDetail).toBe(false);
+    expect(documentado.monthDetail).toBe(false);
   });
 
-  it("a variação enxuta manda NCM numérica (schema alternativo espera número)", () => {
+  it("a variação de fallback 'portal' carrega as NCMs como string de 8 dígitos", () => {
     const corpos = bodiesMercado("import", NCMS, "2024-01", "2024-12", "uf") as any[];
-    const enxuto = corpos[2];
-    expect(enxuto.filters[0].values).toEqual([73170010, 73170020]);
-    expect(enxuto.details).toEqual(["state"]);
+    const portal = corpos[1];
+    expect(portal.filterArray[0].idInput).toBe("ncm");
+    expect(portal.filterArray[0].item).toEqual(NCMS);
+    expect(portal.detailDatabase[0].id).toBe("state");
   });
 });
