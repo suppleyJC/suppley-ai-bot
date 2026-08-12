@@ -56,8 +56,22 @@ export type Message = {
    * Quando um turno com thinking pede tools, a API exige que esses blocos sejam
    * devolvidos INTACTOS na mensagem do assistente do turno seguinte. Preencha
    * com o que veio em InvokeResult.choices[0].message.thinking_blocks.
+   *
+   * PREFIRA `raw_content`: remontar a mensagem a partir das partes reordena os
+   * blocos, e a API rejeita isso como "thinking blocks foram modificados".
    */
   thinking_blocks?: unknown[];
+  /**
+   * Conteúdo BRUTO da resposta do assistente, exatamente como a API devolveu.
+   *
+   * É o único jeito seguro de devolver um turno com raciocínio: os blocos são
+   * assinados e validados em CONJUNTO — ordem inclusive. Remontá-los por
+   * categoria (thinking → texto → tool_use) muda a ordem quando o modelo
+   * intercala raciocínio entre chamadas, e derruba a requisição com 400. Também
+   * preserva blocos que não modelamos (pesquisa web nativa: `server_tool_use` e
+   * `web_search_tool_result`), que a remontagem descartava.
+   */
+  raw_content?: unknown[];
 };
 
 export type Tool = {
@@ -158,6 +172,12 @@ export type InvokeResult = {
       tool_calls?: ToolCall[];
       /** Blocos de extended thinking CRUS (replay obrigatório no loop de tools). */
       thinking_blocks?: unknown[];
+      /**
+       * Conteúdo BRUTO da resposta, na ordem original. Repasse para
+       * Message.raw_content ao devolver o turno — é o que mantém a assinatura
+       * do raciocínio válida.
+       */
+      raw_content?: unknown[];
     };
     finish_reason: string | null;
   }>;
@@ -357,6 +377,15 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     }
 
     if (message.role === "assistant" && message.tool_calls && message.tool_calls.length > 0) {
+      // CAMINHO CORRETO: devolver o conteúdo do turno EXATAMENTE como veio.
+      // Os blocos de raciocínio são assinados e validados em conjunto (ordem
+      // inclusive); qualquer remontagem é lida como adulteração e a API responde
+      // 400. Só caímos na remontagem abaixo com histórico antigo, sem raw_content.
+      if (message.raw_content?.length) {
+        anthropicMessages.push({ role: "assistant", content: message.raw_content });
+        continue;
+      }
+
       const blocks: Array<Record<string, unknown>> = [];
       // REPLAY do extended thinking: blocos assinados do turno anterior devem
       // voltar PRIMEIRO e intactos, senão a API rejeita o tool loop com thinking.
@@ -592,6 +621,9 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
           content: textContent,
           ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
           ...(thinkingBlocks.length > 0 && { thinking_blocks: thinkingBlocks }),
+          ...(Array.isArray(result.content) && result.content.length > 0 && {
+            raw_content: result.content,
+          }),
         },
         finish_reason: result.stop_reason === "tool_use" ? "tool_calls" : result.stop_reason,
       },

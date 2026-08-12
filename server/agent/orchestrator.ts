@@ -457,13 +457,15 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
     }
 
     // Anexa a mensagem do assistente (que pediu tools) ao histórico.
-    // IMPORTANTE: precisa carregar os tool_calls (e os thinking_blocks, quando
-    // houver) para a Anthropic casar cada tool_result com seu tool_use.
+    // IMPORTANTE: precisa carregar os tool_calls para a Anthropic casar cada
+    // tool_result com seu tool_use, e o raw_content para devolver os blocos de
+    // raciocínio EXATAMENTE como vieram (remontá-los reordena e dá 400).
     conversation.push({
       role: "assistant",
       content: typeof choice?.content === "string" ? choice.content : "",
       tool_calls: toolCalls,
       thinking_blocks: choice?.thinking_blocks,
+      raw_content: choice?.raw_content,
     } as Message);
 
     // Executa cada tool pedida e devolve o resultado ao modelo
@@ -585,6 +587,7 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
       content: typeof choice?.content === "string" ? choice.content : "",
       tool_calls: toolCalls,
       thinking_blocks: choice?.thinking_blocks,
+      raw_content: choice?.raw_content,
     } as Message);
 
     // Executa cada tool e emite evento
