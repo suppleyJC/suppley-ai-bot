@@ -376,6 +376,12 @@ export interface MercadoDimensionado {
   baseComparacao: { de: number; para: number } | null;
   disponivel: boolean;
   fonte: string;
+  /**
+   * Anos pedidos que voltaram SEM nenhum dado. Explicitados (em vez de
+   * simplesmente ausentes de `anos`) para que a omissão seja visível a quem
+   * apresenta — um ano que some da tabela parece um ano que não foi pedido.
+   */
+  anosSemDado: number[];
   /** Preenchido quando a fonte oficial não respondeu — nunca inventar número. */
   erro?: string;
 }
@@ -635,7 +641,7 @@ export async function dimensionarMercadoComex(input: {
   const vazio: MercadoDimensionado = {
     ncms, fluxo, anos: [], variacaoFobPct: null, variacaoVolumePct: null,
     baseComparacao: null, disponivel: false,
-    fonte: "Comex Stat (MDIC/SECEX)",
+    fonte: "Comex Stat (MDIC/SECEX)", anosSemDado: [],
   };
 
   if (!ncms.length) return { ...vazio, erro: "nenhuma NCM de 8 dígitos informada" };
@@ -649,21 +655,33 @@ export async function dimensionarMercadoComex(input: {
     return { ...vazio, erro: "os anos pedidos ainda não têm meses consolidados na base" };
   }
 
-  // Um par de consultas por ano (país + UF), todas em paralelo.
-  const resultados = await Promise.all(
-    janelas.map(async ({ ano, janela }) => {
-      const [rowsPais, rowsUf] = await Promise.all([
-        queryMercado(fluxo, ncms, janela.from, janela.to, "pais"),
-        queryMercado(fluxo, ncms, janela.from, janela.to, "uf"),
-      ]);
-      return { ano, janela, rowsPais, rowsUf };
-    }),
-  );
+  // Consultas SERIALIZADAS: disparar os pares (país + UF) de vários anos em
+  // paralelo faz a fonte estrangular e devolver vazio — que aqui é
+  // indistinguível de "não há dado". O volume é pequeno (2 consultas por ano),
+  // então a serialização custa pouco e elimina uma classe inteira de falha.
+  const resultados: Array<{
+    ano: number;
+    janela: NonNullable<ReturnType<typeof janelaDoAno>>;
+    rowsPais: ComexRow[];
+    rowsUf: ComexRow[];
+  }> = [];
+  for (const { ano, janela } of janelas) {
+    const rowsPais = await queryMercado(fluxo, ncms, janela.from, janela.to, "pais");
+    const rowsUf = await queryMercado(fluxo, ncms, janela.from, janela.to, "uf");
+    resultados.push({ ano, janela, rowsPais, rowsUf });
+  }
 
+  // Um ano sem NENHUM dado é registrado, não descartado em silêncio: sumir da
+  // saída faz o leitor achar que o ano não foi pedido.
   const comDado = resultados.filter((r) => r.rowsPais.length > 0 || r.rowsUf.length > 0);
+  const anosSemDado = resultados
+    .filter((r) => r.rowsPais.length === 0 && r.rowsUf.length === 0)
+    .map((r) => r.ano);
+
   if (!comDado.length) {
     return {
       ...vazio,
+      anosSemDado,
       erro: "a fonte oficial não retornou dados para o recorte pedido",
     };
   }
@@ -708,5 +726,6 @@ export async function dimensionarMercadoComex(input: {
     baseComparacao,
     disponivel: true,
     fonte: "Comex Stat (MDIC/SECEX)",
+    anosSemDado,
   };
 }

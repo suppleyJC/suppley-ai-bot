@@ -82,6 +82,73 @@ async function detectarSchema(
   return { schema: null, bloqueado };
 }
 
+/**
+ * MODO SONDA (--probe): descobre empiricamente qual identificador de detalhe a
+ * API aceita para cada dimensão.
+ *
+ * Existe porque um id inválido NÃO dá erro: a API ignora o detalhamento e
+ * devolve a linha agregada. O sintoma é "1 linha" — parece sucesso e é falha.
+ * Só o número de linhas distingue os dois casos.
+ */
+async function sondarDetalhes(ncms: string[], from: string, to: string) {
+  const candidatos = [
+    { dim: "país", id: "country", text: "País" },
+    { dim: "país", id: "noPaispt", text: "Países" },
+    { dim: "país", id: "coPais", text: "Países" },
+    { dim: "país", id: "pais", text: "País" },
+    { dim: "UF", id: "state", text: "UF" },
+    { dim: "UF", id: "noUfpt", text: "UF" },
+    { dim: "UF", id: "uf", text: "UF" },
+  ];
+
+  console.log(`\nSONDA DE DETALHAMENTO (janela ${from}..${to})`);
+  console.log("Uma linha só = id ignorado (veio o agregado). Várias = id válido.\n");
+
+  for (const c of candidatos) {
+    const body = {
+      flow: "import",
+      monthDetail: false,
+      period: { from, to },
+      filterArray: [{ idInput: "ncm", item: ncms }],
+      filterList: [{ id: "ncm", text: "NCM", item: ncms }],
+      detailDatabase: [{ id: c.id, text: c.text }],
+      monthStartEnd: false,
+      metricFOB: true,
+      metricKG: true,
+      metricStatistic: false,
+      formQueue: "general",
+      langDefault: "pt",
+    };
+    try {
+      const resp = await fetch(URL_COMEX, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!resp.ok) {
+        console.log(`   [${c.dim}] ${c.id.padEnd(10)} HTTP ${resp.status}`);
+        continue;
+      }
+      const json: any = await resp.json();
+      const list = json?.data?.list ?? json?.list ?? json?.data ?? [];
+      const n = Array.isArray(list) ? list.length : 0;
+      const veredito = n > 1 ? "VÁLIDO" : n === 1 ? "ignorado (agregado)" : "vazio";
+      console.log(`   [${c.dim}] ${c.id.padEnd(10)} ${String(n).padStart(4)} linha(s)  ${veredito}`);
+      // Mostra as chaves da primeira linha: revela como a fonte nomeia os campos.
+      if (n > 0) {
+        console.log(`        campos: ${Object.keys(list[0]).join(", ")}`);
+      }
+    } catch (e: any) {
+      console.log(`   [${c.dim}] ${c.id.padEnd(10)} ${e?.name === "TimeoutError" ? "timeout" : String(e?.message ?? e)}`);
+    }
+    // Serializado de propósito: em paralelo a fonte estrangula e o resultado
+    // da sonda fica ambíguo (vazio por throttling parece id inválido).
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  console.log("");
+}
+
 async function main() {
   const { ncms: pedidas, anos } = parseArgs(process.argv.slice(2));
   console.log(`\nSMOKE COMEX STAT — NCMs pedidas: ${pedidas.join(", ")} | anos: ${anos.join(", ")}\n`);
@@ -127,6 +194,11 @@ async function main() {
   if (!janela) {
     console.error(`Ano ${anos[0]} ainda não tem meses consolidados na base.`);
     process.exit(1);
+  }
+
+  if (process.argv.includes("--probe")) {
+    await sondarDetalhes(ncms, janela.from, janela.to);
+    return;
   }
   console.log(`\n2) Detectando o schema aceito (janela ${janela.from}..${janela.to})...`);
   const { schema, bloqueado } = await detectarSchema(ncms, janela.from, janela.to);
