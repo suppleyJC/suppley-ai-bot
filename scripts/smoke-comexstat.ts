@@ -52,7 +52,9 @@ async function detectarSchema(
   to: string,
 ): Promise<{ schema: number | null; bloqueado: boolean }> {
   const corpos = bodiesMercado("import", ncms, from, to, "pais");
-  const rotulos = ["portal (filterArray + flags)", "legado (filterList + metricList)", "enxuto (filters/details)"];
+  // Ordem tem que acompanhar bodiesMercado(): documentado primeiro (o que a
+  // sonda confirmou funcionar), portal e legado depois como fallback.
+  const rotulos = ["documentado (filters/details/metrics)", "portal (filterArray + flags)", "legado (filterList + metricList)"];
   let bloqueado = false;
 
   for (let i = 0; i < corpos.length; i++) {
