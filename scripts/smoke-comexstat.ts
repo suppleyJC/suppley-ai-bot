@@ -20,6 +20,12 @@
  * NOTA: a expansão de SH4/SH6 usa o banco (tabela de NCMs). Sem banco, informe
  * NCMs de 8 dígitos direto.
  */
+// Carrega o .env ANTES de qualquer import que leia process.env. Só o entrypoint
+// da aplicação (server/_core/index.ts) faz isso; rodando o script solto, sem
+// esta linha o DATABASE_URL vem vazio e a expansão de NCM falha por "banco
+// indisponível" — diagnóstico enganoso, já que o banco está no ar.
+import "dotenv/config";
+
 import {
   bodiesMercado,
   dimensionarMercadoComex,
@@ -91,13 +97,28 @@ async function main() {
       console.log(`   ${prefixos.join(", ")} -> ${ncms.length} NCM(s) de 8 dígitos`);
       if (r.naoEncontrados.length) console.log(`   sem correspondência: ${r.naoEncontrados.join(", ")}`);
     } catch (e: any) {
-      console.error(`   FALHOU (banco indisponível?): ${e?.message ?? e}`);
-      console.error("   Rode com NCMs de 8 dígitos para testar só a rede.");
+      console.error(`   FALHOU ao consultar a base de NCMs: ${e?.message ?? e}`);
+      if (!process.env.DATABASE_URL) {
+        console.error("   DATABASE_URL não está definida — rode a partir da raiz do projeto");
+        console.error("   (onde está o .env) ou exporte a variável.");
+      }
+      console.error("   Para testar só a rede, passe NCMs de 8 dígitos.");
       process.exit(1);
     }
   }
   if (!ncms.length) {
-    console.error("Nenhuma NCM de 8 dígitos para consultar.");
+    console.error("\nFALHOU: nenhuma NCM de 8 dígitos para consultar.");
+    if (!process.env.DATABASE_URL) {
+      // Causa mais provável, e a que o diagnóstico anterior escondia: sem banco
+      // a expansão volta vazia em silêncio, parecendo NCM inexistente.
+      console.error("DATABASE_URL não está definida — a expansão de SH4/SH6 consulta a");
+      console.error("tabela de NCMs. Rode a partir da raiz do projeto (onde está o .env),");
+      console.error("ou passe NCMs de 8 dígitos para testar só a rede:");
+      console.error("  pnpm tsx scripts/smoke-comexstat.ts 73170010 --anos 2024");
+    } else {
+      console.error(`Os códigos ${prefixos.join(", ")} não têm correspondência na tabela de NCMs.`);
+      console.error("Confira se a base de classificação foi importada (Siscomex).");
+    }
     process.exit(1);
   }
 
