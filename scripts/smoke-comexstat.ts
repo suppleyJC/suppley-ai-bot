@@ -119,32 +119,47 @@ async function sondarDetalhes(ncms: string[], from: string, to: string) {
       formQueue: "general",
       langDefault: "pt",
     };
-    try {
-      const resp = await fetch(URL_COMEX, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!resp.ok) {
-        console.log(`   [${c.dim}] ${c.id.padEnd(10)} HTTP ${resp.status}`);
-        continue;
+    // Até 4 tentativas por candidato: um 429 aqui não é veredito, é ruído.
+    let veredito = "";
+    for (let t = 0; t < 4; t++) {
+      try {
+        const resp = await fetch(URL_COMEX, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (resp.status === 429) {
+          const ra = Number(resp.headers.get("retry-after"));
+          const ms = Number.isFinite(ra) && ra > 0 ? ra * 1000 : 5000 * (t + 1);
+          console.log(`   [${c.dim}] ${c.id.padEnd(10)} 429 — aguardando ${Math.round(ms / 1000)}s...`);
+          await new Promise((r) => setTimeout(r, Math.min(ms, 20_000)));
+          continue;
+        }
+        if (!resp.ok) { veredito = `HTTP ${resp.status}`; break; }
+
+        const json: any = await resp.json();
+        const list = json?.data?.list ?? json?.list ?? json?.data ?? [];
+        const n = Array.isArray(list) ? list.length : 0;
+        veredito =
+          `${String(n).padStart(4)} linha(s)  ` +
+          (n > 1 ? "VÁLIDO" : n === 1 ? "agregado (detalhe ignorado ou throttling)" : "vazio");
+        if (n > 0) {
+          // A primeira linha INTEIRA: os nomes E os valores mostram se o
+          // detalhamento veio e como a fonte nomeia as colunas de métrica.
+          veredito += `\n        primeira linha: ${JSON.stringify(list[0])}`;
+        }
+        break;
+      } catch (e: any) {
+        veredito = e?.name === "TimeoutError" ? "timeout" : String(e?.message ?? e);
+        break;
       }
-      const json: any = await resp.json();
-      const list = json?.data?.list ?? json?.list ?? json?.data ?? [];
-      const n = Array.isArray(list) ? list.length : 0;
-      const veredito = n > 1 ? "VÁLIDO" : n === 1 ? "ignorado (agregado)" : "vazio";
-      console.log(`   [${c.dim}] ${c.id.padEnd(10)} ${String(n).padStart(4)} linha(s)  ${veredito}`);
-      // Mostra as chaves da primeira linha: revela como a fonte nomeia os campos.
-      if (n > 0) {
-        console.log(`        campos: ${Object.keys(list[0]).join(", ")}`);
-      }
-    } catch (e: any) {
-      console.log(`   [${c.dim}] ${c.id.padEnd(10)} ${e?.name === "TimeoutError" ? "timeout" : String(e?.message ?? e)}`);
     }
-    // Serializado de propósito: em paralelo a fonte estrangula e o resultado
-    // da sonda fica ambíguo (vazio por throttling parece id inválido).
-    await new Promise((r) => setTimeout(r, 400));
+    console.log(`   [${c.dim}] ${c.id.padEnd(10)} ${veredito || "sem resposta após 4 tentativas"}`);
+
+    // Espaçamento largo: a fonte estrangula com facilidade, e um 429 tratado
+    // como resposta transforma a sonda em gerador de conclusão errada.
+    await new Promise((r) => setTimeout(r, 6000));
   }
   console.log("");
 }

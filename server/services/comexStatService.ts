@@ -145,17 +145,43 @@ export function agregarComex(
 /** Teto de espera por chamada: o chat não pode ficar pendurado numa fonte lenta. */
 const TIMEOUT_MS = 20_000;
 
+const RETRIES_429 = 3;
+const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * POST no Comex Stat com tratamento de LIMITE DE TAXA.
+ *
+ * A fonte estrangula sob concorrência e responde 429. Pior: quando estrangulada
+ * ela às vezes não devolve erro, e sim a linha AGREGADA (sem o detalhamento
+ * pedido) — o que parece uma resposta válida e faz o corte por país/UF sumir
+ * silenciosamente. Por isso o 429 é tratado com espera e nova tentativa, em vez
+ * de virar lista vazia.
+ */
 async function postComex(body: unknown): Promise<ComexRow[]> {
-  const resp = await fetch(COMEXSTAT_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  if (!resp.ok) return [];
-  const json: any = await resp.json();
-  const list = json?.data?.list ?? json?.list ?? json?.data ?? [];
-  return Array.isArray(list) ? (list as ComexRow[]) : [];
+  for (let tentativa = 0; tentativa <= RETRIES_429; tentativa++) {
+    const resp = await fetch(COMEXSTAT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+
+    if (resp.status === 429 && tentativa < RETRIES_429) {
+      // Respeita o Retry-After quando vier; senão, recuo exponencial.
+      const retryAfter = Number(resp.headers.get("retry-after"));
+      const espera_ms = Number.isFinite(retryAfter) && retryAfter > 0
+        ? retryAfter * 1000
+        : 2000 * Math.pow(2, tentativa);
+      await espera(Math.min(espera_ms, 15_000));
+      continue;
+    }
+
+    if (!resp.ok) return [];
+    const json: any = await resp.json();
+    const list = json?.data?.list ?? json?.list ?? json?.data ?? [];
+    return Array.isArray(list) ? (list as ComexRow[]) : [];
+  }
+  return [];
 }
 
 /**
@@ -561,6 +587,24 @@ export function bodiesMercado(
   return [portal, legado, enxuto];
 }
 
+/**
+ * A resposta traz DE FATO a coluna de detalhamento pedida?
+ *
+ * Sob throttling a fonte devolve a linha agregada (só `year` e as métricas) em
+ * vez de erro. Aceitar isso como resposta válida é o que fazia o corte por país
+ * sumir sem nenhum sinal. Uma linha sem a chave da dimensão é resposta
+ * degradada, não resultado.
+ */
+function temDetalhe(rows: ComexRow[], detalhe: DetalheMercado): boolean {
+  if (!rows.length) return false;
+  const chaves = Object.keys(rows[0]).map((k) => k.toLowerCase());
+  const esperadas =
+    detalhe === "uf"
+      ? ["state", "nouf", "uf", "sguf"]
+      : ["country", "nopais", "pais", "copais"];
+  return chaves.some((k) => esperadas.some((e) => k.includes(e)));
+}
+
 /** Consulta um recorte tentando os formatos conhecidos; falha graciosa. */
 async function queryMercado(
   fluxo: Fluxo,
@@ -570,11 +614,20 @@ async function queryMercado(
   detalhe: DetalheMercado,
 ): Promise<ComexRow[]> {
   for (const body of bodiesMercado(fluxo, ncms, from, to, detalhe)) {
-    try {
-      const rows = await postComex(body);
-      if (rows.length) return rows;
-    } catch {
-      /* tenta o próximo formato */
+    for (let tentativa = 0; tentativa < 2; tentativa++) {
+      try {
+        const rows = await postComex(body);
+        if (temDetalhe(rows, detalhe)) return rows;
+        // Veio agregado: quase sempre throttling. Respira e tenta de novo o
+        // MESMO formato antes de concluir que este schema não serve.
+        if (rows.length && tentativa === 0) {
+          await espera(3000);
+          continue;
+        }
+      } catch {
+        /* cai para o próximo formato */
+      }
+      break;
     }
   }
   return [];
