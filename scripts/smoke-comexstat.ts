@@ -90,75 +90,123 @@ async function detectarSchema(
  * devolve a linha agregada. O sintoma é "1 linha" — parece sucesso e é falha.
  * Só o número de linhas distingue os dois casos.
  */
-async function sondarDetalhes(ncms: string[], from: string, to: string) {
-  const candidatos = [
-    { dim: "país", id: "country", text: "País" },
-    { dim: "país", id: "noPaispt", text: "Países" },
-    { dim: "país", id: "coPais", text: "Países" },
-    { dim: "país", id: "pais", text: "País" },
-    { dim: "UF", id: "state", text: "UF" },
-    { dim: "UF", id: "noUfpt", text: "UF" },
-    { dim: "UF", id: "uf", text: "UF" },
+/**
+ * MODO SONDA (--probe): descobre qual FORMATO DE CORPO a API realmente lê.
+ *
+ * A sonda anterior testava ids de detalhamento e concluiu "todos ignorados".
+ * A pista estava no valor: US$ 262 bilhões é o total importado pelo Brasil no
+ * ano — ou seja, o FILTRO DE NCM também estava sendo descartado. Não era o id:
+ * era o formato do corpo inteiro sendo ignorado, com a API respondendo 200 e
+ * devolvendo o agregado nacional.
+ *
+ * Por isso a sonda agora varia o CORPO e usa dois critérios de veredito:
+ *   - o filtro pegou? (o FOB precisa ser MUITO menor que o total nacional)
+ *   - o detalhamento veio? (a linha precisa ter a coluna da dimensão)
+ */
+const TOTAL_BR_2024 = 262_869_606_174; // referência observada: Brasil inteiro
+
+function corposCandidatos(ncms: string[], from: string, to: string) {
+  const numericas = ncms.map((n) => Number(n));
+  return [
+    {
+      nome: "documentado (filters/details/metrics)",
+      body: {
+        flow: "import",
+        monthDetail: false,
+        period: { from, to },
+        filters: [{ filter: "ncm", values: numericas }],
+        details: ["country"],
+        metrics: ["metricFOB", "metricKG"],
+      },
+    },
+    {
+      nome: "documentado + ncm como string",
+      body: {
+        flow: "import",
+        monthDetail: false,
+        period: { from, to },
+        filters: [{ filter: "ncm", values: ncms }],
+        details: ["country"],
+        metrics: ["metricFOB", "metricKG"],
+      },
+    },
+    {
+      nome: "portal (filterArray/detailDatabase)",
+      body: {
+        flow: "import",
+        monthDetail: false,
+        period: { from, to },
+        filterArray: [{ idInput: "ncm", item: ncms }],
+        detailDatabase: [{ id: "country", text: "País" }],
+        metricFOB: true,
+        metricKG: true,
+        langDefault: "pt",
+      },
+    },
+    {
+      nome: "legado (filterList/metricList)",
+      body: {
+        flow: "import",
+        monthDetail: false,
+        period: { from, to },
+        filterList: [{ id: "ncm", text: "NCM", item: ncms }],
+        detailDatabase: [{ id: "country", text: "País" }],
+        metricList: ["metricFOB", "metricKG"],
+        langDefault: "pt",
+      },
+    },
   ];
+}
 
-  console.log(`\nSONDA DE DETALHAMENTO (janela ${from}..${to})`);
-  console.log("Uma linha só = id ignorado (veio o agregado). Várias = id válido.\n");
+async function sondarDetalhes(ncms: string[], from: string, to: string) {
+  console.log(`\nSONDA DE FORMATO DE CORPO (janela ${from}..${to})`);
+  console.log(`Referência: o Brasil inteiro importou ~US$ ${(TOTAL_BR_2024 / 1e9).toFixed(0)} bi em 2024.`);
+  console.log("FOB perto disso = filtro de NCM IGNORADO. Muito menor = filtro aplicado.\n");
 
-  for (const c of candidatos) {
-    const body = {
-      flow: "import",
-      monthDetail: false,
-      period: { from, to },
-      filterArray: [{ idInput: "ncm", item: ncms }],
-      filterList: [{ id: "ncm", text: "NCM", item: ncms }],
-      detailDatabase: [{ id: c.id, text: c.text }],
-      monthStartEnd: false,
-      metricFOB: true,
-      metricKG: true,
-      metricStatistic: false,
-      formQueue: "general",
-      langDefault: "pt",
-    };
-    // Até 4 tentativas por candidato: um 429 aqui não é veredito, é ruído.
-    let veredito = "";
+  for (const c of corposCandidatos(ncms, from, to)) {
+    let saida = "";
     for (let t = 0; t < 4; t++) {
       try {
         const resp = await fetch(URL_COMEX, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify(c.body),
           signal: AbortSignal.timeout(30_000),
         });
         if (resp.status === 429) {
           const ra = Number(resp.headers.get("retry-after"));
           const ms = Number.isFinite(ra) && ra > 0 ? ra * 1000 : 5000 * (t + 1);
-          console.log(`   [${c.dim}] ${c.id.padEnd(10)} 429 — aguardando ${Math.round(ms / 1000)}s...`);
+          console.log(`   ${c.nome}: 429 — aguardando ${Math.round(ms / 1000)}s...`);
           await new Promise((r) => setTimeout(r, Math.min(ms, 20_000)));
           continue;
         }
-        if (!resp.ok) { veredito = `HTTP ${resp.status}`; break; }
+        if (!resp.ok) {
+          // O corpo do erro costuma dizer QUAL campo a API esperava.
+          const txt = (await resp.text()).slice(0, 300);
+          saida = `HTTP ${resp.status} — ${txt}`;
+          break;
+        }
 
         const json: any = await resp.json();
         const list = json?.data?.list ?? json?.list ?? json?.data ?? [];
         const n = Array.isArray(list) ? list.length : 0;
-        veredito =
-          `${String(n).padStart(4)} linha(s)  ` +
-          (n > 1 ? "VÁLIDO" : n === 1 ? "agregado (detalhe ignorado ou throttling)" : "vazio");
-        if (n > 0) {
-          // A primeira linha INTEIRA: os nomes E os valores mostram se o
-          // detalhamento veio e como a fonte nomeia as colunas de métrica.
-          veredito += `\n        primeira linha: ${JSON.stringify(list[0])}`;
-        }
+        if (!n) { saida = "vazio"; break; }
+
+        const fob = Number(String(list[0]?.metricFOB ?? 0).replace(/[^0-9.]/g, ""));
+        const filtrou = fob > 0 && fob < TOTAL_BR_2024 * 0.05;
+        const detalhou = n > 1 || Object.keys(list[0]).some((k) => /pais|country/i.test(k));
+
+        saida =
+          `${n} linha(s) | filtro ${filtrou ? "APLICADO" : "IGNORADO"} | ` +
+          `detalhe ${detalhou ? "VEIO" : "ausente"}` +
+          `\n        primeira linha: ${JSON.stringify(list[0])}`;
         break;
       } catch (e: any) {
-        veredito = e?.name === "TimeoutError" ? "timeout" : String(e?.message ?? e);
+        saida = e?.name === "TimeoutError" ? "timeout" : String(e?.message ?? e);
         break;
       }
     }
-    console.log(`   [${c.dim}] ${c.id.padEnd(10)} ${veredito || "sem resposta após 4 tentativas"}`);
-
-    // Espaçamento largo: a fonte estrangula com facilidade, e um 429 tratado
-    // como resposta transforma a sonda em gerador de conclusão errada.
+    console.log(`   ${c.nome}: ${saida || "sem resposta"}`);
     await new Promise((r) => setTimeout(r, 6000));
   }
   console.log("");
