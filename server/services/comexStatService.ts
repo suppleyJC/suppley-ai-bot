@@ -494,8 +494,15 @@ export function agregarMercadoAno(input: {
   };
 }
 
-/** Corpos de request para um recorte livre (N NCMs, período, dimensão). */
-function bodiesMercado(
+/**
+ * Corpos de request para um recorte livre (N NCMs, período, dimensão).
+ *
+ * Exportado para teste: a camada de rede não é exercitável no sandbox, então o
+ * que trava o contrato com a fonte é a FORMA do payload — NCMs como strings de
+ * 8 dígitos, período YYYY-MM, dimensão de detalhe correta e as três variações
+ * conhecidas do schema em ordem de preferência.
+ */
+export function bodiesMercado(
   fluxo: Fluxo,
   ncms: string[],
   from: string,
