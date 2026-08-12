@@ -63,9 +63,15 @@ export async function buildAttachmentBlock(att: AttachmentRef): Promise<MessageC
     const buffer = Buffer.from(await resp.arrayBuffer());
 
     // Planilhas: converte para texto/Markdown antes de enviar ao LLM.
+    // O truncamento é o MESMO dos demais formatos: o limite por aba
+    // (1500 linhas) não impede uma pasta com muitas abas de estourar a janela
+    // do modelo — e estouro de contexto derruba a requisição inteira.
     if (isSpreadsheet(att.mimeType, att.name)) {
       const tabela = await spreadsheetBufferToText(buffer, { name: att.name, mimeType: att.mimeType });
-      return { type: "text", text: `Conteúdo da planilha anexada (${att.name}):\n\n${tabela}` };
+      return {
+        type: "text",
+        text: `Conteúdo da planilha anexada (${att.name}):\n\n${truncateForContext(tabela, att.name)}`,
+      };
     }
 
     // Word (.docx): extrai o texto com mammoth.
