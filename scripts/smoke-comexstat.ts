@@ -298,6 +298,15 @@ async function main() {
   }
 
   let problemas = 0;
+
+  // Ano sem NENHUM dado (país e UF vazios) some do array `anos` por design —
+  // mas isso não pode passar em silêncio aqui, senão o gate de deploy aprova
+  // uma consulta que perdeu um ano inteiro sem avisar ninguém.
+  if (dados.anosSemDado.length) {
+    console.error(`\n   ERRO: sem NENHUM dado para o(s) ano(s) ${dados.anosSemDado.join(", ")}.`);
+    problemas += dados.anosSemDado.length;
+  }
+
   for (const a of dados.anos) {
     const marca = a.parcial ? `PARCIAL (${a.mesesCobertos}m)` : "cheio";
     console.log(
