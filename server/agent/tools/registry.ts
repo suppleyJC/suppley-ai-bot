@@ -28,6 +28,7 @@ import { consultarOperacaoTool } from "./consultarOperacao";
 import { buscarDocumentoOperacaoTool } from "./buscarDocumentoOperacao";
 import { analiseMercadoTool } from "./analiseMercado";
 import { estatisticasComexTool } from "./estatisticasComex";
+import { dimensionarMercadoTool } from "./dimensionarMercado";
 import { mapearMercadoGlobalTool } from "./mapearMercadoGlobal";
 import { preverPrecosTool } from "./preverPrecos";
 import { calcularCustoLogisticoTool } from "./calcularCustoLogistico";
@@ -73,6 +74,9 @@ export const BASE_TOOLS: AgentTool[] = [
   analiseMercadoTool,
   // Estatísticas oficiais de comércio exterior por NCM (Comex Stat / MDIC-SECEX)
   estatisticasComexTool,
+  // Dimensionamento de mercado — consulta parametrizada do Comex Stat:
+  // total por ano, por país de origem, por UF de desembaraço e preço por tonelada
+  dimensionarMercadoTool,
   // Mapa do mercado global de suprimento — líderes, emergentes e preço por país
   mapearMercadoGlobalTool,
   // Motor preditivo — projeção de câmbio e preço do NCM com banda de confiança

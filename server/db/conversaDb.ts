@@ -82,6 +82,30 @@ export async function getConversa(id: number, userId: number, admin = false) {
   return { ...conv, mensagens };
 }
 
+/**
+ * Checagem de POSSE — barata e sem efeito colateral.
+ *
+ * Usada em caminhos que recebem o conversaId pelo corpo da requisição (o stream
+ * do chat) e precisam confirmar a titularidade ANTES de gravar. Diferente de
+ * getConversa, não lança e não carrega as mensagens: só responde se a conversa
+ * é daquele usuário.
+ */
+export async function conversaPertenceAoUsuario(
+  conversaId: number,
+  userId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível");
+
+  const [conv] = await db
+    .select({ id: conversas.id })
+    .from(conversas)
+    .where(and(eq(conversas.id, conversaId), eq(conversas.userId, userId)))
+    .limit(1);
+
+  return !!conv;
+}
+
 export async function createConversa(
   userId: number,
   input: { titulo?: string; operacaoId?: number; estagio?: EstagioConversa }

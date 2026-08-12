@@ -106,22 +106,35 @@ export type InvokeParams = {
   /** Limite de buscas por chamada (default 5). */
   webSearchMaxUses?: number;
   /**
-   * EXTENDED THINKING (cadeia de pensamento nativa da Anthropic): o modelo
-   * raciocina em blocos internos antes de responder — qualidade muito superior
-   * em análises complexas (viabilidade multi-cenário, correlação de mercado,
-   * planejamento fiscal). O budget é o teto de tokens de raciocínio.
-   * Restrições da API: incompatível com tool_choice FORÇADO (use "auto") e o
-   * max_tokens deve ser MAIOR que o budget. Com tools, os blocos de thinking
-   * retornados devem ser replayados intactos (ver Message.thinking_blocks).
+   * RACIOCÍNIO PROFUNDO (adaptive thinking da Anthropic): o modelo raciocina em
+   * blocos internos antes de responder — qualidade muito superior em análises
+   * complexas (viabilidade multi-cenário, correlação de mercado, dimensionamento
+   * de mercado, planejamento fiscal).
+   *
+   * O modelo decide SOZINHO quanto pensar; a profundidade é modulada por
+   * `effort`, não por teto de tokens. O parâmetro antigo `budget_tokens` foi
+   * REMOVIDO da API e devolve 400 nos modelos atuais — era isso que fazia toda
+   * análise complexa cair no retry sem raciocínio, gastando uma chamada extra e
+   * entregando resposta mais rasa.
+   *
+   * Restrições: incompatível com tool_choice FORÇADO (use "auto"). Com tools, os
+   * blocos de thinking retornados devem ser replayados intactos (ver
+   * Message.thinking_blocks).
    */
-  thinking?: { budgetTokens: number };
+  thinking?: boolean;
+  /**
+   * Profundidade do raciocínio e do gasto de tokens.
+   * "xhigh" é o ponto certo para trabalho analítico e agêntico pesado;
+   * "high" é o default da API; "low"/"medium" para tarefas rotineiras.
+   */
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
 };
 
 /** IDs de modelo disponíveis para roteamento por complexidade. */
 export const MODELS = {
-  fast: "claude-haiku-4-5-20251001", // tarefas determinísticas/simples (NCM, classificações)
-  balanced: "claude-sonnet-4-6", // análise de complexidade média
-  smart: "claude-opus-4-8", // raciocínio estratégico (orquestrador)
+  fast: "claude-haiku-4-5", // tarefas determinísticas/simples (NCM, classificações)
+  balanced: "claude-sonnet-5", // análise de complexidade média
+  smart: "claude-opus-5", // raciocínio estratégico (orquestrador)
 } as const;
 
 export type ToolCall = {
@@ -299,6 +312,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     webSearch,
     webSearchMaxUses,
     thinking,
+    effort,
   } = params;
 
   // A Anthropic não tem "response_format: json_schema" como a OpenAI. Para obter
@@ -387,19 +401,27 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   // Preparar payload para Anthropic
   const requestedMax = max_tokens || maxTokens || 4096;
+  const modeloAtual = model || MODELS.smart;
   const payload: Record<string, unknown> = {
-    model: model || MODELS.smart,
+    model: modeloAtual,
     max_tokens: requestedMax,
     messages: anthropicMessages,
   };
 
-  // Extended thinking: exige max_tokens > budget e tool_choice não-forçado.
-  // Com schema estruturado (tool forçada), thinking é silenciosamente ignorado.
+  // RACIOCÍNIO PROFUNDO (adaptive): o modelo decide quanto pensar; `effort` dá a
+  // profundidade. Com schema estruturado (tool forçada), thinking é ignorado
+  // pela API — não enviamos, para não desperdiçar a chamada.
   const thinkingEnabled = !!thinking && !structuredSchema;
   if (thinkingEnabled) {
-    const budget = Math.max(1024, thinking!.budgetTokens);
-    payload.thinking = { type: "enabled", budget_tokens: budget };
-    if (requestedMax <= budget) payload.max_tokens = budget + 8000;
+    payload.thinking = { type: "adaptive" };
+    // Teto de saída generoso: com raciocínio ligado o max_tokens cobre
+    // pensamento + resposta, então um teto apertado trunca a análise no meio.
+    if (requestedMax < 16_000) payload.max_tokens = 16_000;
+  }
+
+  // Profundidade/gasto — vale com ou sem raciocínio explícito.
+  if (effort) {
+    payload.output_config = { ...(payload.output_config as object ?? {}), effort };
   }
 
   if (systemPrompt) {
@@ -455,7 +477,16 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     const existing = (payload.tools as Array<Record<string, unknown>> | undefined) ?? [];
     payload.tools = [
       ...existing,
-      { type: "web_search_20250305", name: "web_search", max_uses: webSearchMaxUses ?? 5 },
+      // Filtragem dinâmica (web_search_20260209): o modelo filtra os resultados
+      // ANTES de entrarem no contexto — pesquisa mais precisa e menos ruído.
+      // Só existe nos modelos de fronteira; o Haiku fica na variante básica.
+      {
+        type: modeloAtual.startsWith("claude-haiku")
+          ? "web_search_20250305"
+          : "web_search_20260209",
+        name: "web_search",
+        max_uses: webSearchMaxUses ?? 5,
+      },
     ];
     // Garante que o modelo PODE escolher pesquisar (nunca força).
     if (!payload.tool_choice) payload.tool_choice = { type: "auto" };

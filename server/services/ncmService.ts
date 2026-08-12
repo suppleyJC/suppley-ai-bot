@@ -349,6 +349,65 @@ export async function searchNCMs(query: string, limit: number = 20): Promise<any
   }
 }
 
+// ============================================================
+// EXPANSÃO DE PREFIXO — SH4/SH6 → todas as NCMs de 8 dígitos
+// ============================================================
+
+/**
+ * Expande códigos parciais (capítulo, posição SH4 ou subposição SH6) para as
+ * NCMs de 8 dígitos que existem sob eles.
+ *
+ * Por que isso importa: o Comex Stat só aceita filtro por NCM de 8 dígitos. Um
+ * mercado real ("pregos", "arames") não vive numa NCM só — vive numa POSIÇÃO
+ * inteira. Sem expandir, uma consulta por "7317" volta vazia e o dimensionamento
+ * do mercado fica impossível.
+ *
+ * Códigos já com 8 dígitos passam direto. Se a base local não tiver a posição
+ * cadastrada, devolvemos o que veio (o chamador trata) em vez de silenciar.
+ */
+export async function expandNcmPrefixes(
+  codes: string[],
+): Promise<{ ncms: string[]; naoEncontrados: string[] }> {
+  const limpos = Array.from(
+    new Set(codes.map((c) => String(c ?? "").replace(/\D/g, "")).filter(Boolean)),
+  );
+  const completos = new Set<string>();
+  const prefixos: string[] = [];
+  const naoEncontrados: string[] = [];
+
+  for (const c of limpos) {
+    if (c.length === 8) completos.add(c);
+    else if (c.length >= 2) prefixos.push(c);
+  }
+
+  if (prefixos.length) {
+    const db = await getDb();
+    if (db) {
+      for (const p of prefixos) {
+        try {
+          const linhas = await db
+            .select({ ncmCode: ncmTaxRates.ncmCode })
+            .from(ncmTaxRates)
+            .where(like(ncmTaxRates.ncmCode, `${p}%`))
+            .limit(500);
+          const oito = linhas
+            .map((l) => String(l.ncmCode).replace(/\D/g, ""))
+            .filter((n) => n.length === 8);
+          if (oito.length) oito.forEach((n) => completos.add(n));
+          else naoEncontrados.push(p);
+        } catch (error) {
+          console.error(`[NCM] Erro ao expandir prefixo ${p}:`, error);
+          naoEncontrados.push(p);
+        }
+      }
+    } else {
+      naoEncontrados.push(...prefixos);
+    }
+  }
+
+  return { ncms: Array.from(completos).sort(), naoEncontrados };
+}
+
 /**
  * Obtém NCM por código (com cache de 1h)
  */
@@ -431,18 +490,39 @@ IMPORTANTE: cruze o nome com a descrição do documento — material, dimensões
 NCMs DISPONÍVEIS NO SISTEMA:
 ${ncmContext || "Nenhum NCM similar encontrado no banco de dados."}
 
+MÉTODO DE CLASSIFICAÇÃO (siga nesta ordem — RGI 1 a 6):
+1. FORMA E MATÉRIA decidem o capítulo, antes de qualquer uso comercial. Percorra a hierarquia
+   capítulo → posição (4 díg.) → subposição (6 díg.) → item (8 díg.) e só desça quando o nível
+   acima estiver certo. Um erro de capítulo é o erro mais caro que existe aqui.
+2. Armadilhas frequentes no capítulo 73 (obras de ferro/aço), onde a forma mais confunde:
+   - FIO / ARAME de ferro ou aço não ligado (inclusive zincado, galvanizado ou recozido) = 7217;
+     de aço inoxidável = 7223. NÃO é 7308.
+   - PREGOS, tachas, percevejos, grampos = 7317.
+   - ARAME FARPADO e arame torcido para cercas = 7313.
+   - 7308 é ESTRUTURA de construção (pontes, torres, pilares, andaimes) — não é fio nem prego.
+     ANDAIMES, escoramentos e formas = 7308.40.00 (não 7308.90.00).
+   - FIO-MÁQUINA (laminado a quente, matéria-prima do arame) = 7213, capítulo diferente do arame acabado.
+3. Prefira SEMPRE um código da lista acima quando ele descrever corretamente o produto. Só proponha
+   um código fora da lista se a lista não contiver a posição correta — e nesse caso o código precisa
+   existir de fato na NCM vigente. Nunca invente dígitos para completar 8 posições.
+4. A confiança deve refletir a evidência: acima de 85 só quando material, forma e uso estiverem
+   determinados. Se o nome for genérico e não houver descrição, fique abaixo de 60 e marque risco alto.
+
 TAREFA:
 1. Identifique a NCM mais adequada para este produto
 2. Sugira até 2 classificações alternativas com menor carga tributária
 3. Avalie o risco de cada classificação
-4. Cite base legal quando possível
+4. Cite base legal quando possível (RGI aplicada, nota de seção/capítulo)
 
 Responda em JSON com o formato especificado.`;
 
   try {
     const response = await invokeLLM({
-      // NCM é classificação determinística → modelo rápido (custo −90%, latência menor).
-      model: MODELS.fast,
+      // Classificação NCM não é tarefa determinística: exige percorrer a hierarquia
+      // da TEC e aplicar as RGI. No modelo rápido a taxa de erro de CAPÍTULO era
+      // alta demais (arame caindo em 7308, estrutura de construção) — e capítulo
+      // errado contamina alíquota, barreira e todo o cálculo a jusante.
+      model: MODELS.balanced,
       messages: [
         { role: "system", content: "Você é um especialista em classificação fiscal NCM. Responda sempre em JSON válido. Seja conciso." },
         { role: "user", content: prompt },
@@ -528,10 +608,28 @@ Responda em JSON com o formato especificado.`;
         result.suggestedNCM.ipiRate = mainDb.ipiRate;
         result.suggestedNCM.pisRate = mainDb.pisRate;
         result.suggestedNCM.cofinsRate = mainDb.cofinsRate;
+        // A descrição OFICIAL da NCM vence a que o modelo escreveu — é o que a
+        // pessoa vai conferir na TEC.
+        if (mainDb.description) result.suggestedNCM.description = mainDb.description;
       } else {
         result.suggestedNCM.ipiRate = 0;
         result.suggestedNCM.pisRate = 210;
         result.suggestedNCM.cofinsRate = 1025;
+      }
+
+      // VALIDAÇÃO DE EXISTÊNCIA — um código que não existe na nomenclatura vigente
+      // não pode sair com confiança alta: ele contamina alíquota, barreira e todo
+      // o cálculo a jusante. Rebaixa a confiança e eleva o risco, em vez de
+      // apresentar um palpite com cara de certeza.
+      const codigoValido = /^\d{8}$/.test(
+        String(result.suggestedNCM.ncmCode ?? "").replace(/\D/g, ""),
+      );
+      if (!mainDb || !codigoValido) {
+        result.suggestedNCM.confidence = Math.min(result.suggestedNCM.confidence ?? 0, 45);
+        result.riskLevel = "high";
+        result.suggestedNCM.reason =
+          `${result.suggestedNCM.reason ?? ""} ` +
+          `[Código não confirmado na nomenclatura da base — confirmar na TEC antes de fechar.]`.trim();
       }
 
       // Enriquecer alternativas

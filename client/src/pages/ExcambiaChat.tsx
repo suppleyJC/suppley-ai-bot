@@ -506,7 +506,7 @@ export default function ExcambiaChat() {
           {vazio ? (
             <Welcome onPick={(t) => setDraft(t)} />
           ) : (
-            <div className="flex w-full max-w-full sm:max-w-2xl lg:max-w-3xl shrink-0 flex-col gap-4 sm:gap-6 px-3 sm:px-6 pt-4 sm:pt-6 pb-2">
+            <div className="flex w-full max-w-full sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl shrink-0 flex-col gap-4 sm:gap-6 px-3 sm:px-6 pt-4 sm:pt-6 pb-2">
               {mensagens.map((m: any, i: number) => {
                 const anterior = mensagens[i - 1];
                 const mostraDia = m.criadaEm && (!anterior || !isSameDay(anterior?.criadaEm, m.criadaEm));
@@ -543,7 +543,7 @@ export default function ExcambiaChat() {
 
         {/* composer — fixo no rodapé (não encolhe) */}
         <div className="flex w-full flex-shrink-0 justify-center bg-gradient-to-t from-(--paper) px-3 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-6 pt-2.5 sm:pt-3.5">
-          <div className="w-full max-w-full sm:max-w-2xl lg:max-w-3xl">
+          <div className="w-full max-w-full sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
             <div className="flex items-end gap-2 sm:gap-2.5 rounded-[18px] border border-(--hair) bg-(--exc-card) p-2 sm:p-2.5 pl-3 sm:pl-4 shadow-[0_4px_20px_rgba(49,18,96,0.05)] transition-colors focus-within:border-violet-500 focus-within:shadow-[0_4px_24px_rgba(104,42,186,0.12)]">
               <input
                 ref={fileInputRef}

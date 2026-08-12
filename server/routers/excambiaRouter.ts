@@ -49,8 +49,11 @@ saveChatMessage: protectedProcedure
       sessionId: input.sessionId || null,
       conversaId: input.conversaId ?? null,
     });
-    // Mantém a sidebar ordenada por atividade recente.
-    if (input.conversaId) await db.touchConversa(input.conversaId);
+    // Mantém a sidebar ordenada por atividade recente — só na própria conversa
+    // (o conversaId vem do cliente; sem a checagem dá para mexer na thread alheia).
+    if (input.conversaId && (await db.conversaPertenceAoUsuario(input.conversaId, ctx.user.id))) {
+      await db.touchConversa(input.conversaId);
+    }
     return saved;
   }),
 

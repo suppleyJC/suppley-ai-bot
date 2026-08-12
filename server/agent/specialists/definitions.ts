@@ -79,7 +79,13 @@ ${REGRAS_COMUNS}`,
       "no motor certificado, traz benchmark de mercado e gera o relatório. Produz recomendação GO/NO-GO. " +
       "Delegue quando o tema for 'vale a pena?', cálculo de viabilidade, custo, margem ou relatório.",
     model: MODELS.smart,
-    toolNames: ["montar_calculo", "classificar_ncm", "benchmark_mercado", "comparar_cotacoes", "gerar_relatorio_calculo"],
+    toolNames: [
+      "montar_calculo", "classificar_ncm", "benchmark_mercado", "comparar_cotacoes",
+      "gerar_relatorio_calculo",
+      // Benchmark contra o mercado real: o FOB cotado só vira decisão quando
+      // confrontado com a média oficial de importação e com o tamanho do mercado.
+      "estatisticas_comex", "dimensionar_mercado",
+    ],
     systemPrompt: `Você é o ESPECIALISTA DE ANÁLISE da SUPPLEY, sub-agente da Excambia.
 Seu domínio: viabilidade econômica e tributária da importação.
 

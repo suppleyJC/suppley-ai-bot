@@ -84,8 +84,11 @@ const components: Components = {
   ),
 
   // Tabelas — contêiner rolável e arredondado, cabeçalho destacado, zebra leve.
+  // `min-w-0` no contêiner é o que faz o scroll horizontal funcionar de fato:
+  // sem ele, um item flex assume min-width:auto, a tabela empurra o pai e a
+  // conversa inteira rola de lado em vez da tabela.
   table: ({ node, ...props }) => (
-    <div className="my-3 w-full overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+    <div className="my-3 w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-lg border border-slate-200 dark:border-slate-700">
       <table {...props} className="w-full border-collapse text-[13px]" />
     </div>
   ),
@@ -95,13 +98,16 @@ const components: Components = {
   th: ({ node, ...props }) => (
     <th
       {...props}
-      className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200"
+      className="whitespace-nowrap border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200"
     />
   ),
+  // Células em `nowrap`: numa tabela de mercado (volume, US$, share, preço médio)
+  // a quebra parte o número no meio e destrói a leitura. Melhor rolar a tabela.
+  // `tabular-nums` alinha os dígitos entre as linhas para comparação vertical.
   td: ({ node, ...props }) => (
     <td
       {...props}
-      className="border-b border-slate-100 px-3 py-2 align-top text-slate-700 last:border-0 dark:border-slate-800 dark:text-slate-300"
+      className="whitespace-nowrap border-b border-slate-100 px-3 py-2 align-top tabular-nums text-slate-700 last:border-0 dark:border-slate-800 dark:text-slate-300"
     />
   ),
   tr: ({ node, ...props }) => (

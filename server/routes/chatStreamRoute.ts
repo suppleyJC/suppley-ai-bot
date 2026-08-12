@@ -106,6 +106,17 @@ router.post("/api/chat/stream", async (req: Request, res: Response) => {
       return;
     }
 
+    // POSSE DA CONVERSA (obrigatório): o conversaId vem do corpo da requisição.
+    // Sem esta checagem, um usuário autenticado grava mensagens — e faz a
+    // Excambia responder — dentro da thread de OUTRO usuário. Todo o resto da
+    // rota escreve usando este id, então a validação vem antes de qualquer
+    // gravação.
+    const daPessoa = await conversaDb.conversaPertenceAoUsuario(payload.conversaId, user.id);
+    if (!daPessoa) {
+      res.status(404).json({ error: "Conversa não encontrada" });
+      return;
+    }
+
     // Adiciona mensagem do usuário ao histórico (com marcador do anexo, sem emoji)
     const userMsg = payload.messages[payload.messages.length - 1];
     if (userMsg?.role === "user") {

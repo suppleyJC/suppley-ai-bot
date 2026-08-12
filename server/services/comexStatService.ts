@@ -142,11 +142,15 @@ export function agregarComex(
   };
 }
 
+/** Teto de espera por chamada: o chat não pode ficar pendurado numa fonte lenta. */
+const TIMEOUT_MS = 20_000;
+
 async function postComex(body: unknown): Promise<ComexRow[]> {
   const resp = await fetch(COMEXSTAT_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   if (!resp.ok) return [];
   const json: any = await resp.json();
@@ -298,4 +302,404 @@ export async function consultarComexPorNcm(input: { ncm: string; fluxo?: Fluxo }
   ]);
 
   return agregarComex(ncm8, fluxo, recente, anterior);
+}
+
+// ---------------------------------------------------------------------------
+// DIMENSIONAMENTO DE MERCADO — a consulta parametrizada de verdade.
+//
+// Responde, com número oficial e auditável, as quatro perguntas que dimensionam
+// um mercado de importação:
+//   1. total importado por ANO (toneladas e US$), série plurianual;
+//   2. decomposição por PAÍS de origem (com países fixados no ranking);
+//   3. decomposição por UF de desembaraço;
+//   4. PREÇO MÉDIO por tonelada, por origem.
+//
+// Diferente de `consultarComexPorNcm` (janela fixa de 12 meses, 1 NCM, top-5
+// países), aqui o recorte é livre: N NCMs somadas, N anos, corte por país E por
+// UF, ranking completo com posição de qualquer país pedido.
+//
+// RIGOR: o ano corrente é PARCIAL (a base consolida com ~2 meses de defasagem).
+// Um ano parcial comparado com um ano cheio produz leitura errada, então cada
+// ano carrega `parcial` e `mesesCobertos` — quem apresenta é obrigado a rotular.
+// ---------------------------------------------------------------------------
+
+/** Dimensão de corte disponível na base. */
+export type DetalheMercado = "pais" | "uf";
+
+export interface MercadoLinha {
+  /** Nome do país de origem ou da UF de desembaraço. */
+  chave: string;
+  /** Posição no ranking COMPLETO do ano (1 = maior), por valor FOB. */
+  posicao: number;
+  fobUsd: number;
+  kg: number;
+  toneladas: number;
+  /** Preço médio da origem — US$ por TONELADA (o que o mercado negocia). */
+  precoMedioUsdT: number | null;
+  /** Participação no valor FOB total do ano, em %. */
+  sharePct: number;
+}
+
+export interface MercadoAno {
+  ano: number;
+  /** true quando o ano ainda não fechou na base (dado parcial). */
+  parcial: boolean;
+  /** Quantos meses do ano estão cobertos pelo dado (12 = ano cheio). */
+  mesesCobertos: number;
+  fobUsd: number;
+  kg: number;
+  toneladas: number;
+  precoMedioUsdT: number | null;
+  /** Ranking por país de origem (top N + países fixados). */
+  porPais: MercadoLinha[];
+  /** Ranking por UF de desembaraço (top N + UFs fixadas). */
+  porUf: MercadoLinha[];
+  /** Nº de países/UFs no ranking completo, antes do corte top N. */
+  totalPaises: number;
+  totalUfs: number;
+}
+
+export interface MercadoDimensionado {
+  /** NCMs efetivamente consultadas (8 dígitos). */
+  ncms: string[];
+  fluxo: Fluxo;
+  anos: MercadoAno[];
+  /** Variação do FOB do último ano × ano anterior (null se incomparável). */
+  variacaoFobPct: number | null;
+  /** Variação do volume (t) do último ano × ano anterior. */
+  variacaoVolumePct: number | null;
+  /**
+   * Anos comparados na variação. Quando um deles é parcial, a comparação é
+   * feita apenas se AMBOS tiverem a mesma cobertura em meses — caso contrário
+   * fica null, porque comparar 12 meses com 7 meses é erro analítico.
+   */
+  baseComparacao: { de: number; para: number } | null;
+  disponivel: boolean;
+  fonte: string;
+  /** Preenchido quando a fonte oficial não respondeu — nunca inventar número. */
+  erro?: string;
+}
+
+/** Normaliza nome de país/UF para casar "China" com "China, República Popular da". */
+function normalizarChave(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+/** Extrai a UF de desembaraço da linha (tolerante a variações de schema). */
+function ufDe(r: ComexRow): string {
+  const v =
+    (r as any).state ?? (r as any).noUfpt ?? (r as any).uf ??
+    (r as any).sgUf ?? (r as any).noUf;
+  return String(v ?? "—").trim() || "—";
+}
+
+/**
+ * Um país "destaque" casa com a linha do ranking quando um nome contém o outro.
+ * Resolve "Paraguai" × "Paraguai" e "China" × "China, República Popular da".
+ */
+function casaDestaque(chave: string, destaque: string): boolean {
+  const a = normalizarChave(chave);
+  const b = normalizarChave(destaque);
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+/**
+ * AGREGAÇÃO PURA de um recorte (sem rede): linhas brutas → ranking com posição,
+ * share e preço médio por tonelada. `destaques` força a presença de chaves
+ * específicas (ex.: China e Paraguai) mesmo que caiam fora do top N, com a
+ * posição REAL que ocupam no ranking completo.
+ */
+export function rankearMercado(
+  rows: ComexRow[],
+  chaveDe: (r: ComexRow) => string,
+  topN: number,
+  destaques: string[] = [],
+): { linhas: MercadoLinha[]; total: number; fobTotal: number; kgTotal: number } {
+  const acc = new Map<string, { fob: number; kg: number }>();
+  for (const r of rows) {
+    const k = chaveDe(r);
+    const cur = acc.get(k) ?? { fob: 0, kg: 0 };
+    cur.fob += num(r.metricFOB);
+    cur.kg += num(r.metricKG);
+    acc.set(k, cur);
+  }
+
+  const fobTotal = Array.from(acc.values()).reduce((s, v) => s + v.fob, 0);
+  const kgTotal = Array.from(acc.values()).reduce((s, v) => s + v.kg, 0);
+
+  // Ranking COMPLETO primeiro — a posição precisa refletir o universo inteiro.
+  const completo: MercadoLinha[] = Array.from(acc.entries())
+    .map(([chave, v]) => ({
+      chave,
+      posicao: 0,
+      fobUsd: v.fob,
+      kg: v.kg,
+      toneladas: v.kg / 1000,
+      precoMedioUsdT: v.kg > 0 ? v.fob / (v.kg / 1000) : null,
+      sharePct: fobTotal > 0 ? (v.fob / fobTotal) * 100 : 0,
+    }))
+    .sort((a, b) => b.fobUsd - a.fobUsd)
+    .map((l, i) => ({ ...l, posicao: i + 1 }));
+
+  const linhas = completo.slice(0, Math.max(1, topN));
+
+  // Fixa os destaques que ficaram de fora, preservando a posição real.
+  for (const d of destaques) {
+    if (linhas.some((l) => casaDestaque(l.chave, d))) continue;
+    const achado = completo.find((l) => casaDestaque(l.chave, d));
+    if (achado) linhas.push(achado);
+  }
+
+  return { linhas, total: completo.length, fobTotal, kgTotal };
+}
+
+/**
+ * AGREGAÇÃO PURA de um ano: combina o corte por país e o corte por UF num
+ * `MercadoAno` completo. Os totais do ano saem do corte por PAÍS (que é o
+ * universo íntegro); o corte por UF é uma visão do mesmo total.
+ */
+export function agregarMercadoAno(input: {
+  ano: number;
+  parcial: boolean;
+  mesesCobertos: number;
+  rowsPais: ComexRow[];
+  rowsUf: ComexRow[];
+  topN: number;
+  paisesDestaque?: string[];
+  ufsDestaque?: string[];
+}): MercadoAno {
+  const pais = rankearMercado(input.rowsPais, paisDe, input.topN, input.paisesDestaque ?? []);
+  const uf = rankearMercado(input.rowsUf, ufDe, input.topN, input.ufsDestaque ?? []);
+
+  const fobUsd = pais.fobTotal;
+  const kg = pais.kgTotal;
+  const toneladas = kg / 1000;
+
+  return {
+    ano: input.ano,
+    parcial: input.parcial,
+    mesesCobertos: input.mesesCobertos,
+    fobUsd,
+    kg,
+    toneladas,
+    precoMedioUsdT: toneladas > 0 ? fobUsd / toneladas : null,
+    porPais: pais.linhas,
+    porUf: uf.linhas,
+    totalPaises: pais.total,
+    totalUfs: uf.total,
+  };
+}
+
+/** Corpos de request para um recorte livre (N NCMs, período, dimensão). */
+function bodiesMercado(
+  fluxo: Fluxo,
+  ncms: string[],
+  from: string,
+  to: string,
+  detalhe: DetalheMercado,
+): unknown[] {
+  const detailId = detalhe === "uf" ? "state" : "country";
+  const detailTexto = detalhe === "uf" ? "UF" : "País";
+
+  // Formato do portal atual (filterArray + flags de métrica booleanas).
+  const portal = {
+    flow: fluxo,
+    monthDetail: false,
+    period: { from, to },
+    filterArray: [{ idInput: "ncm", item: ncms }],
+    filterList: [{ id: "ncm", text: "NCM", item: ncms }],
+    detailDatabase: [{ id: detailId, text: detailTexto }],
+    monthStartEnd: false,
+    metricFOB: true,
+    metricKG: true,
+    metricStatistic: false,
+    metricFreight: false,
+    metricInsurance: false,
+    metricCIF: false,
+    formQueue: "general",
+    langDefault: "pt",
+  };
+
+  // Formato anterior (filterList + metricList) — mantido como fallback.
+  const legado = {
+    flow: fluxo,
+    monthDetail: false,
+    period: { from, to },
+    filterList: [{ id: "ncm", text: ncms.join(","), item: ncms }],
+    detailDatabase: [{ id: detailId, text: detailTexto }],
+    metricList: ["metricFOB", "metricKG"],
+    langDefault: "pt",
+  };
+
+  // Formato enxuto (filters/details/metrics) — terceira variação conhecida.
+  const enxuto = {
+    flow: fluxo,
+    monthDetail: false,
+    period: { from, to },
+    filters: [{ filter: "ncm", values: ncms.map((n) => Number(n)) }],
+    details: [detalhe === "uf" ? "state" : "country"],
+    metrics: ["metricFOB", "metricKG"],
+  };
+
+  return [portal, legado, enxuto];
+}
+
+/** Consulta um recorte tentando os formatos conhecidos; falha graciosa. */
+async function queryMercado(
+  fluxo: Fluxo,
+  ncms: string[],
+  from: string,
+  to: string,
+  detalhe: DetalheMercado,
+): Promise<ComexRow[]> {
+  for (const body of bodiesMercado(fluxo, ncms, from, to, detalhe)) {
+    try {
+      const rows = await postComex(body);
+      if (rows.length) return rows;
+    } catch {
+      /* tenta o próximo formato */
+    }
+  }
+  return [];
+}
+
+/** Último mês consolidado na base, como { ano, mes }. */
+export function ultimoMesConsolidado(base: Date): { ano: number; mes: number } {
+  const d = new Date(base.getFullYear(), base.getMonth() - DEFASAGEM_MESES, 1);
+  return { ano: d.getFullYear(), mes: d.getMonth() + 1 };
+}
+
+/**
+ * Janela de consulta de um ano, respeitando a defasagem de consolidação.
+ * Retorna null quando o ano inteiro ainda não tem nenhum mês consolidado.
+ */
+export function janelaDoAno(
+  ano: number,
+  base: Date,
+): { from: string; to: string; parcial: boolean; mesesCobertos: number } | null {
+  const { ano: aMax, mes: mMax } = ultimoMesConsolidado(base);
+  if (ano > aMax) return null;
+  const ultimoMes = ano === aMax ? mMax : 12;
+  if (ultimoMes < 1) return null;
+  return {
+    from: `${ano}-01`,
+    to: `${ano}-${String(ultimoMes).padStart(2, "0")}`,
+    parcial: ultimoMes < 12,
+    mesesCobertos: ultimoMes,
+  };
+}
+
+/**
+ * DIMENSIONA O MERCADO de um conjunto de NCMs, ano a ano, por país de origem e
+ * por UF de desembaraço, com preço médio por tonelada.
+ *
+ * Falha graciosa: se a fonte oficial não responder, volta `disponivel: false`
+ * com `erro` preenchido — quem apresenta deve dizer que a fonte não respondeu,
+ * JAMAIS estimar o número.
+ */
+export async function dimensionarMercadoComex(input: {
+  /** NCMs de 8 dígitos (já expandidas a partir de SH4/SH6, se for o caso). */
+  ncms: string[];
+  /** Anos a consultar (ex.: [2024, 2025]). */
+  anos: number[];
+  fluxo?: Fluxo;
+  /** Países que devem constar no ranking mesmo fora do top N (ex.: Paraguai). */
+  paisesDestaque?: string[];
+  /** UFs que devem constar no ranking mesmo fora do top N (ex.: SC). */
+  ufsDestaque?: string[];
+  /** Tamanho do ranking (default 10). */
+  topN?: number;
+  /** Injetável nos testes — default: agora. */
+  hoje?: Date;
+}): Promise<MercadoDimensionado> {
+  const fluxo: Fluxo = input.fluxo ?? "import";
+  const topN = Math.min(30, Math.max(3, input.topN ?? 10));
+  const hoje = input.hoje ?? new Date();
+
+  const ncms = Array.from(
+    new Set(input.ncms.map((n) => String(n).replace(/\D/g, "")).filter((n) => n.length === 8)),
+  );
+  const anos = Array.from(new Set(input.anos)).sort((a, b) => a - b);
+
+  const vazio: MercadoDimensionado = {
+    ncms, fluxo, anos: [], variacaoFobPct: null, variacaoVolumePct: null,
+    baseComparacao: null, disponivel: false,
+    fonte: "Comex Stat (MDIC/SECEX)",
+  };
+
+  if (!ncms.length) return { ...vazio, erro: "nenhuma NCM de 8 dígitos informada" };
+  if (!anos.length) return { ...vazio, erro: "nenhum ano informado" };
+
+  const janelas = anos
+    .map((ano) => ({ ano, janela: janelaDoAno(ano, hoje) }))
+    .filter((x): x is { ano: number; janela: NonNullable<ReturnType<typeof janelaDoAno>> } => x.janela !== null);
+
+  if (!janelas.length) {
+    return { ...vazio, erro: "os anos pedidos ainda não têm meses consolidados na base" };
+  }
+
+  // Um par de consultas por ano (país + UF), todas em paralelo.
+  const resultados = await Promise.all(
+    janelas.map(async ({ ano, janela }) => {
+      const [rowsPais, rowsUf] = await Promise.all([
+        queryMercado(fluxo, ncms, janela.from, janela.to, "pais"),
+        queryMercado(fluxo, ncms, janela.from, janela.to, "uf"),
+      ]);
+      return { ano, janela, rowsPais, rowsUf };
+    }),
+  );
+
+  const comDado = resultados.filter((r) => r.rowsPais.length > 0 || r.rowsUf.length > 0);
+  if (!comDado.length) {
+    return {
+      ...vazio,
+      erro: "a fonte oficial não retornou dados para o recorte pedido",
+    };
+  }
+
+  const anosAgregados = comDado.map(({ ano, janela, rowsPais, rowsUf }) =>
+    agregarMercadoAno({
+      ano,
+      parcial: janela.parcial,
+      mesesCobertos: janela.mesesCobertos,
+      rowsPais,
+      rowsUf,
+      topN,
+      paisesDestaque: input.paisesDestaque,
+      ufsDestaque: input.ufsDestaque,
+    }),
+  );
+
+  // Variação só entre anos COMPARÁVEIS (mesma cobertura em meses).
+  let variacaoFobPct: number | null = null;
+  let variacaoVolumePct: number | null = null;
+  let baseComparacao: MercadoDimensionado["baseComparacao"] = null;
+  if (anosAgregados.length >= 2) {
+    const ultimo = anosAgregados[anosAgregados.length - 1];
+    const penultimo = anosAgregados[anosAgregados.length - 2];
+    if (ultimo.mesesCobertos === penultimo.mesesCobertos) {
+      if (penultimo.fobUsd > 0) {
+        variacaoFobPct = ((ultimo.fobUsd - penultimo.fobUsd) / penultimo.fobUsd) * 100;
+      }
+      if (penultimo.toneladas > 0) {
+        variacaoVolumePct = ((ultimo.toneladas - penultimo.toneladas) / penultimo.toneladas) * 100;
+      }
+      baseComparacao = { de: penultimo.ano, para: ultimo.ano };
+    }
+  }
+
+  return {
+    ncms,
+    fluxo,
+    anos: anosAgregados,
+    variacaoFobPct,
+    variacaoVolumePct,
+    baseComparacao,
+    disponivel: true,
+    fonte: "Comex Stat (MDIC/SECEX)",
+  };
 }

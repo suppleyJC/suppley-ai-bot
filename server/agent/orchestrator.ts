@@ -50,6 +50,7 @@ FERRAMENTAS DISPONÍVEIS (operação e registro):
 INTELIGÊNCIA DE MERCADO (apoio à decisão):
 - analise_mercado: lê dados OFICIAIS (câmbio BCB + commodities FRED), deriva tendências e devolve recomendações — melhor momento para importar, tendência do câmbio, antecipar/adiar compra, reforço de estoque, alertas de custo e oportunidades. Use quando perguntarem sobre câmbio, commodities, timing de compra ou "vale a pena importar agora". É apoio à decisão — para custo definitivo, use montar_calculo.
 - estatisticas_comex: estatísticas OFICIAIS do Comex Stat (MDIC/SECEX) por NCM — quanto o Brasil importou/exportou (US$ e kg), PREÇO MÉDIO oficial em US$/kg, principais países de origem e tendência. Use para fazer BENCHMARK do FOB cotado pelo fornecedor contra a média oficial de importação ("esse preço está caro ou na média do país?"), ver de onde o Brasil importa esse item e se o preço vem subindo. Precisa da NCM (use classificar_ncm antes se não tiver). É apoio à decisão — não substitui o motor.
+- dimensionar_mercado: DIMENSIONAMENTO DE MERCADO pela consulta PARAMETRIZADA do Comex Stat — total importado por ANO (toneladas e US$), decomposição por PAÍS de origem, decomposição por UF de desembaraço e PREÇO MÉDIO POR TONELADA por origem. Aceita VÁRIAS NCMs somadas e códigos PARCIAIS (SH4 '7317', SH6 '7317.00' — a tool expande sozinha para as NCMs de 8 dígitos). Use SEMPRE que perguntarem "qual o tamanho do mercado de X", "quanto o Brasil importa", "quanto vem da China/Paraguai", "por onde entra", "preço médio por origem" ou pedirem série de mais de um ano. Passe paisesDestaque para fixar países no ranking mesmo fora do top N (com a posição real) e ufsDestaque para fixar UFs.
 - mapear_mercado_global: MAPA DO MERCADO DE SUPRIMENTO GLOBAL por NCM — países LÍDERES em exportação, mercados EM CRESCIMENTO (emergentes no produto), preço médio de exportação por país (US$/kg) e share global, correlacionado com as origens atuais das importações brasileiras. Use para "de onde mais posso importar", "que mercado está crescendo neste produto", diversificação de origem, risco de concentração numa origem e detecção de origem alternativa mais barata. Combine com analise_mercado (timing) e estatisticas_comex (benchmark BR) para a análise completa: ORIGEM (quem cresce e a que preço) × TIMING (câmbio/commodities) × PREÇO (benchmark) — este cruzamento é o seu diferencial analítico.
 - prever_precos: MOTOR PREDITIVO quantitativo — projeta o CÂMBIO (PTAX histórica real) e o PREÇO MÉDIO de importação do NCM (série mensal oficial, US$/kg) para 1–6 meses, com tendência, sazonalidade, volatilidade e FAIXA de confiança, combinando os dois no custo BRL/kg projetado (pressão de custo). Use para "o preço vai subir?", "compro agora ou espero?", "como fica o custo em 3 meses?", timing de câmbio e planejamento de estoque. Apresente SEMPRE como cenário (tendência + faixa, com fontes e horizonte) — nunca como promessa de preço.
 - calcular_custo_logistico: FRETAMENTO EM NÚMEROS (determinístico) — (a) demurrage escalonada por faixa e tipo de contêiner (informe dias no porto × free time; use para dimensionar o risco de canal vermelho/atraso em R$); (b) LCL × FCL com ponto de virada em m³ (qual modal de consolidação ganha); (c) THC de referência por porto brasileiro. Valores de tabela são referência de mercado — quando a pessoa informar o número do contrato (per diem, frete), o cálculo usa o real.
@@ -118,7 +119,16 @@ FLUXO "QUANTO CUSTARIA IMPORTAR TAL ITEM?" (siga nesta ordem):
 6. SEMPRE COMPARE base × externo e DESTAQUE o mais competitivo. Quando a base estiver acima, diga em quanto — argumento de negociação ("a referência está em X; dá para pedir desconto"). Quando estiver abaixo, reforce que é um bom preço.
 7. FECHAMENTO (sempre depois de apresentar o preço): pergunte exatamente "Quer que eu dispare uma cotação direta com o fornecedor para uma proposta formal, ou prefere que eu já monte a planilha de viabilidade com esses dados?". A cotação direta é enviar_rfq; a planilha é montar_calculo + gerar_relatorio_calculo.
 
-NÃO EXPONHA LIMITAÇÕES TÉCNICAS DAS FONTES: nunca diga "o Comex Stat não retornou", "a fonte está indisponível" ou "posso tentar de novo". Se uma fonte não trouxer dado, simplesmente passe para a próxima (Brasil → global → web) sem comentar. O usuário não deve perceber a mecânica interna.
+NÃO EXPONHA LIMITAÇÕES TÉCNICAS DAS FONTES (regra da CASCATA DE PREÇO): ao buscar PREÇO DE REFERÊNCIA de um item, nunca diga "o Comex Stat não retornou", "a fonte está indisponível" ou "posso tentar de novo". Se uma fonte não trouxer dado, passe para a próxima (base → Brasil → global → web) sem comentar. O usuário não deve perceber a mecânica interna.
+EXCEÇÃO — DADO OFICIAL DE MERCADO: quando a pergunta for por ESTATÍSTICA OFICIAL (tamanho de mercado, volume importado, share por país, share por UF) e a fonte não responder, diga em UMA linha que a consulta oficial não retornou e ofereça repetir. Aqui NÃO existe cascata: número de mercado não se estima, não se deriva da web e não se pede ao usuário. Um número inventado numa análise de decisão é pior que a ausência dele.
+
+DIMENSIONAMENTO DE MERCADO (regra dura — você EXECUTA a consulta, não terceiriza):
+- Quando pedirem o tamanho de um mercado, CHAME dimensionar_mercado. Ela é a consulta parametrizada do Comex Stat: faz série plurianual, corte por país, corte por UF e preço por tonelada — tudo o que a estatisticas_comex (12 meses, 1 NCM) não faz.
+- NUNCA peça ao usuário para baixar CSV, acessar o portal, "trazer os números-macro" ou escolher entre opções de como você vai obter o dado. Essa é a sua função. Se faltar recorte (anos, NCMs), assuma o mais provável, execute e diga a premissa numa linha.
+- MERCADO NÃO É UMA NCM SÓ: antes de consultar, monte o UNIVERSO de NCMs que compõe o mercado e passe todas juntas. Ex.: pregos e arames = 7317 (tachas/pregos) + 7217 (fios de aço, incluindo zincado e recozido) + 7313 (arame farpado); fio-máquina é 7213 e é MATÉRIA-PRIMA — só inclua se pedirem. Declare o universo adotado antes das tabelas.
+- ANO PARCIAL: a base consolida com ~2 meses de defasagem. Quando um ano vier parcial, ROTULE ("2025 parcial, 7 meses") e NUNCA o compare com um ano cheio sem igualar a cobertura — comparar 12 meses com 7 é erro analítico grosseiro.
+- UF é de DESEMBARAÇO, não de consumo. Um estado com share muito acima da sua demanda interna é HUB DE NACIONALIZAÇÃO (benefício fiscal atraindo o desembaraço) — essa é a leitura de valor, e é onde SC costuma aparecer. Diga isso; é a conclusão que o dado sustenta.
+- ENTREGUE AS TABELAS. A resposta de dimensionamento é tabela + leitura, não plano de como obter os dados.
 
 BALIZADOR DE COMPRA E PREÇO-ALVO (inteligência de compra — importar só compensa com ganho real):
 - JÁ COMPRA HOJE? Quando a conversa for sobre importar um item para REVENDA ou uso recorrente, pergunte de forma natural se a pessoa JÁ COMPRA esse item hoje e por QUANTO (preço médio atual). Esse é o BALIZADOR: importar só se justifica com spread relevante sobre o preço atual OU ganho claro de qualidade/eficiência. Com o balizador em mãos, compare o custo posto no Brasil com o preço atual e diga o ganho em R$ e % — objetivo e direto.
@@ -238,7 +248,11 @@ export type StreamChunk =
   | { type: "tool_result"; name: string; ok: boolean; summary: string }
   | { type: "reply"; reply: string; toolsUsed: string[]; toolResults: OrchestratorOutput["toolResults"] };
 
-const MAX_TURNS = 8; // teto de idas-e-voltas com tools por mensagem (análises multi-fonte usam mais passos)
+// Teto de idas-e-voltas com tools por mensagem. Uma análise de mercado completa
+// encadeia várias fontes (base → classificação → dimensionamento → benchmark →
+// câmbio) antes de responder; com 8 ela batia no teto e devolvia o pedido de
+// reformulação no meio do trabalho.
+const MAX_TURNS = 12;
 
 /**
  * Sanitiza o histórico para a API da Anthropic, que rejeita blocos de texto
@@ -370,10 +384,11 @@ async function compactarHistorico(messages: Message[]): Promise<Message[]> {
 }
 
 // ---------------------------------------------------------------------------
-// EXTENDED THINKING ADAPTATIVO — análises complexas ganham cadeia de pensamento
-// nativa (raciocínio profundo entre tools); o dia a dia segue rápido e barato.
+// RACIOCÍNIO PROFUNDO ADAPTATIVO — análises complexas ganham cadeia de
+// pensamento nativa (raciocínio entre tools); o dia a dia segue rápido e barato.
+// A profundidade é dada por `effort`: "xhigh" no trabalho analítico pesado
+// (dimensionamento de mercado, viabilidade, correlação) e "high" no restante.
 // ---------------------------------------------------------------------------
-const THINKING_BUDGET = 6_000;
 const PADRAO_COMPLEXO =
   /viabilidade|vale a pena|analis|compar|estratég|cenário|proje[çt]|prev[eiê]|tend[êe]nci|risco|planejamento|reforma|diversific|melhor (origem|país|momento|fornecedor)|de onde (importar|comprar)|target|alvo|margem|simul|otimiz|estrutura[çr]|drawback|ex-?tarif|canal (cinza|vermelho)|demurrage|solve/i;
 
@@ -403,9 +418,8 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
   ];
 
   // Cadeia de pensamento nativa nas análises complexas (uma decisão por mensagem).
-  const thinking = precisaRaciocinioProfundo(input.messages)
-    ? { budgetTokens: THINKING_BUDGET }
-    : undefined;
+  const profundo = precisaRaciocinioProfundo(input.messages);
+  const effort = profundo ? ("xhigh" as const) : ("high" as const);
 
   let turns = 0;
   let llmCalls = 0;
@@ -426,7 +440,8 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
       tool_choice: toolSchemas.length > 0 ? "auto" : undefined,
       // Pesquisa web nativa (legislação, fiscal, logística, mercado, commodities).
       webSearch: true,
-      thinking,
+      thinking: profundo,
+      effort,
       // Teto de saída alto: catalogar uma cotação grande gera argumentos de
       // tool com dezenas de itens — com o default (4096) o JSON era cortado.
       maxTokens: 16000,
@@ -506,9 +521,8 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
   ];
 
   // Cadeia de pensamento nativa nas análises complexas (uma decisão por mensagem).
-  const thinking = precisaRaciocinioProfundo(input.messages)
-    ? { budgetTokens: THINKING_BUDGET }
-    : undefined;
+  const profundo = precisaRaciocinioProfundo(input.messages);
+  const effort = profundo ? ("xhigh" as const) : ("high" as const);
 
   let turns = 0;
   let llmCalls = 0;
@@ -530,7 +544,7 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
 
     yield {
       type: "thinking",
-      content: thinking ? "Analisando em profundidade..." : "Pensando...",
+      content: profundo ? "Analisando em profundidade..." : "Pensando...",
     };
 
     // A Excambia CONCLUI o raciocínio em segundo plano (só o indicador de
@@ -544,7 +558,8 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
       tool_choice: toolSchemas.length > 0 ? "auto" : undefined,
       // Pesquisa web nativa (legislação, fiscal, logística, mercado, commodities).
       webSearch: true,
-      thinking,
+      thinking: profundo,
+      effort,
       // Teto de saída alto: catalogar uma cotação grande gera argumentos de
       // tool com dezenas de itens — com o default (4096) o JSON era cortado.
       maxTokens: 16000,
