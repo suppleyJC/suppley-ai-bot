@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { serveStatic } from "./static";
 import { chatStreamRouter } from "../routes/chatStreamRoute";
 import { rfqInboundRouter } from "../routes/rfqInboundRoute";
+import { arquivoRouter } from "../routes/arquivoRoute";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -41,6 +42,8 @@ async function startServer() {
   app.use(chatStreamRouter);
   // Webhook de respostas de RFQ por email (cotação semi-automatizada)
   app.use(rfqInboundRouter);
+  // Link estável de arquivo (re-assina o S3 a cada clique — o link vive no chat)
+  app.use(arquivoRouter);
   // tRPC API
   app.use(
     "/api/trpc",

@@ -25,6 +25,7 @@ import * as operacaoService from "../../services/operacaoService";
 import { generateEstimativaExcel } from "../../services/excelEstimativaService";
 import { generateQuotationReport } from "../../services/pdfReportService";
 import { storagePut } from "../../storage";
+import { linkEstavelDeArquivo } from "../../routes/arquivoRoute";
 import type { EngineResult } from "../../services/importCostEngine";
 
 const schema = defineSchema(
@@ -186,13 +187,22 @@ export const gerarRelatorioTool: AgentTool = {
     }
 
     // 5) Sobe ao storage e obtém o link
-    let url: string;
+    //
+    // O link entregue no chat é ESTÁVEL (rota da aplicação), não a URL
+    // pré-assinada do S3: a mensagem fica no histórico para sempre, e a
+    // assinatura do S3 vale 1 hora — depois disso o clique devolvia um XML cru
+    // de AccessDenied, como se o arquivo tivesse sumido. A URL do S3 segue
+    // sendo gerada, mas só para o registro na operação.
+    let urlS3: string;
     const fileKey = `reports/excambia-calc-${ctx.userId}-${Date.now()}.${ext}`;
     try {
-      ({ url } = await storagePut(fileKey, buffer, contentType));
+      ({ url: urlS3 } = await storagePut(fileKey, buffer, contentType));
     } catch (e: any) {
       return { ok: false, summary: "Arquivo gerado, mas falhou ao subir para o storage.", error: String(e?.message ?? e) };
     }
+
+    const fileName = `${nome}.${ext}`;
+    const url = await linkEstavelDeArquivo({ k: fileKey, n: fileName, u: ctx.userId });
 
     // 6) WORKFLOW AUDITÁVEL: registra como anexo na operação (se houver).
     // fileKey = CHAVE permanente (a URL pré-assinada expira em ~1h — gravar a
@@ -203,9 +213,9 @@ export const gerarRelatorioTool: AgentTool = {
           userId: ctx.userId,
           operacaoId: ctx.operacaoId,
           tipo: formato === "pdf" ? "pdf" : "outro",
-          nome: `${nome}.${ext}`,
+          nome: fileName,
           fileKey,
-          fileUrl: url,
+          fileUrl: urlS3,
           contentType,
           autor: "excambia",
           descricao: `Relatório de cálculo (${formato.toUpperCase()}) gerado pela Excambia`,
@@ -223,7 +233,7 @@ export const gerarRelatorioTool: AgentTool = {
         (custo != null
           ? ` (custo líquido ~ R$ ${Number(custo).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}).`
           : "."),
-      data: { url, fileKey, formato, fileName: `${nome}.${ext}` },
+      data: { url, fileKey, formato, fileName },
     };
   },
 };

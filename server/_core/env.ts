@@ -17,6 +17,13 @@ export const ENV = {
   get forgeApiUrl() { return process.env.BUILT_IN_FORGE_API_URL ?? ""; },
   get forgeApiKey() { return process.env.BUILT_IN_FORGE_API_KEY ?? ""; },
   get anthropicApiKey() { return process.env.ANTHROPIC_API_KEY ?? ""; },
+  /**
+   * URL pública da aplicação (ex.: https://calculasuppley.com.br), sem barra
+   * final. Usada para montar links ABSOLUTOS de arquivo — necessários quando o
+   * link sai do navegador (email ao cliente/contador). Vazia, os links saem
+   * relativos, que funcionam normalmente dentro do próprio chat.
+   */
+  get appUrl() { return (process.env.APP_URL ?? "").replace(/\/+$/, ""); },
   // AWS S3 Storage
   get awsS3Bucket() { return process.env.AWS_S3_BUCKET ?? ""; },
   get awsRegion() { return process.env.AWS_REGION ?? "us-east-1"; },

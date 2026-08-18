@@ -9,16 +9,15 @@
  * Fecha o pedido "me traz a invoice dessa operação" → a Excambia busca e devolve
  * o arquivo (link) na conversa.
  *
- * Read-only: não grava nada. O fileUrl salvo no banco expira em ~1h, por isso
- * SEMPRE re-assinamos a URL a partir do fileKey na hora do pedido.
+ * Read-only: não grava nada. O fileUrl salvo no banco expira em ~1h, então o
+ * link entregue aponta para a rota de arquivo da aplicação, que re-assina o S3
+ * a cada clique — a mensagem fica no histórico para sempre e o link precisa
+ * sobreviver a ela.
  */
 import { defineSchema, type AgentTool, type ToolContext, type ToolResult } from "./types";
 import * as operacaoService from "../../services/operacaoService";
-import { storageGet } from "../../storage";
+import { linkEstavelDeArquivo } from "../../routes/arquivoRoute";
 import { normalizeForSearch } from "../../services/productSimilarity";
-
-// Link válido por 6h — cobre a conversa sem reexpor credenciais.
-const LINK_TTL_SEGUNDOS = 6 * 3600;
 
 const schema = defineSchema(
   "buscar_documento_operacao",
@@ -87,12 +86,17 @@ export const buscarDocumentoOperacaoTool: AgentTool = {
     const semMatch = candidatos.length === 0;
     if (semMatch) candidatos = anexos as any[];
 
-    // Re-assina URL fresca a partir do fileKey (o fileUrl do banco já expirou).
+    // Link ESTÁVEL da aplicação a partir do fileKey: a mensagem fica no
+    // histórico para sempre, então um link que expira vira XML de AccessDenied
+    // dias depois. A rota re-assina o S3 a cada clique. Só cai na URL
+    // pré-assinada em registro legado, sem fileKey.
     const documentos = await Promise.all(
       candidatos.slice(0, 8).map(async (a: any) => {
         let url: string | null = null;
         try {
-          url = a.fileKey ? (await storageGet(a.fileKey, LINK_TTL_SEGUNDOS)).url : (a.fileUrl ?? null);
+          url = a.fileKey
+            ? await linkEstavelDeArquivo({ k: a.fileKey, n: a.nome, u: ctx.userId })
+            : (a.fileUrl ?? null);
         } catch {
           url = a.fileUrl ?? null; // fallback best-effort
         }
@@ -121,7 +125,7 @@ export const buscarDocumentoOperacaoTool: AgentTool = {
         (documentos.length === 1
           ? `Documento encontrado na operação ${opId}:\n${linhas}\n`
           : `Documentos encontrados na operação ${opId}:\n${linhas}\n`) +
-        `Entregue o(s) link(s) de download direto no chat (é um link temporário, válido por algumas horas).`,
+        `Entregue o(s) link(s) de download direto no chat.`,
       data: { documentos, match: true },
     };
   },
