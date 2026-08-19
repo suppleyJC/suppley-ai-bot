@@ -54,9 +54,11 @@ if [ -z "$DB_PASSWORD" ]; then
 fi
 
 # MYSQL_PWD em vez de -p: evita a senha na linha de comando (e o aviso do mysql).
+# --default-character-set=utf8mb4: sem isso o cliente negocia latin1 e todo
+# acento sai como '?' no relatório (os dados no banco estão corretos).
 consulta() {
   docker exec -i -e MYSQL_PWD="$DB_PASSWORD" "$DB_CONTAINER" \
-    mysql -u "$DB_USER" "$DB_NAME" --table
+    mysql -u "$DB_USER" "$DB_NAME" --table --default-character-set=utf8mb4
 }
 
 echo "═══════════════════════════════════════════════════════════════════"
@@ -93,6 +95,25 @@ baldes AS (
 )"
 
 echo
+echo "── 0. FORMA DA NOMENCLATURA (ncm_tax_rates) ───────────────────────"
+echo "   O que a coluna 'description' contém de fato: folha isolada ('Outros')"
+echo "   ou caminho hierárquico? Isso decide se a busca precisa ser reindexada."
+consulta <<'SQL'
+SELECT COUNT(*) AS linhas,
+       SUM(description IS NULL OR description = '') AS sem_descricao,
+       SUM(description LIKE '% > %')                AS com_caminho,
+       ROUND(AVG(CHAR_LENGTH(description)))         AS media_chars,
+       ROUND(AVG(CHAR_LENGTH(SUBSTRING_INDEX(description, ' > ', -1)))) AS media_folha
+FROM ncm_tax_rates;
+SQL
+consulta <<'SQL'
+SELECT ncmCode, CHAR_LENGTH(description) AS chars, LEFT(description, 150) AS amostra
+FROM ncm_tax_rates
+WHERE ncmCode IN ('39269090','73084000','76109000','94051990','40151100','01012900')
+ORDER BY ncmCode;
+SQL
+
+echo
 echo "── 1. PANORAMA ────────────────────────────────────────────────────"
 echo "   Quanto do catálogo está pronto para uso e quanto precisa de ação."
 consulta <<SQL
@@ -111,6 +132,35 @@ ${CTE}
 SELECT bruto AS gravado, canon AS normalizado, COUNT(*) AS produtos
 FROM baldes WHERE balde = '4 · INEXISTENTE NA NOMENCLATURA'
 GROUP BY bruto, canon ORDER BY produtos DESC LIMIT 20;
+SQL
+
+echo
+echo "── 2b. NATUREZA DO CÓDIGO INEXISTENTE ─────────────────────────────"
+echo "   Separa dois defeitos com conserto MUITO diferente: SH6 preenchido com"
+echo "   '00' (a subposição existe, falta descer ao item) × código extinto."
+consulta <<SQL
+${CTE}
+SELECT diagnostico, COUNT(*) AS produtos FROM (
+  SELECT CASE
+    WHEN EXISTS (SELECT 1 FROM ncm_tax_rates s WHERE s.ncmCode LIKE CONCAT(LEFT(b.canon,6),'%'))
+      THEN 'A · subposicao valida — falta descer ao item certo'
+    WHEN EXISTS (SELECT 1 FROM ncm_tax_rates s WHERE s.ncmCode LIKE CONCAT(LEFT(b.canon,4),'%'))
+      THEN 'B · posicao valida, subposicao inexistente'
+    ELSE 'C · nem a posicao existe (extinto ou outra nomenclatura)'
+  END AS diagnostico
+  FROM baldes b WHERE b.balde = '4 · INEXISTENTE NA NOMENCLATURA'
+) x GROUP BY diagnostico ORDER BY produtos DESC;
+SQL
+
+echo "   Para os mais frequentes: quais itens VÁLIDOS existem sob a subposição."
+consulta <<SQL
+${CTE}
+SELECT b.canon AS gravado, COUNT(*) AS produtos,
+       LEFT((SELECT GROUP_CONCAT(s.ncmCode ORDER BY s.ncmCode SEPARATOR ', ')
+             FROM ncm_tax_rates s
+             WHERE s.ncmCode LIKE CONCAT(LEFT(b.canon,6),'%')), 70) AS itens_validos
+FROM baldes b WHERE b.balde = '4 · INEXISTENTE NA NOMENCLATURA'
+GROUP BY b.canon ORDER BY produtos DESC LIMIT 12;
 SQL
 
 echo
@@ -145,9 +195,10 @@ consulta <<SQL
 ${CTE}
 SELECT canon AS ncm,
        COUNT(*) AS produtos,
-       CASE WHEN REGEXP_REPLACE(desc_oficial, '^[ -]+', '') LIKE 'Outr%'
+       CASE WHEN REGEXP_REPLACE(SUBSTRING_INDEX(desc_oficial, ' > ', -1),
+                                '^[0-9.]+ *', '') LIKE 'Outr%'
             THEN 'RESIDUAL' ELSE '' END AS tipo,
-       LEFT(COALESCE(desc_oficial, '(fora da nomenclatura)'), 60) AS descricao
+       LEFT(SUBSTRING_INDEX(COALESCE(desc_oficial, '(sem descricao)'), ' > ', -1), 55) AS folha
 FROM baldes WHERE existe IS NOT NULL
 GROUP BY canon, desc_oficial ORDER BY produtos DESC LIMIT 20;
 SQL
@@ -155,8 +206,10 @@ SQL
 consulta <<SQL
 ${CTE}
 SELECT COUNT(*) AS classificados,
-       SUM(REGEXP_REPLACE(desc_oficial, '^[ -]+', '') LIKE 'Outr%') AS em_residual,
-       CONCAT(ROUND(100.0 * SUM(REGEXP_REPLACE(desc_oficial, '^[ -]+', '') LIKE 'Outr%')
+       SUM(REGEXP_REPLACE(SUBSTRING_INDEX(desc_oficial, ' > ', -1),
+                          '^[0-9.]+ *', '') LIKE 'Outr%') AS em_residual,
+       CONCAT(ROUND(100.0 * SUM(REGEXP_REPLACE(SUBSTRING_INDEX(desc_oficial, ' > ', -1),
+                                               '^[0-9.]+ *', '') LIKE 'Outr%')
                     / COUNT(*), 1), '%') AS fatia_residual
 FROM baldes WHERE existe IS NOT NULL;
 SQL
