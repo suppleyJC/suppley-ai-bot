@@ -340,22 +340,40 @@ export function resetDeteccaoFulltext(): void {
   indiceFulltext = null;
 }
 
+/** Dobra acentos: a consulta vem de proforma, muitas vezes sem acentuação. */
+function semAcento(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
 /**
- * Promove candidatos cuja FOLHA casa com os termos.
+ * Ordena candidatos: quantos termos casam na FOLHA primeiro, relevância do
+ * FULLTEXT só como desempate.
  *
- * Multiplicativo, não aditivo: a relevância do FULLTEXT continua mandando na
- * ordem geral (ela já pondera por IDF), e o casamento na folha apenas amplifica
- * quem descreve o ITEM em vez de casar só pelo nome do capítulo.
+ * A ordem entre os dois critérios foi decidida por medição contra a base real,
+ * não por preferência. Buscando "garrafa térmica inox":
+ *
+ *   9617.00.10 Garrafas térmicas...            folha 2   score 24,94
+ *   8422.30.10 Máquinas para encher garrafas   folha 1   score 37,84
+ *
+ * A máquina de encher garrafas tem a MAIOR pontuação bruta. Uma combinação
+ * multiplicativa (que era o que estava aqui) a colocaria em primeiro. Quem
+ * descreve o ITEM tem que ganhar de quem só compartilha vocabulário, e é a
+ * contagem na folha que expressa isso.
  */
 function ordenarPorFolha(linhas: any[], termos: string[], limit: number): any[] {
+  const alvos = termos.map(semAcento);
   return linhas
     .map((r) => {
-      const folha = folhaDaDescricao(r.description).toLowerCase();
-      const naFolha = termos.reduce((n, t) => n + (folha.includes(t) ? 1 : 0), 0);
-      const base = Number(r.score ?? 1) || 1;
-      return { r, peso: base * (1 + 0.5 * naFolha) };
+      const folha = semAcento(folhaDaDescricao(r.description));
+      const naFolha = alvos.reduce((n, t) => n + (folha.includes(t) ? 1 : 0), 0);
+      return { r, naFolha, score: Number(r.score ?? 0) || 0 };
     })
-    .sort((a, b) => b.peso - a.peso || String(a.r.ncmCode).localeCompare(String(b.r.ncmCode)))
+    .sort(
+      (a, b) =>
+        b.naFolha - a.naFolha ||
+        b.score - a.score ||
+        String(a.r.ncmCode).localeCompare(String(b.r.ncmCode)),
+    )
     .slice(0, limit)
     .map((x) => x.r);
 }
@@ -402,16 +420,24 @@ export async function searchNCMs(
     let results: any[] = [];
 
     if (await temIndiceFulltext(db)) {
-      // NATURAL LANGUAGE MODE: pondera por IDF. O nome do capítulo, presente em
-      // centenas de linhas, pesa quase nada; o termo distintivo domina. É o que
-      // conserta a busca sobre texto hierárquico.
-      const expressao = termos.join(" ");
+      // BOOLEAN MODE com CURINGA DE PREFIXO, e não natural language.
+      //
+      // O FULLTEXT do MySQL não faz stemming: 'solenoide' e 'solenoides' são
+      // tokens distintos, 'escoramento' não casa 'escoramentos'. Medido contra
+      // a base real, o termo que deveria decidir simplesmente não entrava na
+      // conta e o ranking ficava por conta das palavras comuns — "escora
+      // metálica" devolvia Albacora-laje (um atum), casado por "laje".
+      //
+      // O sufixo '*' resolve a morfologia sem stemmer. Acento NÃO precisa de
+      // tratamento aqui: a collation da coluna é accent-insensitive (verificado
+      // — 'metalica' casa 'metálica').
+      const expressao = termos.map((t) => `${t}*`).join(" ");
       const r: any = await db.execute(sql`
-        SELECT *, MATCH(description) AGAINST (${expressao} IN NATURAL LANGUAGE MODE) AS score
+        SELECT *, MATCH(description) AGAINST (${expressao} IN BOOLEAN MODE) AS score
         FROM ncm_tax_rates
-        WHERE MATCH(description) AGAINST (${expressao} IN NATURAL LANGUAGE MODE)
+        WHERE MATCH(description) AGAINST (${expressao} IN BOOLEAN MODE)
         ORDER BY score DESC
-        LIMIT ${Math.max(limit * 4, 60)}
+        LIMIT ${Math.max(limit * 6, 90)}
       `);
       const linhas = (Array.isArray(r) ? r[0] : r) ?? [];
       results = ordenarPorFolha(Array.isArray(linhas) ? linhas : [], termos, limit);

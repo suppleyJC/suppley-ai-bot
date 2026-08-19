@@ -107,6 +107,53 @@ describe("searchNCMs — ranqueamento por folha", () => {
     expect(r[0].ncmCode).toBe("84818092");
   });
 
+  it("a contagem na folha vence a pontuação bruta do FULLTEXT", async () => {
+    // Caso REAL medido contra a base de produção, buscando "garrafa térmica
+    // inox": a máquina de encher garrafas tem a MAIOR pontuação de FULLTEXT
+    // (37,84 contra 24,94), mas casa um termo só na folha. Quem descreve o
+    // ITEM tem que ganhar de quem apenas compartilha vocabulário — foi por
+    // este caso que a combinação multiplicativa foi abandonada.
+    comFulltext([
+      {
+        ncmCode: "84223010",
+        description:
+          "84 Reatores nucleares, caldeiras, máquinas. > 84.22 Máquinas de lavar louça > 8422.30 - Para encher > 8422.30.10 Máquinas e aparelhos para encher, fechar, arrolhar, capsular ou rotular garrafas",
+        iiRate: 1400,
+        score: 37.84,
+      },
+      {
+        ncmCode: "96170010",
+        description:
+          "96 Obras diversas. > 96.17 Garrafas térmicas e outros recipientes isotérmicos > 9617.00.10 Garrafas térmicas e outros recipientes isotérmicos",
+        iiRate: 1800,
+        score: 24.94,
+      },
+    ]);
+
+    const r = await searchNCMs("garrafa termica inox parede dupla");
+
+    expect(r[0].ncmCode).toBe("96170010");
+  });
+
+  it("casa termo sem acento contra descrição acentuada", async () => {
+    // A consulta vem de proforma, com frequência sem acentuação; a folha tem
+    // "térmicas". Se a comparação em JS fosse literal, a folha não pontuaria e
+    // o critério principal do ranqueamento ficaria sempre zerado.
+    comFulltext([
+      {
+        ncmCode: "96170010",
+        description: "96 Obras diversas. > 9617.00.10 Garrafas térmicas e outros recipientes isotérmicos",
+        iiRate: 1800,
+        score: 1,
+      },
+      { ncmCode: "39269090", description: `${CAP39} > ${POS3926} > 3926.90.90 Outras`, iiRate: 1800, score: 9 },
+    ]);
+
+    const r = await searchNCMs("garrafa termica");
+
+    expect(r[0].ncmCode).toBe("96170010");
+  });
+
   it("não decide por menor código quando há empate de termos", async () => {
     // O viés antigo: empate na pontuação → localeCompare do código → sempre o
     // menor. Aqui '39232110' é o menor e NÃO pode ganhar de quem casa na folha.
