@@ -13,6 +13,7 @@ import { getDb } from "../db";
 import { ncmTaxRates } from "../../drizzle/schema";
 import { eq, like, sql, or } from "drizzle-orm";
 import { invokeLLM, MODELS } from "../_core/llm";
+import { normalizarNcm, ncmCanonico } from "./ncmCodigo";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -290,55 +291,152 @@ export function tokenizarBuscaNcm(query: string): string[] {
     .slice(0, 6);
 }
 
-export async function searchNCMs(query: string, limit: number = 20): Promise<any[]> {
+/**
+ * A descrição da NCM é um CAMINHO: "39 Plástico e suas obras. > 39.26 Outras
+ * obras... > 3926.90 - Outras > 3926.90.90 Outras". A última seção é o item de
+ * fato; tudo antes é contexto herdado do capítulo e da posição.
+ */
+export function folhaDaDescricao(descricao: string | null | undefined): string {
+  const texto = String(descricao ?? "");
+  const partes = texto.split(" > ");
+  return (partes[partes.length - 1] ?? texto).trim();
+}
+
+/**
+ * O índice FULLTEXT é criado por migração SQL aplicada à mão (0049), então o
+ * código não pode assumir que ele existe: entre o deploy e a aplicação da
+ * migração a busca precisa continuar funcionando. Detectado uma vez por
+ * processo — é DDL, não muda em tempo de execução.
+ */
+let indiceFulltext: boolean | null = null;
+
+async function temIndiceFulltext(db: any): Promise<boolean> {
+  if (indiceFulltext !== null) return indiceFulltext;
+  try {
+    const r: any = await db.execute(sql`
+      SELECT COUNT(*) AS n FROM information_schema.STATISTICS
+      WHERE table_schema = DATABASE()
+        AND table_name   = 'ncm_tax_rates'
+        AND index_name   = 'ft_ncm_description'
+    `);
+    // mysql2 devolve [linhas, campos]; drizzle repassa cru.
+    const linhas = Array.isArray(r) ? r[0] : r;
+    const n = Number(linhas?.[0]?.n ?? 0);
+    indiceFulltext = n > 0;
+    if (!indiceFulltext) {
+      console.warn(
+        "[NCM] índice ft_ncm_description ausente — busca em modo degradado (LIKE). " +
+        "Aplique drizzle/0049_ncm_fulltext.sql.",
+      );
+    }
+  } catch {
+    indiceFulltext = false;
+  }
+  return indiceFulltext;
+}
+
+/** Só para os testes: força a redetecção do índice. */
+export function resetDeteccaoFulltext(): void {
+  indiceFulltext = null;
+}
+
+/**
+ * Promove candidatos cuja FOLHA casa com os termos.
+ *
+ * Multiplicativo, não aditivo: a relevância do FULLTEXT continua mandando na
+ * ordem geral (ela já pondera por IDF), e o casamento na folha apenas amplifica
+ * quem descreve o ITEM em vez de casar só pelo nome do capítulo.
+ */
+function ordenarPorFolha(linhas: any[], termos: string[], limit: number): any[] {
+  return linhas
+    .map((r) => {
+      const folha = folhaDaDescricao(r.description).toLowerCase();
+      const naFolha = termos.reduce((n, t) => n + (folha.includes(t) ? 1 : 0), 0);
+      const base = Number(r.score ?? 1) || 1;
+      return { r, peso: base * (1 + 0.5 * naFolha) };
+    })
+    .sort((a, b) => b.peso - a.peso || String(a.r.ncmCode).localeCompare(String(b.r.ncmCode)))
+    .slice(0, limit)
+    .map((x) => x.r);
+}
+
+/**
+ * Busca NCMs por código ou descrição (com cache de 5 min).
+ *
+ * @param contexto  Descrição/especificações do produto. ENTRA na recuperação —
+ *   antes só o nome curto era usado para achar candidatos, e a descrição ia
+ *   direto para o modelo. Um item chamado "Cabo Flex 750V" cujo detalhe diz
+ *   "condutor de cobre isolado em PVC" era procurado apenas pelo nome
+ *   comercial, e o candidato certo nunca chegava à lista.
+ */
+export async function searchNCMs(
+  query: string,
+  limit: number = 20,
+  contexto?: string,
+): Promise<any[]> {
   const db = await getDb();
   if (!db) return [];
 
   const cleanQuery = query.replace(/\./g, "").trim();
   if (!cleanQuery) return [];
 
-  // Check cache
-  const cacheKey = `search:${cleanQuery}:${limit}`;
+  const cacheKey = `search:${cleanQuery}:${limit}:${(contexto ?? "").slice(0, 120)}`;
   const cached = searchCache.get(cacheKey);
   if (cached) return cached;
 
   try {
-    // Busca otimizada: priorizar match por código (usa índice)
-    const isNumeric = /^\d+$/.test(cleanQuery);
-
-    let results: any[];
-    if (isNumeric) {
-      // Busca por código NCM (usa índice, muito rápido)
-      results = await db
+    // Código: casamento por prefixo, que usa o índice e é exato.
+    if (/^\d+$/.test(cleanQuery)) {
+      const results = await db
         .select()
         .from(ncmTaxRates)
         .where(like(ncmTaxRates.ncmCode, `${cleanQuery}%`))
         .limit(limit);
-    } else {
-      // Busca por descrição TOKENIZADA: um LIKE por termo relevante, ranqueado
-      // pelo nº de termos que casam. O LIKE com a frase inteira retornava vazio
-      // para qualquer nome de produto real.
-      const termos = tokenizarBuscaNcm(cleanQuery);
-      const condicoes = [
-        like(ncmTaxRates.ncmCode, `${cleanQuery}%`),
-        ...termos.map((t) => like(ncmTaxRates.description, `%${t}%`)),
-      ];
+      searchCache.set(cacheKey, results);
+      return results;
+    }
+
+    const termos = tokenizarBuscaNcm([cleanQuery, contexto ?? ""].join(" "));
+    if (!termos.length) return [];
+
+    let results: any[] = [];
+
+    if (await temIndiceFulltext(db)) {
+      // NATURAL LANGUAGE MODE: pondera por IDF. O nome do capítulo, presente em
+      // centenas de linhas, pesa quase nada; o termo distintivo domina. É o que
+      // conserta a busca sobre texto hierárquico.
+      const expressao = termos.join(" ");
+      const r: any = await db.execute(sql`
+        SELECT *, MATCH(description) AGAINST (${expressao} IN NATURAL LANGUAGE MODE) AS score
+        FROM ncm_tax_rates
+        WHERE MATCH(description) AGAINST (${expressao} IN NATURAL LANGUAGE MODE)
+        ORDER BY score DESC
+        LIMIT ${Math.max(limit * 4, 60)}
+      `);
+      const linhas = (Array.isArray(r) ? r[0] : r) ?? [];
+      results = ordenarPorFolha(Array.isArray(linhas) ? linhas : [], termos, limit);
+    }
+
+    if (!results.length) {
+      // Degradação: sem índice, ou quando o FULLTEXT não casou nada (termos
+      // abaixo do token mínimo, por exemplo).
+      //
+      // O LIMIT aqui é generoso DE PROPÓSITO. A versão anterior cortava em 200
+      // sem ORDER BY e ranqueava só o que sobrava — com descrições que carregam
+      // o capítulo inteiro, um termo genérico casa centenas de linhas e a
+      // resposta certa não entrava no recorte. Ranquear antes de cortar é o
+      // ponto; o custo é aceitável numa tabela de 11 mil linhas.
       const brutos = await db
         .select()
         .from(ncmTaxRates)
-        .where(or(...condicoes))
-        .limit(200);
+        .where(or(...termos.map((t) => like(ncmTaxRates.description, `%${t}%`))))
+        .limit(1500);
 
-      // Ranqueia: mais termos casados primeiro (empate → código menor, estável)
-      const rank = (r: any) => {
-        const d = (r.description ?? "").toLowerCase();
-        return termos.reduce((n, t) => n + (d.includes(t) ? 1 : 0), 0);
-      };
-      results = brutos
-        .map((r) => ({ r, score: rank(r) }))
-        .sort((a, b) => b.score - a.score || a.r.ncmCode.localeCompare(b.r.ncmCode))
-        .slice(0, Math.min(limit, 30))
-        .map((x) => x.r);
+      const pontuados = (Array.isArray(brutos) ? brutos : []).map((r: any) => {
+        const d = String(r.description ?? "").toLowerCase();
+        return { ...r, score: termos.reduce((n, t) => n + (d.includes(t) ? 1 : 0), 0) };
+      });
+      results = ordenarPorFolha(pontuados, termos, limit);
     }
 
     searchCache.set(cacheKey, results);
@@ -412,7 +510,10 @@ export async function expandNcmPrefixes(
  * Obtém NCM por código (com cache de 1h)
  */
 export async function getNCMByCode(ncmCode: string): Promise<any | null> {
-  const cleanCode = ncmCode.replace(/\./g, "");
+  // Normaliza pela MESMA regra da escrita: tirar só os pontos deixava
+  // '3923300000' (10 dígitos, 87 produtos na base) sem correspondência, e o
+  // produto ficava sem alíquota como se a NCM não existisse.
+  const cleanCode = ncmCanonico(ncmCode) ?? ncmCode.replace(/\D/g, "");
   if (!cleanCode) return null;
 
   // Check cache
@@ -471,10 +572,19 @@ export async function suggestNCMWithAI(
     return cached;
   }
 
-  // Buscar NCMs similares (usa cache de search)
-  const similarNCMs = await searchNCMs(productName, 30);
+  // A RECUPERAÇÃO usa nome + descrição + linha do documento. O modelo só
+  // escolhe bem entre candidatos que a busca trouxe; procurar apenas pelo nome
+  // comercial curto deixava de fora o candidato certo sempre que o detalhe
+  // técnico (material, processo, tensão) era o que decidia a posição.
+  const similarNCMs = await searchNCMs(
+    productName,
+    30,
+    [productDescription ?? "", documentContext ?? ""].join(" ").trim() || undefined,
+  );
 
-  // Preparar contexto limitado para a IA (top 15 para reduzir tokens)
+  // Cada candidato vai com o CAMINHO hierárquico completo — capítulo, posição,
+  // subposição e item. Sem ele, um quarto da nomenclatura chega ao modelo como
+  // "Outros" e não há como aplicar a RGI 6, que compara no mesmo nível.
   const ncmContext = similarNCMs.slice(0, 15).map(n =>
     `${n.ncmCode}: ${n.description} (II: ${(n.iiRate / 100).toFixed(1)}%)`
   ).join("\n");
@@ -494,19 +604,30 @@ MÉTODO DE CLASSIFICAÇÃO (siga nesta ordem — RGI 1 a 6):
 1. FORMA E MATÉRIA decidem o capítulo, antes de qualquer uso comercial. Percorra a hierarquia
    capítulo → posição (4 díg.) → subposição (6 díg.) → item (8 díg.) e só desça quando o nível
    acima estiver certo. Um erro de capítulo é o erro mais caro que existe aqui.
-2. Armadilhas frequentes no capítulo 73 (obras de ferro/aço), onde a forma mais confunde:
-   - FIO / ARAME de ferro ou aço não ligado (inclusive zincado, galvanizado ou recozido) = 7217;
-     de aço inoxidável = 7223. NÃO é 7308.
-   - PREGOS, tachas, percevejos, grampos = 7317.
-   - ARAME FARPADO e arame torcido para cercas = 7313.
-   - 7308 é ESTRUTURA de construção (pontes, torres, pilares, andaimes) — não é fio nem prego.
-     ANDAIMES, escoramentos e formas = 7308.40.00 (não 7308.90.00).
-   - FIO-MÁQUINA (laminado a quente, matéria-prima do arame) = 7213, capítulo diferente do arame acabado.
-3. Prefira SEMPRE um código da lista acima quando ele descrever corretamente o produto. Só proponha
+2. Os candidatos vêm com o CAMINHO completo ("39 Plástico e suas obras. > 39.26 Outras obras...
+   > 3926.90 - Outras > 3926.90.90 Outras"). Compare no MESMO nível (RGI 6): dois itens só se
+   comparam depois que a posição está decidida. Uma folha que se lê "Outros" não descreve nada
+   sozinha — leia-a junto com o caminho que a precede.
+3. RESIDUAL É ÚLTIMO RECURSO. Posições "Outros/Outras" existem para o que não cabe em nenhuma
+   posição específica. Antes de escolher uma, verifique se há item específico na MESMA subposição.
+   Escolher residual sem justificar por que os específicos não servem é classificar por desistência.
+4. NUNCA complete uma subposição com zeros para chegar a 8 dígitos. "3923.30" é SUBPOSIÇÃO; os
+   itens reais são 3923.30.10 e 3923.30.90 — "3923.30.00" NÃO EXISTE e é rejeitado na declaração.
+   Se não souber descer ao item, diga isso e baixe a confiança; não invente o último par de dígitos.
+5. Eixos que decidem a classificação, nesta ordem de força: MATÉRIA (do que é feito) → FORMA/PROCESSO
+   (como se apresenta: fio, chapa, obra acabada) → USO. O uso comercial quase nunca vence a matéria.
+   Exemplo do capítulo 73, onde a forma mais confunde: FIO/ARAME de ferro ou aço não ligado
+   (mesmo zincado ou recozido) = 7217, inox = 7223; PREGOS e tachas = 7317; ARAME FARPADO = 7313;
+   ESTRUTURA de construção (pontes, torres, andaimes) = 7308, sendo andaimes e escoramentos
+   7308.40.00; FIO-MÁQUINA laminado a quente = 7213. O mesmo raciocínio vale em qualquer capítulo:
+   a matéria fixa o capítulo, a forma fixa a posição, o uso só desempata no fim.
+6. Prefira SEMPRE um código da lista acima quando ele descrever corretamente o produto. Só proponha
    um código fora da lista se a lista não contiver a posição correta — e nesse caso o código precisa
    existir de fato na NCM vigente. Nunca invente dígitos para completar 8 posições.
-4. A confiança deve refletir a evidência: acima de 85 só quando material, forma e uso estiverem
-   determinados. Se o nome for genérico e não houver descrição, fique abaixo de 60 e marque risco alto.
+7. A confiança deve refletir a evidência: acima de 85 só quando matéria, forma e uso estiverem
+   determinados E os candidatos convergirem na mesma subposição. Se os dois melhores candidatos
+   estiverem em CAPÍTULOS diferentes, a confiança fica abaixo de 60 e o risco é alto — diga qual
+   informação resolveria a dúvida (matéria? processo? apresentação? uso?).
 
 TAREFA:
 1. Identifique a NCM mais adequada para este produto
@@ -595,6 +716,16 @@ Responda em JSON com o formato especificado.`;
         .trim();
       const result: NCMOptimizationResult = JSON.parse(cleaned);
 
+      // NORMALIZA a saída do modelo antes de qualquer coisa: o código gravado e
+      // o código consultado têm que ser a MESMA string. Foi a ausência disso em
+      // todos os caminhos de escrita que espalhou a mesma NCM em cinco grafias.
+      const canonicoPrincipal = ncmCanonico(result.suggestedNCM.ncmCode);
+      if (canonicoPrincipal) result.suggestedNCM.ncmCode = canonicoPrincipal;
+      for (const alt of result.alternatives) {
+        const c = ncmCanonico(alt.ncmCode);
+        if (c) alt.ncmCode = c;
+      }
+
       // Enriquecer com dados do banco em paralelo (não sequencial)
       const allCodes = [
         result.suggestedNCM.ncmCode,
@@ -621,15 +752,21 @@ Responda em JSON com o formato especificado.`;
       // não pode sair com confiança alta: ele contamina alíquota, barreira e todo
       // o cálculo a jusante. Rebaixa a confiança e eleva o risco, em vez de
       // apresentar um palpite com cara de certeza.
-      const codigoValido = /^\d{8}$/.test(
-        String(result.suggestedNCM.ncmCode ?? "").replace(/\D/g, ""),
-      );
-      if (!mainDb || !codigoValido) {
+      //
+      // O teste de 8 dígitos sozinho NÃO basta: '39233000' tem oito dígitos e
+      // não existe — é a subposição 3923.30 completada com zeros, o padrão que
+      // respondia por 736 produtos do catálogo. Quem decide é a presença na
+      // nomenclatura (`mainDb`), e o aviso diz qual dos dois defeitos ocorreu.
+      const normalizado = normalizarNcm(result.suggestedNCM.ncmCode);
+      if (!mainDb || !normalizado.canonico) {
+        const motivo = !normalizado.canonico
+          ? `não é um item de 8 dígitos (${normalizado.classe})`
+          : `não consta na nomenclatura da base — pode ser subposição completada com zeros`;
         result.suggestedNCM.confidence = Math.min(result.suggestedNCM.confidence ?? 0, 45);
         result.riskLevel = "high";
         result.suggestedNCM.reason =
           `${result.suggestedNCM.reason ?? ""} ` +
-          `[Código não confirmado na nomenclatura da base — confirmar na TEC antes de fechar.]`.trim();
+          `[Código ${result.suggestedNCM.ncmCode}: ${motivo}. Confirmar na TEC antes de fechar.]`.trim();
       }
 
       // Enriquecer alternativas
