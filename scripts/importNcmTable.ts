@@ -52,7 +52,7 @@ function mapHeaders(headers: string[]): Record<string, number> {
 /** "12,6" | "12.6" | "0.126" | "12,6%" → basis points (12,6% = 1260) */
 function parseRateToBp(raw: string | undefined): number | undefined {
   if (raw === undefined || raw === null) return undefined;
-  const cleaned = String(raw).replace("%", "").replace(/\./g, (m, i, s) =>
+  const cleaned = String(raw).replace(/%/g, "").replace(/\./g, (m, i, s) =>
     // mantém o último ponto como decimal se não houver vírgula
     s.includes(",") ? "" : m
   ).replace(",", ".").trim();

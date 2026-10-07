@@ -16,6 +16,7 @@ import { invokeLLM, MODELS, type Message } from "../_core/llm";
 import { getToolSchemas, runTool } from "./tools";
 import type { AnexoTurno, ToolContext } from "./tools/types";
 import { checkBudget } from "./guardrails";
+import { modelForTurn } from "./modelRouting";
 import { getLearningContext } from "../db";
 import * as operacaoService from "../services/operacaoService";
 
@@ -272,9 +273,18 @@ const MAX_TURNS = 12;
 async function buildSystemContent(userId: number, operacaoId?: number): Promise<string> {
   let prompt = EXCAMBIA_SYSTEM_PROMPT;
 
-  try {
-    const ctx = await getLearningContext(userId); // já ordenado por importância desc
-    const top = ctx.filter((c) => c.value?.trim()).slice(0, 20);
+  // Memória e snapshot da operação são independentes. Antes eram buscados em
+  // sequência, somando as duas latências em todo turno vinculado a operação.
+  // Buscamos em paralelo e mantemos o comportamento best-effort.
+  const [ctxResult, snapshotResult] = await Promise.allSettled([
+    getLearningContext(userId),
+    operacaoId
+      ? operacaoService.getOperacaoContextoChat(userId, operacaoId)
+      : Promise.resolve(null),
+  ]);
+
+  if (ctxResult.status === "fulfilled") {
+    const top = ctxResult.value.filter((c) => c.value?.trim()).slice(0, 20);
 
     // PERSONA ATIVA: se o perfil técnico já foi aprendido, vira diretriz de
     // primeira linha — a resposta já nasce calibrada (novato/intermediario/expert).
@@ -294,19 +304,18 @@ async function buildSystemContent(userId: number, operacaoId?: number): Promise<
         `necessidade. Se algo mudar ou você descobrir um novo padrão durável, registre ` +
         `com a ferramenta registrar_memoria.\n${linhas}`;
     }
-  } catch { /* memória é opcional */ }
+  }
 
-  if (operacaoId) {
-    try {
-      const snapshot = await operacaoService.getOperacaoContextoChat(userId, operacaoId);
-      if (snapshot) {
-        prompt +=
-          `\n\n## Operação vinculada a esta conversa (estado ATUAL, sincronizado com o painel)\n` +
-          snapshot +
-          `\nEste é o estado de agora — inclui o que a pessoa fez no painel. Não repita a ` +
-          `consulta para o básico; narre a partir daqui e registre os avanços que ela relatar.`;
-      }
-    } catch { /* snapshot é opcional */ }
+  if (
+    operacaoId &&
+    snapshotResult.status === "fulfilled" &&
+    snapshotResult.value
+  ) {
+    prompt +=
+      `\n\n## Operação vinculada a esta conversa (estado ATUAL, sincronizado com o painel)\n` +
+      snapshotResult.value +
+      `\nEste é o estado de agora — inclui o que a pessoa fez no painel. Não repita a ` +
+      `consulta para o básico; narre a partir daqui e registre os avanços que ela relatar.`;
   }
 
   return prompt;
@@ -420,6 +429,7 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
   // Cadeia de pensamento nativa nas análises complexas (uma decisão por mensagem).
   const profundo = precisaRaciocinioProfundo(input.messages);
   const effort = profundo ? ("xhigh" as const) : ("high" as const);
+  const model = modelForTurn(input.messages, profundo);
 
   let turns = 0;
   let llmCalls = 0;
@@ -445,6 +455,7 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
       // Teto de saída alto: catalogar uma cotação grande gera argumentos de
       // tool com dezenas de itens — com o default (4096) o JSON era cortado.
       maxTokens: 16000,
+      model,
     });
 
     const choice = result.choices?.[0]?.message;
@@ -525,6 +536,7 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
   // Cadeia de pensamento nativa nas análises complexas (uma decisão por mensagem).
   const profundo = precisaRaciocinioProfundo(input.messages);
   const effort = profundo ? ("xhigh" as const) : ("high" as const);
+  const model = modelForTurn(input.messages, profundo);
 
   let turns = 0;
   let llmCalls = 0;
@@ -565,6 +577,7 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
       // Teto de saída alto: catalogar uma cotação grande gera argumentos de
       // tool com dezenas de itens — com o default (4096) o JSON era cortado.
       maxTokens: 16000,
+      model,
     });
 
     const choice = result.choices?.[0]?.message;

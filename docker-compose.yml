@@ -11,8 +11,8 @@ services:
       - "${PORT:-3000}:3000"
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      DATABASE_URL: mysql://${DB_USER:-suppley}:${DB_PASSWORD:-changeme}@db:3306/${DB_NAME:-suppley_calc}
-      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production}
+      DATABASE_URL: mysql://${DB_USER:-suppley}:${DB_PASSWORD:?DB_PASSWORD must be set}@db:3306/${DB_NAME:-suppley_calc}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       PORT: 3000
       # IA (Anthropic Claude) — essencial para a Excambia responder
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -50,9 +50,9 @@ services:
     container_name: suppley-mysql
     environment:
       MYSQL_DATABASE: ${DB_NAME:-suppley_calc}
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootchangeme}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD must be set}
       MYSQL_USER: ${DB_USER:-suppley}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-changeme}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
     # DB NÃO é exposto no host (postura de produção): o app conecta pela rede
     # interna do Docker (db:3306). Para acesso manual: docker exec -it suppley-mysql mysql -u suppley -p
     # Para expor em dev, descomente abaixo (ajuste a porta se 3306 estiver ocupada):
@@ -64,7 +64,7 @@ services:
       # Optional: custom MySQL configuration
       # - ./mysql.cnf:/etc/mysql/conf.d/custom.cnf
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-rootchangeme}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD must be set}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -89,7 +89,7 @@ services:
     environment:
       PMA_HOST: db
       PMA_USER: root
-      PMA_PASSWORD: ${DB_ROOT_PASSWORD:-rootchangeme}
+      PMA_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD must be set}
     ports:
       - "8080:80"
     depends_on:

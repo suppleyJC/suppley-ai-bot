@@ -98,8 +98,11 @@ function extractValueAfter(text: string, keywords: string[]): string | null {
     const m = after.match(/^[^,.;\n]+/);
     if (!m) continue;
 
-    // Limpa conjunção residual no fim ("... e").
-    const value = m[0].trim().replace(/\s+e$/i, "").trim();
+    // Limpa conjunção residual no fim ("... e") sem regex sobre conteúdo livre.
+    let value = m[0].trim();
+    if (value.length >= 2 && value.slice(-2).toLowerCase() === " e") {
+      value = value.slice(0, -2).trim();
+    }
     if (value) return value;
   }
   return null;

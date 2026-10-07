@@ -20,10 +20,12 @@ import { and, eq, like } from "drizzle-orm";
 import { getDb } from "../db/connection";
 import { rfqs, supplierOutreach } from "../../drizzle/rfqSchema";
 import { registrarRespostaFornecedor } from "../services/rfqOutreachService";
+import { createRateLimit } from "../_core/rateLimit";
 
 export const rfqInboundRouter = Router();
+const rfqInboundRateLimit = createRateLimit({ windowMs: 60_000, max: 120 });
 
-rfqInboundRouter.post("/api/rfq/inbound", async (req: Request, res: Response) => {
+rfqInboundRouter.post("/api/rfq/inbound", rfqInboundRateLimit, async (req: Request, res: Response) => {
   const token = process.env.RFQ_INBOUND_TOKEN;
   if (!token) return res.status(404).json({ error: "inbound desabilitado" });
   const auth = req.headers.authorization ?? "";
@@ -51,7 +53,11 @@ rfqInboundRouter.post("/api/rfq/inbound", async (req: Request, res: Response) =>
     // Tenta casar o outreach original pelo email do remetente (fecha o rastreio).
     let outreachId: number | undefined;
     if (from) {
-      const fromEmail = from.match(/<([^>]+)>/)?.[1] ?? from;
+      const lt = from.indexOf("<");
+      const gt = lt >= 0 ? from.indexOf(">", lt + 1) : -1;
+      const fromEmail = lt >= 0 && gt > lt + 1
+        ? from.slice(lt + 1, gt).trim()
+        : from;
       const [o] = await db.select().from(supplierOutreach)
         .where(and(eq(supplierOutreach.rfqId, rfq.id), eq(supplierOutreach.recipientEmail, fromEmail)))
         .limit(1);

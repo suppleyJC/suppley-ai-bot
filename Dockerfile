@@ -1,7 +1,7 @@
 # Multi-stage build para segurança + tamanho mínimo
 
 # Stage 1: Build
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ COPY pnpm-lock.yaml package.json ./
 # Instalar pnpm + TODAS as dependências: o build precisa das de dev
 # (vite/esbuild). Antes funcionava com --prod por acidente — o COPY . .
 # trazia o node_modules do host; com o .dockerignore isso acabou.
-RUN npm install -g pnpm && \
+RUN npm install -g pnpm@10.4.1 && \
     pnpm install --frozen-lockfile
 
 # Copiar código
@@ -23,7 +23,7 @@ RUN pnpm build && \
     pnpm prune --prod
 
 # Stage 2: Runtime (mínimo)
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 

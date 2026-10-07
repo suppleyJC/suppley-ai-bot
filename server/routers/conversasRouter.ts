@@ -148,7 +148,7 @@ export const conversasRouter = router({
         content: m.content,
       }));
       if (input.attachment && agentMessages.length > 0) {
-        const block = await buildAttachmentBlock(input.attachment);
+        const block = await buildAttachmentBlock(input.attachment, ctx.user.id);
         const lastIdx = agentMessages.length - 1;
         const lastText = (agentMessages[lastIdx].content as string) || "";
         if (block) {

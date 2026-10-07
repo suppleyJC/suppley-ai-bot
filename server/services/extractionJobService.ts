@@ -36,7 +36,7 @@ function prune() {
 
 export function startExtractionJob(
   userId: number,
-  fileUrl: string,
+  fileKey: string,
   mimeType: string,
   hints?: { supplierName?: string; expectedProducts?: string[]; fileName?: string },
 ): string {
@@ -44,7 +44,7 @@ export function startExtractionJob(
   const id = randomUUID();
   jobs.set(id, { id, userId, status: "processando", criadoEm: Date.now() });
 
-  void extractProformaFromFile(fileUrl, mimeType, hints)
+  void extractProformaFromFile(userId, fileKey, mimeType, hints)
     .then((result) => {
       const job = jobs.get(id);
       if (job) Object.assign(job, { status: "concluida" as const, result });

@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import { ENV } from "./env";
 import { recordLlmUsage } from "../db/usageDb";
 
@@ -522,6 +523,8 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   }
 
   // Chamar API Anthropic
+  const perfStartedAt = performance.now();
+  let perfRetriedWithoutThinking = false;
   const headers: Record<string, string> = {
     "content-type": "application/json",
     "x-api-key": ENV.anthropicApiKey!,
@@ -543,6 +546,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   // thinking antes de desistir — uma análise complexa não pode deixar o chat
   // mudo por causa de uma incompatibilidade pontual do recurso.
   if (!response.ok && thinkingEnabled) {
+    perfRetriedWithoutThinking = true;
     const retryPayload = { ...payload };
     delete retryPayload.thinking;
     retryPayload.max_tokens = requestedMax;
@@ -554,6 +558,15 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   }
 
   if (!response.ok) {
+    console.info("[perf:llm]", {
+      model: modeloAtual,
+      totalMs: Math.round(performance.now() - perfStartedAt),
+      status: response.status,
+      thinking: thinkingEnabled,
+      webSearch: Boolean(webSearch),
+      retriedWithoutThinking: perfRetriedWithoutThinking,
+      maxTokens: payload.max_tokens,
+    });
     const errorText = await response.text();
     throw new Error(
       `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
@@ -561,6 +574,17 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   }
 
   const result = await response.json() as any;
+  console.info("[perf:llm]", {
+    model: result.model ?? modeloAtual,
+    totalMs: Math.round(performance.now() - perfStartedAt),
+    status: response.status,
+    thinking: thinkingEnabled,
+    webSearch: Boolean(webSearch),
+    retriedWithoutThinking: perfRetriedWithoutThinking,
+    maxTokens: payload.max_tokens,
+    inputTokens: result.usage?.input_tokens ?? null,
+    outputTokens: result.usage?.output_tokens ?? null,
+  });
 
   // Medição de tokens/custo (fire-and-forget; inclui cache read/write).
   if (result.usage) {

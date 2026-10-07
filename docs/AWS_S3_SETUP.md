@@ -168,8 +168,8 @@ AWS Console > IAM > Policies > "Create policy"
 # .env (local development)
 AWS_S3_BUCKET=suppley-ai-uploads-dev
 AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=AKIA1234567890ABCDEF
-AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY
+AWS_ACCESS_KEY_ID=YOUR_AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY=YOUR_AWS_SECRET_ACCESS_KEY
 ```
 
 ### 4.2 Adicionar ao `.env.production` (Produção)
@@ -178,8 +178,8 @@ AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY
 # .env.production (production - servidor SSH)
 AWS_S3_BUCKET=suppley-ai-uploads-prod
 AWS_REGION=sa-east-1
-AWS_ACCESS_KEY_ID=AKIA...
-AWS_SECRET_ACCESS_KEY=...
+AWS_ACCESS_KEY_ID=YOUR_AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY=YOUR_AWS_SECRET_ACCESS_KEY
 ```
 
 ### 4.3 Atualizar docker-compose.yml (Produção)
@@ -218,8 +218,8 @@ cd /opt/suppley/suppley-ai-bot
 cat >> .env << 'EOF'
 AWS_S3_BUCKET=suppley-ai-uploads-prod
 AWS_REGION=sa-east-1
-AWS_ACCESS_KEY_ID=AKIA...COLEASUACHAVEAQUI...
-AWS_SECRET_ACCESS_KEY=...COLEASUASECRETKEY...
+AWS_ACCESS_KEY_ID=YOUR_AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY=YOUR_AWS_SECRET_ACCESS_KEY
 EOF
 ```
 

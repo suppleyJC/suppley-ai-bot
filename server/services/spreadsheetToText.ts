@@ -94,7 +94,7 @@ export async function spreadsheetBufferToText(
     const norm = (arr: string[]) => {
       const c = [...arr];
       while (c.length < maxCols) c.push("");
-      return c.map((s) => s.replace(/\|/g, "\\|").replace(/\n/g, " "));
+      return c.map((s) => s.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, " "));
     };
 
     const header = norm(linhas[0]);

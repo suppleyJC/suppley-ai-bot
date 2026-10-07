@@ -3,13 +3,12 @@ import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
 import { jwtVerify } from "jose";
 import { getUserById } from "../services/authService";
-
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "suppley-calc-secret-key-2024");
+import { getJwtSecret } from "./jwtSecret";
 const SESSION_COOKIE = "suppley_session";
 
 async function verifySessionToken(token: string): Promise<{ userId: number } | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return { userId: payload.userId as number };
   } catch {
     return null;

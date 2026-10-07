@@ -14,8 +14,6 @@
  *
  * Espelha o padrão de spreadsheetToText.ts (buffer → texto para o LLM).
  */
-import { PDFParse } from "pdf-parse";
-
 /** Limite de páginas processadas — proteção contra PDFs gigantes no contexto.
  *  Alto o bastante para qualquer cotação/proforma real; quando estourar, o
  *  texto ganha um AVISO explícito (nada de truncar em silêncio). */
@@ -57,10 +55,14 @@ function cleanText(raw: string): string {
  * (o chamador segue com o base64). Nunca lança.
  */
 export async function pdfBufferToText(buffer: Buffer): Promise<PdfTextResult> {
-  let parser: PDFParse | null = null;
+  let parser: { destroy: () => Promise<void> } | null = null;
   try {
-    parser = new PDFParse({ data: new Uint8Array(buffer) });
-    const result = await parser.getText({ last: MAX_PAGES });
+    // Carrega o parser somente quando há um PDF para processar. Isso evita que
+    // pdfjs inicialize DOM/canvas durante imports de serviços que nem usam PDF.
+    const { PDFParse } = await import("pdf-parse");
+    const activeParser = new PDFParse({ data: new Uint8Array(buffer) });
+    parser = activeParser;
+    const result = await activeParser.getText({ last: MAX_PAGES });
     let text = cleanText(result.text || "");
     const pageCount = result.total || result.pages?.length || 0;
     // Truncamento NUNCA é silencioso: o leitor (humano ou LLM) precisa saber

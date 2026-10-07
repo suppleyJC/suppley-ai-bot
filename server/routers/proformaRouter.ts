@@ -48,7 +48,8 @@ export const proformaRouter = router({
   extract: protectedProcedure
     .input(
       z.object({
-        fileUrl: z.string().min(1),
+        fileKey: z.string().min(1),
+        fileUrl: z.string().optional(),
         mimeType: z.string(),
         // Nome original — decide o parser (planilha/docx/texto) pela extensão.
         fileName: z.string().optional(),
@@ -56,9 +57,9 @@ export const proformaRouter = router({
         expectedProducts: z.array(z.string()).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
-        return await proformaService.extractProformaFromFile(input.fileUrl, input.mimeType, {
+        return await proformaService.extractProformaFromFile(ctx.user.id, input.fileKey, input.mimeType, {
           supplierName: input.supplierName,
           expectedProducts: input.expectedProducts,
           fileName: input.fileName,
@@ -78,7 +79,8 @@ export const proformaRouter = router({
   extractStart: protectedProcedure
     .input(
       z.object({
-        fileUrl: z.string().min(1),
+        fileKey: z.string().min(1),
+        fileUrl: z.string().optional(),
         mimeType: z.string(),
         fileName: z.string().optional(),
         supplierName: z.string().optional(),
@@ -86,7 +88,7 @@ export const proformaRouter = router({
       })
     )
     .mutation(({ ctx, input }) => {
-      const jobId = startExtractionJob(ctx.user.id, input.fileUrl, input.mimeType, {
+      const jobId = startExtractionJob(ctx.user.id, input.fileKey, input.mimeType, {
         supplierName: input.supplierName,
         expectedProducts: input.expectedProducts,
         fileName: input.fileName,

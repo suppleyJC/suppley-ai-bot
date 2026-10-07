@@ -14,6 +14,7 @@
 import type { MessageContent } from "../_core/llm";
 import { isSpreadsheet, spreadsheetBufferToText } from "./spreadsheetToText";
 import { pdfBufferToText } from "./pdfToText";
+import { storageGet } from "../storage";
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
 
@@ -29,6 +30,52 @@ const TEXT_MIMES = ["text/plain", "text/markdown", "application/json", "text/x-p
 // Protege o contexto do agente contra arquivos de texto gigantes (o limite de
 // upload é 16MB — um .txt desse tamanho estouraria a janela do modelo).
 const MAX_TEXT_CHARS = 120_000;
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Anexos do chat só podem ser lidos pela chave permanente criada pelo backend
+ * para o próprio usuário. A URL enviada pelo cliente é apenas informativa e
+ * NUNCA é usada em fetch, evitando SSRF e acesso cruzado a objetos do bucket.
+ */
+function validateAttachmentKey(fileKey: string | undefined, userId: number): string {
+  const key = normalizeStorageKey(fileKey);
+  const expectedPrefix = `quotations/${userId}/`;
+
+  if (!key.startsWith(expectedPrefix)) {
+    throw new Error("Attachment fileKey inválida para este usuário");
+  }
+
+  return key;
+}
+
+function normalizeStorageKey(fileKey: string | undefined): string {
+  if (!fileKey) throw new Error("Attachment fileKey ausente");
+
+  let key = fileKey;
+  while (key.startsWith("/")) key = key.slice(1);
+
+  if (!key || key.includes("..") || key.includes("\\")) {
+    throw new Error("Attachment fileKey inválida");
+  }
+  return key;
+}
+
+async function fetchStoredAttachmentByKey(fileKey: string): Promise<Response> {
+  const key = normalizeStorageKey(fileKey);
+  const { url } = await storageGet(key);
+
+  // URL é gerada pelo servidor via AWS SDK. Redirecionamentos são recusados
+  // para impedir que uma resposta 3xx transforme o download em novo vetor SSRF.
+  const resp = await fetch(url, { redirect: "error" });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+  const declaredSize = Number(resp.headers.get("content-length") || "0");
+  if (declaredSize > MAX_ATTACHMENT_BYTES) {
+    throw new Error("Attachment excede o limite de leitura");
+  }
+
+  return resp;
+}
 
 function isPlainTextFile(mimeType: string, name: string): boolean {
   const n = (name || "").toLowerCase();
@@ -56,11 +103,13 @@ export interface AttachmentRef {
   fileKey?: string;
 }
 
-export async function buildAttachmentBlock(att: AttachmentRef): Promise<MessageContent | null> {
+async function buildAttachmentBlockFromStorageKey(att: AttachmentRef, fileKey: string): Promise<MessageContent | null> {
   try {
-    const resp = await fetch(att.url);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const resp = await fetchStoredAttachmentByKey(fileKey);
     const buffer = Buffer.from(await resp.arrayBuffer());
+    if (buffer.byteLength > MAX_ATTACHMENT_BYTES) {
+      throw new Error("Attachment excede o limite de leitura");
+    }
 
     // Planilhas: converte para texto/Markdown antes de enviar ao LLM.
     // O truncamento é o MESMO dos demais formatos: o limite por aba
@@ -119,15 +168,39 @@ export async function buildAttachmentBlock(att: AttachmentRef): Promise<MessageC
 }
 
 /**
+ * Caminho para anexos recebidos do cliente: exige chave no namespace do usuário.
+ */
+export async function buildAttachmentBlock(att: AttachmentRef, userId: number): Promise<MessageContent | null> {
+  try {
+    const key = validateAttachmentKey(att.fileKey, userId);
+    return await buildAttachmentBlockFromStorageKey(att, key);
+  } catch (err) {
+    console.error("[attachmentBlock] anexo rejeitado:", err);
+    return null;
+  }
+}
+
+/**
+ * Caminho interno para chaves vindas do banco após checagem de posse.
+ * Não aceita URL externa; a chave é sempre re-assinada pelo backend.
+ */
+export async function buildStoredAttachmentBlock(
+  att: Omit<AttachmentRef, "url"> & { fileKey: string },
+): Promise<MessageContent | null> {
+  return buildAttachmentBlockFromStorageKey({ ...att, url: "" }, normalizeStorageKey(att.fileKey));
+}
+
+/**
  * Injeta o anexo na ÚLTIMA mensagem do usuário, transformando-a em conteúdo
  * multimodal (texto + arquivo). Retorna a lista de mensagens pronta para o agente.
  */
 export async function applyAttachmentToMessages<T extends { role: string; content: any }>(
   messages: T[],
   attachment: AttachmentRef | undefined,
+  userId: number,
 ): Promise<T[]> {
   if (!attachment || messages.length === 0) return messages;
-  const block = await buildAttachmentBlock(attachment);
+  const block = await buildAttachmentBlock(attachment, userId);
   if (!block) return messages;
   const out = [...messages];
   const lastIdx = out.length - 1;

@@ -213,8 +213,8 @@ export default function Proformas() {
    * concluir. Requisições longas morriam no proxy (nginx 504) com arquivos
    * grandes — aqui nenhuma chamada dura mais que milissegundos.
    */
-  async function extrairComPolling(fileUrl: string, mimeType: string, fileName: string) {
-    const { jobId } = await extractStartMutation.mutateAsync({ fileUrl, mimeType, fileName });
+  async function extrairComPolling(fileKey: string, mimeType: string, fileName: string) {
+    const { jobId } = await extractStartMutation.mutateAsync({ fileKey, mimeType, fileName });
     const inicio = Date.now();
     const LIMITE_MS = 15 * 60 * 1000;
     for (;;) {
@@ -310,7 +310,7 @@ export default function Proformas() {
       toast.info("Excambia analisando a proforma...");
 
       // 2) extração IA (job + polling — arquivos grandes levam minutos)
-      const extracted = await extrairComPolling(uploaded.fileUrl, proformaMime(file), file.name);
+      const extracted = await extrairComPolling(uploaded.fileKey, proformaMime(file), file.name);
 
       setEditingId(null);
       setDraft({
@@ -369,7 +369,7 @@ export default function Proformas() {
         });
 
         marca(i, { status: "extraindo" });
-        const ext = await extrairComPolling(uploaded.fileUrl, proformaMime(file), file.name);
+        const ext = await extrairComPolling(uploaded.fileKey, proformaMime(file), file.name);
 
         marca(i, { status: "salvando" });
         const created = await createMutation.mutateAsync({

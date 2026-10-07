@@ -38,12 +38,13 @@ async function chamarRota(token: string) {
     send(b: string) { this.corpo = b; return this; },
     redirect(c: number, url: string) { this.statusCode = c; this.destino = url; return this; },
   };
-  await camada.route.stack[0].handle({ params: { token } }, res, () => {});
+  const handler = camada.route.stack[camada.route.stack.length - 1]?.handle;
+  await handler({ params: { token }, ip: "127.0.0.1", socket: { remoteAddress: "127.0.0.1" } }, res, () => {});
   return res;
 }
 
 beforeEach(() => {
-  process.env.JWT_SECRET = "segredo-de-teste";
+  process.env.JWT_SECRET = "segredo-de-teste-com-32-caracteres-min";
   delete process.env.APP_URL;
   storageGetMock.mockClear();
 });
@@ -85,7 +86,7 @@ describe("link estável de arquivo", () => {
 
   it("recusa token assinado com outro segredo", async () => {
     const token = await assinarTokenArquivo({ k: CHAVE });
-    process.env.JWT_SECRET = "outro-segredo";
+    process.env.JWT_SECRET = "outro-segredo-com-32-caracteres-min";
     // O módulo já leu o segredo na carga; o teste garante que um token de outra
     // origem (segredo diferente) não passa pela verificação.
     const { SignJWT } = await import("jose");

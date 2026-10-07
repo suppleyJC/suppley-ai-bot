@@ -125,7 +125,8 @@ const EXTRACTION_SCHEMA = {
  * pipeline do chat).
  */
 export async function extractProformaFromFile(
-  fileUrl: string,
+  userId: number,
+  fileKey: string,
   mimeType: string,
   hints?: { supplierName?: string; expectedProducts?: string[]; fileName?: string }
 ): Promise<ProformaExtraction> {
@@ -170,10 +171,11 @@ ${hints?.expectedProducts?.length ? `- Produtos esperados: ${hints.expectedProdu
   // imagem — com o media_type CORRETO (antes, PNG/WebP iam rotulados de JPEG
   // e a API recusava). Cotação em qualquer formato entra pela mesma porta.
   const fileBlock = await buildAttachmentBlock({
-    url: fileUrl,
+    url: "",
+    fileKey,
     mimeType,
     name: hints?.fileName ?? "proforma",
-  });
+  }, userId);
   if (!fileBlock) {
     throw new Error(
       "Não consegui ler o arquivo (download ou extração falhou). Verifique o formato — " +

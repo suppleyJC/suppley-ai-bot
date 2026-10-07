@@ -17,15 +17,20 @@
  * link não morre no meio da conversa.
  */
 import { Router, Request, Response } from "express";
+import { rateLimit } from "express-rate-limit";
 import { SignJWT, jwtVerify } from "jose";
 import { storageGet } from "../storage";
 import { ENV } from "../_core/env";
+import { getJwtSecret } from "../_core/jwtSecret";
 
 const router = Router();
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "suppley-calc-secret-key-2024",
-);
+const arquivoRateLimit = rateLimit({
+  windowMs: 60_000,
+  limit: 60,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Muitas requisições. Tente novamente em instantes." },
+});
 
 /** Assinatura curta do S3: o redirect é usado na hora, não precisa durar. */
 const TTL_ASSINATURA_S3 = 300;
@@ -48,7 +53,7 @@ export async function assinarTokenArquivo(dados: TokenArquivo): Promise<string> 
   return new SignJWT({ k: dados.k, n: dados.n, u: dados.u })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 /**
@@ -63,9 +68,9 @@ export async function linkEstavelDeArquivo(dados: TokenArquivo): Promise<string>
   return `${ENV.appUrl}/api/arquivo/${token}`;
 }
 
-router.get("/api/arquivo/:token", async (req: Request, res: Response) => {
+router.get("/api/arquivo/:token", arquivoRateLimit, async (req: Request, res: Response) => {
   try {
-    const { payload } = await jwtVerify(req.params.token, JWT_SECRET);
+    const { payload } = await jwtVerify(req.params.token, getJwtSecret());
     const chave = typeof payload.k === "string" ? payload.k : "";
     if (!chave) {
       res.status(400).send("Link inválido.");

@@ -1395,7 +1395,10 @@ export async function getOperacao(userId: number, id: number, admin = false) {
   try {
     marcos = await fetchMarcos(db, eq(operacaoMarcos.operacaoId, id), { ordenar: true });
   } catch (e) {
-    console.error(`[getOperacao ${id}] falha ao ler marcos — card abre sem jornada:`, e);
+    console.error("[getOperacao] falha ao ler marcos — card abre sem jornada", {
+      operacaoId: Number.isInteger(id) ? id : null,
+      errorType: e instanceof Error ? e.name : typeof e,
+    });
     marcos = [];
   }
 

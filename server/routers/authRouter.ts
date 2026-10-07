@@ -5,8 +5,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { registerUser, loginUser, getUserById, generateResetToken, resetPassword, changePassword, countUsers } from "../services/authService";
 import { SignJWT, jwtVerify } from "jose";
-
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "excambia-calc-secret-key-2024");
+import { getJwtSecret } from "../_core/jwtSecret";
 const SESSION_COOKIE = "suppley_session";
 const SESSION_EXPIRY = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -15,12 +14,12 @@ async function createSessionToken(userId: number): Promise<string> {
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("30d")
     .setIssuedAt()
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 async function verifySessionToken(token: string): Promise<{ userId: number } | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return { userId: payload.userId as number };
   } catch {
     return null;

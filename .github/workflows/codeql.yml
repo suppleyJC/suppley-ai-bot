@@ -1,7 +1,7 @@
 name: CodeQL Security
 on:
   push:
-    branches: [main, "claude/manus-migration-independent-*"]
+    branches: [main, "claude/manus-migration-independent-*", "security/**"]
   pull_request:
     branches: [main, "claude/manus-migration-independent-*"]
   workflow_dispatch:

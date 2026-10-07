@@ -168,6 +168,10 @@ export default function ExcambiaChat() {
   const [streaming, setStreaming] = useState(false);
   const [streamingReply, setStreamingReply] = useState("");
   const [streamingEvents, setStreamingEvents] = useState<Array<any>>([]);
+  // Trava síncrona: React state só atualiza no próximo render. Sem esta ref,
+  // dois cliques/Enters muito rápidos podem atravessar o guard antes de
+  // setStreaming(true) e disparar duas chamadas à IA.
+  const sendLockRef = useRef(false);
   const utils = trpc.useUtils();
 
   const create = trpc.conversas.create.useMutation({
@@ -241,9 +245,10 @@ export default function ExcambiaChat() {
   }
 
   async function handleSend() {
-    if (streaming || uploading) return; // evita duplo envio (clique duplo / Enter repetido)
+    if (sendLockRef.current || streaming || uploading) return;
     const text = draft.trim();
     if (!text) return;
+    sendLockRef.current = true;
     setDraft("");
     const optId = `opt-${Date.now()}`;
     setOptimistic((prev) => [...prev, { id: optId, content: text }]);
@@ -322,6 +327,7 @@ export default function ExcambiaChat() {
       setStreamingEvents([]);
       toast.error("Não foi possível enviar a mensagem. Tente novamente.");
     } finally {
+      sendLockRef.current = false;
       setOptimistic((prev) => prev.filter((o) => o.id !== optId));
     }
   }
@@ -357,6 +363,8 @@ export default function ExcambiaChat() {
       toast.error("Arquivo muito grande (máximo 16MB).");
       return;
     }
+    if (sendLockRef.current || streaming || uploading) return;
+    sendLockRef.current = true;
 
     const mimeType = file.type || mimeFromName(nome);
     const text = draft.trim();

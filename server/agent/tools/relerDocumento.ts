@@ -15,8 +15,7 @@
 import { defineSchema, type AgentTool, type ToolContext, type ToolResult } from "./types";
 import { getProformasByUser, getProformaById } from "../../db/proformaDb";
 import * as operacaoService from "../../services/operacaoService";
-import { storageGet } from "../../storage";
-import { buildAttachmentBlock } from "../../services/attachmentBlock";
+import { buildStoredAttachmentBlock } from "../../services/attachmentBlock";
 import { normalizeForSearch } from "../../services/productSimilarity";
 
 const schema = defineSchema(
@@ -109,8 +108,11 @@ export const relerDocumentoTool: AgentTool = {
     // 2) Re-assina a URL e re-extrai o conteúdo (mesmo pipeline do anexo do chat)
     let texto: string | null = null;
     try {
-      const { url } = await storageGet(achado.fileKey, 3600);
-      const block = await buildAttachmentBlock({ url, mimeType: achado.mimeType, name: achado.nome });
+      const block = await buildStoredAttachmentBlock({
+        fileKey: achado.fileKey,
+        mimeType: achado.mimeType,
+        name: achado.nome,
+      });
       if (block && (block as any).type === "text") {
         texto = String((block as any).text ?? "");
       } else if (block) {
