@@ -17,14 +17,20 @@
  * link não morre no meio da conversa.
  */
 import { Router, Request, Response } from "express";
+import { rateLimit } from "express-rate-limit";
 import { SignJWT, jwtVerify } from "jose";
 import { storageGet } from "../storage";
 import { ENV } from "../_core/env";
 import { getJwtSecret } from "../_core/jwtSecret";
-import { createRateLimit } from "../_core/rateLimit";
 
 const router = Router();
-const arquivoRateLimit = createRateLimit({ windowMs: 60_000, max: 60 });
+const arquivoRateLimit = rateLimit({
+  windowMs: 60_000,
+  limit: 60,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Muitas requisições. Tente novamente em instantes." },
+});
 
 /** Assinatura curta do S3: o redirect é usado na hora, não precisa durar. */
 const TTL_ASSINATURA_S3 = 300;

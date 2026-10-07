@@ -1,9 +1,15 @@
 import express, { type Express } from "express";
+import { rateLimit } from "express-rate-limit";
 import fs from "fs";
 import path from "path";
-import { createRateLimit } from "./rateLimit";
 
-const spaFallbackRateLimit = createRateLimit({ windowMs: 60_000, max: 300 });
+const spaFallbackRateLimit = rateLimit({
+  windowMs: 60_000,
+  limit: 300,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Muitas requisições. Tente novamente em instantes." },
+});
 
 /**
  * Servidor de arquivos estáticos de PRODUÇÃO.
