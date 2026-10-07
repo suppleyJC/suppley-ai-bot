@@ -52,7 +52,10 @@ export function UsoIaPanel() {
                   <td className="px-4 py-2.5">{num(m.promptTokens)}</td>
                   <td className="px-4 py-2.5">{num(m.completionTokens)}</td>
                   <td className="px-4 py-2.5 text-teal-700">{num(m.cacheReadTokens)}</td>
-                  <td className="px-4 py-2.5 text-right font-semibold">{usd(m.estCostUsd)}</td>
+                  <td className="px-4 py-2.5 text-right font-semibold">
+                    {usd(m.estCostUsd)}
+                    {!m.pricingKnown && <span className="ml-1 text-[10px] font-normal text-amber-700" title="Tarifa não cadastrada; estimativa usa fallback Opus">*</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -67,6 +70,7 @@ export function UsoIaPanel() {
           preço normal — quanto maior, mais barato escala. Leitura de cache nos 30 dias:{" "}
           <strong>{num(cacheReadTotal)}</strong> · escrita: {num(cacheWriteTotal)}. Custo é
           estimativa (preço público × tokens); o valor cobrado real está no Console da Anthropic.
+          {data.byModel.some((m) => !m.pricingKnown) && <span className="block mt-1 text-amber-800">* Há modelos sem tarifa cadastrada; o custo dessas linhas usa fallback e não deve ser tratado como valor exato.</span>}
         </p>
       </div>
     </div>
