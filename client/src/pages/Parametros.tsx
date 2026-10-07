@@ -20,6 +20,17 @@ import { toast } from "sonner";
 import { SlidersHorizontal, Anchor, FileMinus2, Gift, Plus, History, Route, ArrowRight } from "lucide-react";
 
 /* ---------- helpers de formato ---------- */
+// Corrige apenas texto legado salvo com a codificação trocada; não toca em
+// chaves nem em valores numéricos usados pelo motor.
+const corrigirMojibake = (texto: string) => {
+  if (!/[ÃÂâ€™]/.test(texto)) return texto;
+  try {
+    const bytes = Uint8Array.from(Array.from(texto), (char) => char.charCodeAt(0));
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return texto;
+  }
+};
 const pctFromBp = (bp?: number | null) => (bp == null ? "—" : `${(bp / 100).toFixed(2)}%`);
 const brlFromCents = (c?: number | null) =>
   c == null ? "—" : (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -105,8 +116,8 @@ function TributosTab() {
           <tbody>
             {current.map((r) => (
               <tr key={r.paramKey} className="border-t border-border">
-                <Td className="font-medium text-foreground">{r.label}<div className="font-mono text-[11px] text-muted-foreground">{r.paramKey}</div></Td>
-                <Td><Badge variant="secondary">{CATEGORY_LABEL[r.category] ?? r.category}</Badge></Td>
+                <Td className="font-medium text-foreground">{corrigirMojibake(r.label)}<div className="font-mono text-[11px] text-muted-foreground">{r.paramKey}</div></Td>
+                <Td><Badge variant="secondary">{corrigirMojibake(CATEGORY_LABEL[r.category] ?? r.category)}</Badge></Td>
                 <Td className="font-semibold">{r.unit === "bp" ? pctFromBp(r.valueBp) : brlFromCents(r.valueCents)}</Td>
                 <Td className="text-muted-foreground">{fmtDate(r.effectiveDate)}</Td>
                 <Td className="max-w-[220px] truncate text-muted-foreground" >{r.legalBasis ?? "—"}</Td>
