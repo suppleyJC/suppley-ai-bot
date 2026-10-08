@@ -186,6 +186,8 @@ export type InvokeResult = {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
+    cache_creation_input_tokens: number;
+    cache_read_input_tokens: number;
   };
 };
 
@@ -586,15 +588,22 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     outputTokens: result.usage?.output_tokens ?? null,
   });
 
-  // Medição de tokens/custo (fire-and-forget; inclui cache read/write).
+  // Aguarda a gravação para que o painel já possa consultar o uso ao fim da chamada.
+  // Falhas de medição não interrompem a resposta, mas ficam visíveis sem segredos.
   if (result.usage) {
-    void recordLlmUsage({
-      model: result.model ?? (model || MODELS.smart),
-      promptTokens: result.usage.input_tokens ?? 0,
-      completionTokens: result.usage.output_tokens ?? 0,
-      cacheCreationTokens: result.usage.cache_creation_input_tokens ?? 0,
-      cacheReadTokens: result.usage.cache_read_input_tokens ?? 0,
-    }).catch(() => {});
+    try {
+      await recordLlmUsage({
+        model: result.model ?? (model || MODELS.smart),
+        promptTokens: result.usage.input_tokens ?? 0,
+        completionTokens: result.usage.output_tokens ?? 0,
+        cacheCreationTokens: result.usage.cache_creation_input_tokens ?? 0,
+        cacheReadTokens: result.usage.cache_read_input_tokens ?? 0,
+      });
+    } catch {
+      console.warn("[usage:record-failed]", { model: result.model ?? modeloAtual });
+    }
+  } else {
+    console.warn("[usage:missing]", { model: result.model ?? modeloAtual });
   }
 
   // Converter resposta Anthropic para formato genérico InvokeResult
@@ -654,9 +663,12 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     ],
     usage: result.usage
       ? {
-          prompt_tokens: result.usage.input_tokens,
-          completion_tokens: result.usage.output_tokens,
-          total_tokens: result.usage.input_tokens + result.usage.output_tokens,
+          prompt_tokens: result.usage.input_tokens ?? 0,
+          completion_tokens: result.usage.output_tokens ?? 0,
+          cache_creation_input_tokens: result.usage.cache_creation_input_tokens ?? 0,
+          cache_read_input_tokens: result.usage.cache_read_input_tokens ?? 0,
+          total_tokens: (result.usage.input_tokens ?? 0) + (result.usage.output_tokens ?? 0)
+            + (result.usage.cache_creation_input_tokens ?? 0) + (result.usage.cache_read_input_tokens ?? 0),
         }
       : undefined,
   };

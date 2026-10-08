@@ -20,9 +20,12 @@ type UsageModel = {
 };
 
 export function UsoIaPanel() {
-  const { data, isLoading } = trpc.usage.summary.useQuery({ days: 30 });
+  const { data, isLoading, isError, refetch, isFetching } = trpc.usage.summary.useQuery(
+    { days: 30 }, { refetchInterval: 30_000 },
+  );
 
   if (isLoading) return <Placeholder text="Carregando uso…" />;
+  if (isError) return <Placeholder text="Não foi possível consultar o uso da IA. Tente novamente." />;
   if (!data || data.totalCalls === 0) {
     return <Placeholder text="Ainda não há uso registrado nos últimos 30 dias. Conforme a Excambia for usada, os números aparecem aqui." />;
   }
@@ -33,6 +36,12 @@ export function UsoIaPanel() {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <button type="button" onClick={() => void refetch()} disabled={isFetching}
+          className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50">
+          {isFetching ? "Atualizando…" : "Atualizar uso"}
+        </button>
+      </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Stat label="Custo estimado (30 dias)" value={usd(data.totalEstCostUsd)} strong />
         <Stat label="Chamadas de IA" value={num(data.totalCalls)} />

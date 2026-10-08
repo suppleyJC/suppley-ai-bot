@@ -8,7 +8,7 @@ import { getDb } from "./connection";
 
 export async function recordLlmUsage(data: InsertLlmUsage): Promise<void> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) throw new Error("Usage database unavailable");
   await db.insert(llmUsage).values(data);
 }
 
