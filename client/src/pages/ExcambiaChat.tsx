@@ -21,6 +21,7 @@ import { MessageContent } from "@/components/MessageContent";
 import ExcambiaOrb from "@/components/ExcambiaOrb";
 import { STAGE_ORDER, STAGE_LABELS } from "@/lib/stageLabels";
 import { getMarcoLabel } from "@/lib/marcoLabels";
+import { visiblePendingMessages, type PendingMessage } from "@/lib/chatPending";
 
 const ALLOWED_UPLOAD_TYPES = [
   "application/pdf",
@@ -161,7 +162,7 @@ export default function ExcambiaChat() {
   );
   const [draft, setDraft] = useState("");
   // Mensagens do usuário exibidas na hora (optimistic UI), antes da resposta.
-  const [optimistic, setOptimistic] = useState<Array<{ id: string; content: string }>>([]);
+  const [optimistic, setOptimistic] = useState<PendingMessage[]>([]);
   const [uploading, setUploading] = useState(false);
   const [paramModalOpen, setParamModalOpen] = useState(false);
   const [collectedParams, setCollectedParams] = useState<any>(null);
@@ -251,9 +252,10 @@ export default function ExcambiaChat() {
     sendLockRef.current = true;
     setDraft("");
     const optId = `opt-${Date.now()}`;
-    setOptimistic((prev) => [...prev, { id: optId, content: text }]);
+    setOptimistic((prev) => [...prev, { id: optId, content: text, conversationId: activeId, previousIds: mensagens.map(m => m.id) }]);
     try {
       const { id, operacaoId } = await ensureConversa(text);
+      setOptimistic(prev => prev.map(o => o.id === optId ? { ...o, conversationId: id } : o));
       const messages = [...buildHistory(), { role: "user" as const, content: text }];
 
       setStreaming(true);
@@ -372,11 +374,12 @@ export default function ExcambiaChat() {
     const optId = `opt-${Date.now()}`;
     setOptimistic((prev) => [
       ...prev,
-      { id: optId, content: `Anexo: ${file.name}${text ? `\n\n${text}` : ""}` },
+      { id: optId, content: `Anexo: ${file.name}${text ? `\n\n${text}` : ""}`, conversationId: activeId, previousIds: mensagens.map(m => m.id) },
     ]);
     setUploading(true);
     try {
       const { id, operacaoId } = await ensureConversa(file.name);
+      setOptimistic(prev => prev.map(o => o.id === optId ? { ...o, conversationId: id } : o));
       const base64 = await fileToBase64(file);
       const up = await upload.mutateAsync({
         fileName: file.name,
@@ -453,6 +456,7 @@ export default function ExcambiaChat() {
       toast.error("Não foi possível processar o anexo. Tente novamente.");
     } finally {
       setUploading(false);
+      sendLockRef.current = false;
       setOptimistic((prev) => prev.filter((o) => o.id !== optId));
     }
   }
@@ -473,7 +477,8 @@ export default function ExcambiaChat() {
   }
 
   const mensagens = conv?.mensagens ?? [];
-  const vazio = mensagens.length === 0 && optimistic.length === 0;
+  const pendingMessages = visiblePendingMessages(optimistic, mensagens, activeId);
+  const vazio = mensagens.length === 0 && pendingMessages.length === 0;
 
   return (
     <div className="relative flex h-full w-full">
@@ -532,7 +537,7 @@ export default function ExcambiaChat() {
                   </React.Fragment>
                 );
               })}
-              {optimistic.map((o) => (
+              {pendingMessages.map((o) => (
                 <Message key={o.id} role="user" content={o.content} criadaEm={new Date()} />
               ))}
               {(streaming || uploading) && (
