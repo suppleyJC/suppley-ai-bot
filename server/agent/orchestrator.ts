@@ -17,6 +17,7 @@ import { getToolSchemas, runTool } from "./tools";
 import type { AnexoTurno, ToolContext } from "./tools/types";
 import { checkBudget } from "./guardrails";
 import { modelForTurn } from "./modelRouting";
+import { lightTurnText, runLightTurn } from "./lightTurn";
 import { getLearningContext } from "../db";
 import * as operacaoService from "../services/operacaoService";
 
@@ -409,6 +410,8 @@ function precisaRaciocinioProfundo(messages: Message[]): boolean {
 }
 
 export async function runExcambia(input: OrchestratorInput): Promise<OrchestratorOutput> {
+  const lightText = lightTurnText(input);
+  if (lightText !== undefined) return runLightTurn(lightText);
   const ctx: ToolContext = {
     userId: input.userId,
     operacaoId: input.operacaoId,
@@ -517,6 +520,12 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
 }
 
 export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerator<StreamChunk> {
+  const lightText = lightTurnText(input);
+  if (lightText !== undefined) {
+    yield { type: "thinking", content: "Pensando..." };
+    yield { type: "reply", ...(await runLightTurn(lightText)) };
+    return;
+  }
   const ctx: ToolContext = {
     userId: input.userId,
     operacaoId: input.operacaoId,
