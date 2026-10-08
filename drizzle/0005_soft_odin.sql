@@ -1,0 +1,2 @@
+ALTER TABLE `agent_actions` MODIFY COLUMN `actionType` enum('analysis_generated','alert_created','recommendation_made','data_fetched','trend_detected','optimization_suggested','exchange_check','market_analysis','recommendation_generation','chat_response') NOT NULL;--> statement-breakpoint
+ALTER TABLE `agent_alerts` MODIFY COLUMN `alertType` enum('exchange_rate','exchange_rate_favorable','exchange_rate_unfavorable','market_opportunity','cost_optimization','supplier_recommendation','tax_update','trend_alert','recommendation') NOT NULL;

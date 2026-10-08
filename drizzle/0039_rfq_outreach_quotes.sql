@@ -1,0 +1,83 @@
+-- 0039: garante as tabelas do fluxo de cotação semi-automatizada (RFQ outreach).
+-- Estão no _full_schema.sql (instalações novas); bancos de produção anteriores
+-- precisam desta migração. CREATE TABLE IF NOT EXISTS é idempotente.
+
+CREATE TABLE IF NOT EXISTS `supplier_outreach` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`rfqId` int NOT NULL,
+	`supplierId` int,
+	`recipientName` varchar(255) NOT NULL,
+	`recipientEmail` varchar(320),
+	`recipientPhone` varchar(50),
+	`channel` enum('email','wechat','whatsapp','alibaba','phone','other') NOT NULL,
+	`language` varchar(5) NOT NULL DEFAULT 'en',
+	`subject` varchar(255),
+	`messageContent` text NOT NULL,
+	`status` enum('draft','queued','sent','delivered','read','replied','bounced','no_response') NOT NULL DEFAULT 'draft',
+	`sentAt` timestamp,
+	`deliveredAt` timestamp,
+	`readAt` timestamp,
+	`repliedAt` timestamp,
+	`supplierQuoteId` int,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `supplier_outreach_id` PRIMARY KEY(`id`)
+);
+
+CREATE TABLE IF NOT EXISTS `supplier_quotes` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`rfqId` int NOT NULL,
+	`supplierId` int,
+	`supplierName` varchar(255) NOT NULL,
+	`supplierCountry` varchar(100) NOT NULL,
+	`supplierContact` varchar(255),
+	`supplierEmail` varchar(320),
+	`supplierPhone` varchar(50),
+	`supplierPlatform` varchar(50),
+	`currency` varchar(3) NOT NULL DEFAULT 'USD',
+	`incoterm` varchar(3) NOT NULL DEFAULT 'FOB',
+	`totalFobCents` bigint,
+	`totalCifCents` bigint,
+	`freightEstimateCents` bigint,
+	`paymentTerms` varchar(255),
+	`leadTimeDays` int,
+	`moq` int,
+	`validUntil` timestamp,
+	`quotationFileUrl` varchar(512),
+	`quotationFileKey` varchar(255),
+	`quotationFileName` varchar(255),
+	`excambiaScore` int,
+	`excambiaAnalysis` text,
+	`priceCompetitiveness` enum('best','competitive','above_average','expensive'),
+	`status` enum('pending','received','analyzing','shortlisted','selected','rejected','expired') NOT NULL DEFAULT 'pending',
+	`overallRank` int,
+	`notes` text,
+	`communicationChannel` enum('email','wechat','whatsapp','alibaba_chat','phone','other') DEFAULT 'email',
+	`communicationLanguage` varchar(5) DEFAULT 'en',
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `supplier_quotes_id` PRIMARY KEY(`id`)
+);
+
+CREATE TABLE IF NOT EXISTS `supplier_quote_items` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`supplierQuoteId` int NOT NULL,
+	`rfqItemId` int NOT NULL,
+	`unitPriceCents` bigint NOT NULL,
+	`totalPriceCents` bigint NOT NULL,
+	`quantity` int NOT NULL,
+	`unit` varchar(20) NOT NULL DEFAULT 'UN',
+	`priceBreaks` text,
+	`supplierProductName` varchar(255),
+	`supplierSku` varchar(100),
+	`supplierSpecs` text,
+	`inStock` boolean,
+	`stockQuantity` int,
+	`productionDays` int,
+	`nationalizedUnitCostCents` bigint,
+	`nationalizedTotalCostCents` bigint,
+	`vsTargetPercent` int,
+	`vsMarketPercent` int,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `supplier_quote_items_id` PRIMARY KEY(`id`)
+);

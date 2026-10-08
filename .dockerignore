@@ -1,0 +1,13 @@
+# Contexto de build enxuto (689 MB → poucos MB): node_modules e dist são
+# gerados DENTRO do build; .git não é usado no build.
+# O .env fica NO contexto de propósito: o Vite lê as VITE_* dele ao buildar
+# o frontend (excluí-lo mudaria o comportamento do app em produção).
+node_modules
+client/node_modules
+dist
+.git
+logs
+*.log
+.manus
+.DS_Store
+coverage
