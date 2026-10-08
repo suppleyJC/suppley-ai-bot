@@ -18,7 +18,7 @@ function once(s: string): string {
     let hex="";
     if(size!==0){
       for(let j=0;j!==size;j++){
-        const x=byte(s[i+j]???"");
+        const x=byte(s.charAt(i+j));
         if(x===undefined || (j!==0 && (x>>>6)!==2)){hex="";break;}
         hex+="%"+x.toString(16).padStart(2,"0");
       }
