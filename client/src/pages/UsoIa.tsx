@@ -15,7 +15,7 @@ type UsageModel = {
   completionTokens: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
-  estCostUsd: number;
+  estCostUsd: number | null;
   pricingKnown: boolean;
 };
 
@@ -31,6 +31,7 @@ export function UsoIaPanel() {
   }
 
   const models = data.byModel as UsageModel[];
+  const partialCost = models.some(m => m.estCostUsd === null);
   const cacheReadTotal = models.reduce((a: number, m: UsageModel) => a + m.cacheReadTokens, 0);
   const cacheWriteTotal = models.reduce((a: number, m: UsageModel) => a + m.cacheCreationTokens, 0);
 
@@ -43,9 +44,9 @@ export function UsoIaPanel() {
         </button>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Stat label="Custo estimado (30 dias)" value={usd(data.totalEstCostUsd)} strong />
+        <Stat label={partialCost ? "Custo estimado parcial (30 dias)" : "Custo estimado (30 dias)"} value={usd(data.totalEstCostUsd)} strong />
         <Stat label="Chamadas de IA" value={num(data.totalCalls)} />
-        <Stat label="Custo médio / chamada" value={usd(data.avgCostPerCallUsd)} />
+        <Stat label={partialCost ? "Média / chamada com estimativa" : "Custo médio / chamada"} value={usd(data.avgCostPerCallUsd)} />
       </div>
 
       <div className="rounded-2xl border border-border bg-card">
@@ -73,8 +74,8 @@ export function UsoIaPanel() {
                   <td className="px-4 py-2.5">{num(m.completionTokens)}</td>
                   <td className="px-4 py-2.5 text-teal-700">{num(m.cacheReadTokens)}</td>
                   <td className="px-4 py-2.5 text-right font-semibold">
-                    {usd(m.estCostUsd)}
-                    {!m.pricingKnown && <span className="ml-1 text-[10px] font-normal text-amber-700" title="Tarifa não cadastrada; estimativa usa fallback Opus">*</span>}
+                    {m.estCostUsd === null ? "Sem tarifa" : usd(m.estCostUsd)}
+                    {!m.pricingKnown && m.estCostUsd !== null && <span className="ml-1 text-[10px] font-normal text-amber-700" title="Tarifa não cadastrada; estimativa usa fallback Opus">*</span>}
                   </td>
                 </tr>
               ))}
@@ -86,11 +87,11 @@ export function UsoIaPanel() {
       <div className="flex items-start gap-2 rounded-xl border border-teal-100 bg-teal-50 p-3 text-[13px] text-teal-800">
         <Zap className="mt-0.5 h-4 w-4 flex-shrink-0" />
         <p>
-          <strong>Prompt caching ativo.</strong> Tokens em "Cache (leitura)" custam ~10% do
-          preço normal — quanto maior, mais barato escala. Leitura de cache nos 30 dias:{" "}
+          <strong>Uso de cache.</strong> O desconto depende do provedor e do modelo. Leitura de cache nos 30 dias:{" "}
           <strong>{num(cacheReadTotal)}</strong> · escrita: {num(cacheWriteTotal)}. Custo é
-          estimativa (preço público × tokens); o valor cobrado real está no Console da Anthropic.
-          {models.some((m: UsageModel) => !m.pricingKnown) && <span className="block mt-1 text-amber-800">* Há modelos sem tarifa cadastrada; o custo dessas linhas usa fallback e não deve ser tratado como valor exato.</span>}
+          estimativa (preço público × tokens); confira a cobrança no console do respectivo provedor.
+          {partialCost && <span className="block mt-1 text-amber-800">DeepSeek sem tarifa validada: tokens registrados, custo excluído do total e da média.</span>}
+          {models.some((m: UsageModel) => !m.pricingKnown && m.estCostUsd !== null) && <span className="block mt-1 text-amber-800">* Há modelos sem tarifa cadastrada; o custo dessas linhas usa fallback e não deve ser tratado como valor exato.</span>}
         </p>
       </div>
     </div>

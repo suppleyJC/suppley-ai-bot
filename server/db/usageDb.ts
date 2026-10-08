@@ -31,7 +31,7 @@ export interface UsageSummaryRow {
   completionTokens: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
-  estCostUsd: number;
+  estCostUsd: number | null;
   pricingKnown: boolean;
 }
 export interface UsageSummary {
@@ -62,7 +62,7 @@ export async function getLlmUsageSummary(days = 30): Promise<UsageSummary> {
 
   const byModel: UsageSummaryRow[] = rows.map((r) => {
     const p = priceFor(r.model);
-    const estCostUsd =
+    const estCostUsd = r.model.startsWith("deepseek-") ? null :
       (Number(r.promptTokens) * p.in +
         Number(r.cacheCreationTokens) * p.in * 1.25 +
         Number(r.cacheReadTokens) * p.in * 0.1 +
@@ -80,12 +80,13 @@ export async function getLlmUsageSummary(days = 30): Promise<UsageSummary> {
   });
 
   const totalCalls = byModel.reduce((a, m) => a + m.calls, 0);
-  const totalEstCostUsd = byModel.reduce((a, m) => a + m.estCostUsd, 0);
+  const totalEstCostUsd = byModel.reduce((a, m) => a + (m.estCostUsd ?? 0), 0);
+  const pricedCalls = byModel.filter(m => m.estCostUsd !== null).reduce((a, m) => a + m.calls, 0);
   return {
     periodDays: days,
     totalCalls,
     totalEstCostUsd,
-    avgCostPerCallUsd: totalCalls > 0 ? totalEstCostUsd / totalCalls : 0,
-    byModel: byModel.sort((a, b) => b.estCostUsd - a.estCostUsd),
+    avgCostPerCallUsd: pricedCalls > 0 ? totalEstCostUsd / pricedCalls : 0,
+    byModel: byModel.sort((a, b) => (b.estCostUsd ?? 0) - (a.estCostUsd ?? 0)),
   };
 }
