@@ -2,26 +2,39 @@
  * precoNormalizacao — traz observações de preço para uma BASE CANÔNICA comum
  * antes de qualquer média.
  *
- * POR QUE ISTO EXISTE: hoje a consolidação soma `brlPresente` de observações
- * cujas unidades divergem (R$/kg de uma proforma com R$/unidade de um ativo) e
- * cujos Incoterms divergem (FOB de fornecedor com CIF de outro). Média entre
- * bases diferentes não é imprecisão de arredondamento — é número sem
- * significado. Comex Stat publica FOB em US$/kg; uma cotação CIF por peça não
- * é comparável com isso sem conversão.
+ * POR QUE ISTO EXISTE: a consolidação antiga somava `brlPresente` de
+ * observações em unidades divergentes (R$/kg com R$/unidade) e Incoterms
+ * divergentes (FOB de um fornecedor com CIF de outro). Média entre bases
+ * diferentes não é imprecisão de arredondamento — é número sem significado.
  *
- * BASE CANÔNICA: **FOB, US$/kg**.
+ * BASE CANÔNICA POR FAMÍLIA DE UNIDADE. Invoices e cotações declaram a unidade
+ * de medida: tonelada, milheiro, metro, unidade. Converter tudo para kg seria
+ * errado — milheiro de prego compara com milheiro, metro de cabo com metro.
+ * Dentro de uma família a conversão é exata e segura:
  *
- * REGRA DURA — nunca converter no chute. Quando falta o dado para converter
- * (peso unitário, frete embutido no CIF, câmbio da data), a observação é
- * EXCLUÍDA com motivo explícito, não estimada. O motivo volta na saída para
- * quem chamou poder dizer ao usuário o que ficou de fora e por quê — a mesma
- * disciplina que separa "não encontrei" de "não consegui consultar".
+ *   massa       → kg    (t, g, lb)
+ *   contagem    → un    (milheiro, cento, dúzia, par)
+ *   comprimento → m     (km, cm, mm, pé, jarda)
+ *   área        → m²
+ *   volume      → L     (mL, m³)
+ *
+ * ENTRE famílias só há conversão com propriedade física conhecida: contagem ↔
+ * massa exige `pesoUnitarioKg`. Sem isso, a observação é excluída com motivo —
+ * nunca estimada. Comex Stat publica US$/kg, então só entra na comparação
+ * quando a base canônica do conjunto é massa.
+ *
+ * REGRA DURA — nunca converter no chute. Falta peso, falta o frete embutido no
+ * CIF, falta câmbio da data, a unidade é ambígua ("MT" é tonelada métrica ou
+ * metro?): a observação sai do conjunto COM MOTIVO EXPLÍCITO, para quem chamou
+ * poder dizer ao usuário o que ficou de fora e por quê. É a mesma disciplina
+ * que separa "não encontrei" de "não consegui consultar".
  *
  * CAMADA PURA: sem rede, sem banco, sem relógio implícito (`hoje` é injetável).
- * Toda a coleta fica na tool; aqui só há aritmética testável.
  */
 
 export type FontePreco = "invoice" | "proforma" | "cotacao" | "manual" | "mercado";
+
+export type FamiliaUnidade = "massa" | "contagem" | "comprimento" | "area" | "volume";
 
 /** Agrupamento de Incoterm pelo que precisa ser somado/subtraído para chegar a FOB. */
 export type GrupoIncoterm =
@@ -36,11 +49,22 @@ export type FaixaQuantidade = "amostra" | "parcial" | "conteiner" | "multiplo";
 export type MotivoExclusao =
   | "preco_invalido"
   | "sem_cambio"
-  | "unidade_nao_conversivel"
+  | "unidade_desconhecida"
+  | "unidade_ambigua"
+  | "familia_incompativel"
   | "sem_peso_unitario"
   | "incoterm_desconhecido"
   | "incoterm_sem_componentes"
   | "ajuste_invalido";
+
+/** A unidade de referência de cada família. */
+export const UNIDADE_CANONICA: Record<FamiliaUnidade, string> = {
+  massa: "kg",
+  contagem: "un",
+  comprimento: "m",
+  area: "m²",
+  volume: "L",
+};
 
 /** Uma observação de preço como ela chega da base ou de fonte externa. */
 export interface ObservacaoPreco {
@@ -59,7 +83,7 @@ export interface ObservacaoPreco {
 
   /** Quantidade cotada, na mesma `unidade`. */
   quantidade?: number | null;
-  /** Peso de UMA unidade, em kg — obrigatório quando `unidade` é por peça. */
+  /** Peso de UMA peça, em kg — ponte entre contagem e massa. */
   pesoUnitarioKg?: number | null;
 
   incoterm?: string | null;
@@ -84,10 +108,10 @@ export interface ObservacaoPreco {
 
 export interface ObservacaoNormalizada {
   obs: ObservacaoPreco;
-  /** A base canônica: FOB em US$/kg. */
-  precoUsdKg: number;
-  /** Quantidade da cotação convertida para kg (null se não informada). */
-  quantidadeKg: number | null;
+  /** Preço em USD por unidade canônica da família do conjunto. */
+  precoUsdCanonico: number;
+  /** Quantidade convertida para a unidade canônica (null se não informada). */
+  quantidadeCanonica: number | null;
   faixa: FaixaQuantidade | null;
   /** Meses entre `dataCotacao` e `hoje` (null quando não há data). */
   idadeMeses: number | null;
@@ -110,63 +134,115 @@ export interface OpcoesNormalizacao {
    * dado garantir FOB (Comex Stat publica FOB).
    */
   assumirFobQuandoDesconhecido?: boolean;
+  /**
+   * Família alvo. Omitida: detectada do próprio conjunto (a mais frequente;
+   * empate resolve em massa, que é a base do Comex Stat).
+   */
+  familia?: FamiliaUnidade;
 }
 
 export interface NormalizacaoResultado {
   consideradas: ObservacaoNormalizada[];
   excluidas: ExclusaoPreco[];
+  /** Família eleita para o conjunto. Null quando nada foi interpretável. */
+  familia: FamiliaUnidade | null;
+  /** Rótulo da unidade canônica correspondente ("kg", "un", "m"…). */
+  unidadeCanonica: string | null;
 }
 
 const MS_POR_MES = 30.44 * 24 * 3600 * 1000;
 
 /**
- * Fatores de massa. `null` significa "precisa de peso unitário" (itens por
- * peça); ausência do termo significa unidade não suportada.
+ * `fator` = quantas unidades CANÔNICAS cabem em uma unidade cotada.
+ * 1 tonelada = 1000 kg; 1 milheiro = 1000 un; 1 pé = 0,3048 m.
  */
-const FATOR_KG: Array<{ re: RegExp; fator: number | null }> = [
-  { re: /^(kgs?|quilos?|quilogramas?|kilograms?|kilos?)$/i, fator: 1 },
-  { re: /^(t|ton|tons|tonelada|toneladas|mt|tonne|tonnes)$/i, fator: 1000 },
-  { re: /^(g|gr|gramas?|grams?)$/i, fator: 0.001 },
-  { re: /^(lb|lbs|libras?|pounds?)$/i, fator: 0.45359237 },
-  { re: /^(un|und|unid|unidade|unidades|pc|pcs|pç|peca|pecas|peça|peças|piece|pieces|ea|each|set|sets|kit|kits|par|pares|pair|pairs)$/i, fator: null },
+const UNIDADES: Array<{ re: RegExp; familia: FamiliaUnidade; fator: number }> = [
+  // ---- massa → kg
+  { re: /^(kgs?|quilos?|quilogramas?|kilograms?|kilos?)$/i, familia: "massa", fator: 1 },
+  { re: /^(t|ton|tons|tonelada|toneladas|tonne|tonnes|tm)$/i, familia: "massa", fator: 1000 },
+  { re: /^(g|gr|gramas?|grams?)$/i, familia: "massa", fator: 0.001 },
+  { re: /^(lb|lbs|libras?|pounds?)$/i, familia: "massa", fator: 0.45359237 },
+  { re: /^(arroba|@)$/i, familia: "massa", fator: 15 },
+  // ---- contagem → un
+  { re: /^(un|und|unid|unidade|unidades|pc|pcs|pç|peca|pecas|peça|peças|piece|pieces|ea|each)$/i, familia: "contagem", fator: 1 },
+  { re: /^(milheiro|milheiros|mlh|mil|m²?il)$/i, familia: "contagem", fator: 1000 },
+  { re: /^(cento|centos)$/i, familia: "contagem", fator: 100 },
+  { re: /^(duzia|duzias|dz|dozen)$/i, familia: "contagem", fator: 12 },
+  { re: /^(par|pares|pair|pairs|pr)$/i, familia: "contagem", fator: 2 },
+  // ---- comprimento → m
+  { re: /^(m|metro|metros|meter|meters)$/i, familia: "comprimento", fator: 1 },
+  { re: /^(km|quilometros?)$/i, familia: "comprimento", fator: 1000 },
+  { re: /^(cm|centimetros?)$/i, familia: "comprimento", fator: 0.01 },
+  { re: /^(mm|milimetros?)$/i, familia: "comprimento", fator: 0.001 },
+  { re: /^(pe|pes|ft|feet|foot)$/i, familia: "comprimento", fator: 0.3048 },
+  { re: /^(jarda|jardas|yd|yard|yards)$/i, familia: "comprimento", fator: 0.9144 },
+  // ---- área → m²
+  { re: /^(m2|m²|metro quadrado|metros quadrados|sqm)$/i, familia: "area", fator: 1 },
+  { re: /^(cm2|cm²)$/i, familia: "area", fator: 0.0001 },
+  { re: /^(ft2|ft²|sqft)$/i, familia: "area", fator: 0.09290304 },
+  // ---- volume → L
+  { re: /^(l|lt|lts|litro|litros|liter|liters)$/i, familia: "volume", fator: 1 },
+  { re: /^(ml|mililitros?)$/i, familia: "volume", fator: 0.001 },
+  { re: /^(m3|m³|metro cubico|metros cubicos)$/i, familia: "volume", fator: 1000 },
+  { re: /^(gal|galao|galoes|gallon|gallons)$/i, familia: "volume", fator: 3.785411784 },
 ];
+
+/**
+ * Unidades que significam coisas diferentes conforme o contexto e por isso
+ * NÃO são interpretadas. "MT" é tonelada métrica no comércio exterior e metro
+ * em obra; "cx" depende de quantas peças cabem na caixa. Adivinhar aqui
+ * desloca o preço por ordens de grandeza.
+ */
+const UNIDADES_AMBIGUAS = /^(mt|mts|cx|caixa|caixas|box|boxes|fardo|fardos|pacote|pacotes|pack|rolo|rolos|roll|bobina|bobinas|saco|sacos|bag|bags|lote|lotes|kit|kits|set|sets|cj|conjunto)$/i;
 
 const GRUPO_POR_INCOTERM: Record<string, GrupoIncoterm> = {
   FOB: "fob",
   EXW: "pre_embarque", FCA: "pre_embarque", FAS: "pre_embarque",
   CFR: "pos_embarque", CIF: "pos_embarque", CPT: "pos_embarque", CIP: "pos_embarque",
-  C$F: "pos_embarque", CNF: "pos_embarque",
+  CNF: "pos_embarque",
   DAP: "entregue", DPU: "entregue", DDP: "entregue", DAT: "entregue", DDU: "entregue",
 };
 
 /**
- * Limiares de faixa em kg, pensados para contêiner marítimo (20'/40'). São
- * parâmetros de calibração, não verdade: um dia saem para tabela versionada.
+ * Limiares de faixa por família, em unidade canônica. São parâmetros de
+ * calibração, não verdade — um dia saem para tabela versionada.
  */
-const LIMITE_AMOSTRA_KG = 100;
-const LIMITE_PARCIAL_KG = 5_000;
-const LIMITE_CONTEINER_KG = 28_000;
+const LIMIARES: Record<FamiliaUnidade, [number, number, number]> = {
+  massa: [100, 5_000, 28_000],       // kg — contêiner marítimo 20'/40'
+  contagem: [100, 5_000, 50_000],    // un
+  comprimento: [100, 5_000, 50_000], // m
+  area: [50, 1_000, 10_000],         // m²
+  volume: [100, 5_000, 25_000],      // L
+};
 
-/** Normaliza a grafia de uma unidade para casar com os fatores. */
+/** Normaliza a grafia de uma unidade para casar com a tabela. */
 function limparUnidade(unidade: string): string {
   return String(unidade ?? "")
     .trim()
     .replace(/\.$/, "")
+    .replace(/\s+/g, " ")
     .normalize("NFD")
-    .replace(/[̀-̂̄-ͯ]/g, ""); // mantém a cedilha de "peça"
+    .replace(/[̀-̂̄-ͯ]/g, ""); // mantém cedilha de "peça"
+}
+
+export interface UnidadeInterpretada {
+  familia: FamiliaUnidade;
+  /** Unidades canônicas por unidade cotada. */
+  fator: number;
 }
 
 /**
- * Fator para converter a unidade em kg.
- * - número: multiplica direto;
- * - "precisa_peso": é por peça — exige `pesoUnitarioKg`;
- * - null: unidade não suportada.
+ * Interpreta a unidade cotada.
+ * - objeto: família + fator;
+ * - "ambigua": reconhecida como armadilha (MT, caixa, rolo…);
+ * - null: desconhecida.
  */
-export function fatorParaKg(unidade: string): number | "precisa_peso" | null {
+export function interpretarUnidade(unidade: string): UnidadeInterpretada | "ambigua" | null {
   const u = limparUnidade(unidade);
   if (!u) return null;
-  for (const { re, fator } of FATOR_KG) {
-    if (re.test(u)) return fator === null ? "precisa_peso" : fator;
+  if (UNIDADES_AMBIGUAS.test(u)) return "ambigua";
+  for (const { re, familia, fator } of UNIDADES) {
+    if (re.test(u)) return { familia, fator };
   }
   return null;
 }
@@ -179,11 +255,16 @@ export function grupoIncoterm(incoterm: string | null | undefined): GrupoIncoter
 }
 
 /** Faixa de quantidade, para a aderência pesar cotação de amostra vs de lote. */
-export function faixaQuantidade(kg: number | null): FaixaQuantidade | null {
-  if (kg == null || !Number.isFinite(kg) || kg <= 0) return null;
-  if (kg < LIMITE_AMOSTRA_KG) return "amostra";
-  if (kg < LIMITE_PARCIAL_KG) return "parcial";
-  if (kg <= LIMITE_CONTEINER_KG) return "conteiner";
+export function faixaQuantidade(
+  quantidadeCanonica: number | null,
+  familia: FamiliaUnidade,
+): FaixaQuantidade | null {
+  const q = quantidadeCanonica;
+  if (q == null || !Number.isFinite(q) || q <= 0) return null;
+  const [amostra, parcial, conteiner] = LIMIARES[familia];
+  if (q < amostra) return "amostra";
+  if (q < parcial) return "parcial";
+  if (q <= conteiner) return "conteiner";
   return "multiplo";
 }
 
@@ -192,7 +273,6 @@ function cambioParaUsd(obs: ObservacaoPreco): number | null {
   if (obs.cambioMoedaUsd != null && obs.cambioMoedaUsd > 0) return obs.cambioMoedaUsd;
   const { cambioMoedaBrl: mBrl, cambioUsdBrl: uBrl } = obs;
   if (mBrl != null && mBrl > 0 && uBrl != null && uBrl > 0) return mBrl / uBrl;
-  // USD cotado em USD dispensa câmbio.
   if (String(obs.moeda ?? "").trim().toUpperCase() === "USD") return 1;
   return null;
 }
@@ -205,8 +285,8 @@ function ehNumero(v: unknown): v is number {
  * Leva o preço ao Incoterm FOB. Devolve o preço ajustado e o que foi aplicado,
  * ou um motivo de exclusão quando os componentes não estão disponíveis.
  *
- * Note que `0` é componente VÁLIDO (frete zero é informação); só `null` e
- * `undefined` significam ausência.
+ * `0` é componente VÁLIDO (frete zero é informação); só `null` e `undefined`
+ * significam ausência.
  */
 function ajustarParaFob(
   obs: ObservacaoPreco,
@@ -272,15 +352,71 @@ function ajustarParaFob(
 }
 
 /**
- * Normaliza UMA observação para FOB US$/kg.
- * Ordem: valida → ajusta Incoterm → converte moeda → converte unidade.
+ * Converte o preço da unidade cotada para a unidade canônica da família alvo.
+ * Dentro da família é aritmética; entre contagem e massa exige peso unitário.
  */
+function converterUnidade(
+  obs: ObservacaoPreco,
+  interp: UnidadeInterpretada,
+  alvo: FamiliaUnidade,
+): { divisor: number; ajustes: string[] } | { motivo: MotivoExclusao; detalhe: string } {
+  const ajustes: string[] = [];
+  const canonAlvo = UNIDADE_CANONICA[alvo];
+
+  if (interp.familia === alvo) {
+    if (interp.fator !== 1) ajustes.push(`${obs.unidade}→${canonAlvo}: ÷${interp.fator}`);
+    return { divisor: interp.fator, ajustes };
+  }
+
+  const peso = obs.pesoUnitarioKg;
+  const pontePossivel =
+    (interp.familia === "contagem" && alvo === "massa") ||
+    (interp.familia === "massa" && alvo === "contagem");
+
+  if (!pontePossivel) {
+    return {
+      motivo: "familia_incompativel",
+      detalhe: `"${obs.unidade}" é de ${interp.familia}; o conjunto está em ${alvo} (${canonAlvo}). ` +
+        "Conversão exigiria propriedade física que não temos.",
+    };
+  }
+  if (!ehNumero(peso) || peso <= 0) {
+    return {
+      motivo: "sem_peso_unitario",
+      detalhe: `Converter ${interp.familia}→${alvo} exige pesoUnitarioKg.`,
+    };
+  }
+
+  if (interp.familia === "contagem") {
+    // preço/unidade cotada → preço/un → preço/kg
+    ajustes.push(`${obs.unidade}→un: ÷${interp.fator}`, `un→kg: ÷${peso} (peso unitário)`);
+    return { divisor: interp.fator * peso, ajustes };
+  }
+  // massa → contagem: preço/unidade cotada → preço/kg → preço/un
+  ajustes.push(`${obs.unidade}→kg: ÷${interp.fator}`, `kg→un: ×${peso} (peso unitário)`);
+  return { divisor: interp.fator / peso, ajustes };
+}
+
+/** Normaliza UMA observação para a família alvo. */
 export function normalizarObservacao(
   obs: ObservacaoPreco,
+  alvo: FamiliaUnidade,
   opts: OpcoesNormalizacao = {},
 ): ObservacaoNormalizada | ExclusaoPreco {
   if (!ehNumero(obs.precoUnit) || obs.precoUnit <= 0) {
     return { obs, motivo: "preco_invalido", detalhe: `Preço "${obs.precoUnit}" não é um número positivo.` };
+  }
+
+  const interp = interpretarUnidade(obs.unidade);
+  if (interp === null) {
+    return { obs, motivo: "unidade_desconhecida", detalhe: `Unidade "${obs.unidade}" não reconhecida.` };
+  }
+  if (interp === "ambigua") {
+    return {
+      obs,
+      motivo: "unidade_ambigua",
+      detalhe: `Unidade "${obs.unidade}" significa coisas diferentes conforme o contexto — não é interpretada.`,
+    };
   }
 
   const fob = ajustarParaFob(obs, opts);
@@ -288,45 +424,22 @@ export function normalizarObservacao(
 
   const taxa = cambioParaUsd(obs);
   if (taxa == null) {
-    return {
-      obs,
-      motivo: "sem_cambio",
-      detalhe: `Sem câmbio ${obs.moeda}→USD na data da cotação.`,
-    };
+    return { obs, motivo: "sem_cambio", detalhe: `Sem câmbio ${obs.moeda}→USD na data da cotação.` };
   }
 
-  const fator = fatorParaKg(obs.unidade);
-  if (fator === null) {
-    return { obs, motivo: "unidade_nao_conversivel", detalhe: `Unidade "${obs.unidade}" não converte para kg.` };
-  }
+  const conv = converterUnidade(obs, interp, alvo);
+  if ("motivo" in conv) return { obs, motivo: conv.motivo, detalhe: conv.detalhe };
 
-  let kgPorUnidade: number;
-  const ajustes = [...fob.ajustes];
-  if (fator === "precisa_peso") {
-    const peso = obs.pesoUnitarioKg;
-    if (!ehNumero(peso) || peso <= 0) {
-      return {
-        obs,
-        motivo: "sem_peso_unitario",
-        detalhe: `Preço por "${obs.unidade}" exige pesoUnitarioKg para virar US$/kg.`,
-      };
-    }
-    kgPorUnidade = peso;
-    ajustes.push(`${obs.unidade}→kg: ${peso} kg por unidade`);
-  } else {
-    kgPorUnidade = fator;
-    if (fator !== 1) ajustes.push(`${obs.unidade}→kg: ×${fator}`);
-  }
-
+  const ajustes = [...fob.ajustes, ...conv.ajustes];
   if (taxa !== 1) ajustes.push(`${obs.moeda}→USD: ×${taxa.toFixed(6)}`);
 
-  const precoUsdKg = (fob.preco * taxa) / kgPorUnidade;
-  if (!Number.isFinite(precoUsdKg) || precoUsdKg <= 0) {
+  const precoUsdCanonico = (fob.preco * taxa) / conv.divisor;
+  if (!Number.isFinite(precoUsdCanonico) || precoUsdCanonico <= 0) {
     return { obs, motivo: "ajuste_invalido", detalhe: "Conversão resultou em valor não positivo." };
   }
 
-  const quantidadeKg = ehNumero(obs.quantidade) && obs.quantidade > 0
-    ? obs.quantidade * kgPorUnidade
+  const quantidadeCanonica = ehNumero(obs.quantidade) && obs.quantidade > 0
+    ? obs.quantidade * conv.divisor
     : null;
 
   const hoje = opts.hoje ?? new Date();
@@ -338,12 +451,35 @@ export function normalizarObservacao(
 
   return {
     obs,
-    precoUsdKg,
-    quantidadeKg,
-    faixa: faixaQuantidade(quantidadeKg),
+    precoUsdCanonico,
+    quantidadeCanonica,
+    faixa: faixaQuantidade(quantidadeCanonica, alvo),
     idadeMeses,
     ajustes,
   };
+}
+
+/**
+ * Elege a família do conjunto: a mais frequente entre as unidades
+ * interpretáveis. Empate resolve em massa — é a base do Comex Stat, e manter
+ * a comparabilidade com a referência oficial vale o desempate.
+ */
+export function detectarFamilia(observacoes: ObservacaoPreco[]): FamiliaUnidade | null {
+  const contagem = new Map<FamiliaUnidade, number>();
+  for (const o of observacoes ?? []) {
+    const i = interpretarUnidade(o.unidade);
+    if (i && i !== "ambigua") contagem.set(i.familia, (contagem.get(i.familia) ?? 0) + 1);
+  }
+  if (!contagem.size) return null;
+  let melhor: FamiliaUnidade | null = null;
+  let max = -1;
+  contagem.forEach((n, familia) => {
+    if (n > max || (n === max && familia === "massa")) {
+      melhor = familia;
+      max = n;
+    }
+  });
+  return melhor;
 }
 
 /** Normaliza um conjunto, separando o que entrou do que ficou de fora e por quê. */
@@ -351,16 +487,32 @@ export function normalizarObservacoes(
   observacoes: ObservacaoPreco[],
   opts: OpcoesNormalizacao = {},
 ): NormalizacaoResultado {
+  const lista = observacoes ?? [];
+  const familia = opts.familia ?? detectarFamilia(lista);
+
+  if (!familia) {
+    return {
+      consideradas: [],
+      excluidas: lista.map((obs) => {
+        const i = interpretarUnidade(obs.unidade);
+        return i === "ambigua"
+          ? { obs, motivo: "unidade_ambigua" as const, detalhe: `Unidade "${obs.unidade}" é ambígua.` }
+          : { obs, motivo: "unidade_desconhecida" as const, detalhe: `Unidade "${obs.unidade}" não reconhecida.` };
+      }),
+      familia: null,
+      unidadeCanonica: null,
+    };
+  }
+
   const consideradas: ObservacaoNormalizada[] = [];
   const excluidas: ExclusaoPreco[] = [];
-
-  for (const obs of observacoes ?? []) {
-    const r = normalizarObservacao(obs, opts);
+  for (const obs of lista) {
+    const r = normalizarObservacao(obs, familia, opts);
     if ("motivo" in r) excluidas.push(r);
     else consideradas.push(r);
   }
 
-  return { consideradas, excluidas };
+  return { consideradas, excluidas, familia, unidadeCanonica: UNIDADE_CANONICA[familia] };
 }
 
 /** Agrupa as exclusões por motivo — material pronto para a resposta ao usuário. */

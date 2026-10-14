@@ -255,8 +255,11 @@ export const precificarReferenciaTool: AgentTool = {
     const ponderado = ref.conjunto?.ponderado ?? null;
     let unidadeConsolidada = "UN";
     if (ponderado && ptaxUsd != null) {
-      referenciaConsolidadaBrl = ponderado.precoUsdKg * ptaxUsd;
-      unidadeConsolidada = "kg";
+      referenciaConsolidadaBrl = ponderado.precoUsdCanonico * ptaxUsd;
+      // A unidade vem da FAMÍLIA do conjunto — kg para massa, un para
+      // contagem, m para comprimento. Forçar kg converteria milheiro de prego
+      // em algo sem significado.
+      unidadeConsolidada = ref.conjunto?.unidadeCanonica ?? "UN";
     } else if (comParesValidos.length > 0) {
       let somaPeso = 0;
       let somaValor = 0;
@@ -281,9 +284,9 @@ export const precificarReferenciaTool: AgentTool = {
       );
       // Faixa e composição vão para o AGENTE decidir como usar; a máscara de
       // apresentação abaixo continua valendo para o texto ao usuário.
-      if (ponderado?.faixaUsdKg && ptaxUsd != null) {
+      if (ponderado?.faixaUsdCanonico && ptaxUsd != null) {
         partes.push(
-          `Faixa esperada: ${fmtBRL(ponderado.faixaUsdKg.min * ptaxUsd)}–${fmtBRL(ponderado.faixaUsdKg.max * ptaxUsd)}/kg ` +
+          `Faixa esperada: ${fmtBRL(ponderado.faixaUsdCanonico.min * ptaxUsd)}–${fmtBRL(ponderado.faixaUsdCanonico.max * ptaxUsd)}/${unidadeConsolidada} ` +
           `(${ponderado.composicao.length} observações, amostra efetiva ${ponderado.nEfetivo.toFixed(1)}).`,
         );
       }

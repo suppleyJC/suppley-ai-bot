@@ -82,9 +82,9 @@ export interface ContribuicaoPreco {
   fonte: FontePreco;
   fornecedor: string | null;
   /** Preço já com a correção de viés aplicada. */
-  precoUsdKg: number;
+  precoUsdCanonico: number;
   /** Preço antes da correção — para a memória de cálculo. */
-  precoOriginalUsdKg: number;
+  precoOriginalUsdCanonico: number;
   idadeMeses: number | null;
   pesoFonte: number;
   pesoRecencia: number;
@@ -95,9 +95,9 @@ export interface ContribuicaoPreco {
 }
 
 export interface PrecoPonderado {
-  precoUsdKg: number;
+  precoUsdCanonico: number;
   /** Dispersão esperada de uma NOVA cotação. Null com amostra insuficiente. */
-  faixaUsdKg: { min: number; max: number } | null;
+  faixaUsdCanonico: { min: number; max: number } | null;
   /** Tamanho efetivo da amostra (Kish): (Σw)² / Σw². */
   nEfetivo: number;
   /** Coeficiente de variação ponderado, em %. */
@@ -183,8 +183,8 @@ export function ponderarPrecos(
       ref: n.obs.ref,
       fonte,
       fornecedor: n.obs.fornecedor ?? null,
-      precoOriginalUsdKg: n.precoUsdKg,
-      precoUsdKg: n.precoUsdKg * k,
+      precoOriginalUsdCanonico: n.precoUsdCanonico,
+      precoUsdCanonico: n.precoUsdCanonico * k,
       idadeMeses: n.idadeMeses,
       pesoFonte: wFonte,
       pesoRecencia: wRecencia,
@@ -201,8 +201,8 @@ export function ponderarPrecos(
     ref: b.ref,
     fonte: b.fonte,
     fornecedor: b.fornecedor,
-    precoUsdKg: b.precoUsdKg,
-    precoOriginalUsdKg: b.precoOriginalUsdKg,
+    precoUsdCanonico: b.precoUsdCanonico,
+    precoOriginalUsdCanonico: b.precoOriginalUsdCanonico,
     idadeMeses: b.idadeMeses,
     pesoFonte: b.pesoFonte,
     pesoRecencia: b.pesoRecencia,
@@ -211,7 +211,7 @@ export function ponderarPrecos(
     peso: b.pesoBruto / somaPeso,
   }));
 
-  const precoUsdKg = composicao.reduce((s, c) => s + c.peso * c.precoUsdKg, 0);
+  const precoUsdCanonico = composicao.reduce((s, c) => s + c.peso * c.precoUsdCanonico, 0);
 
   // n efetivo de Kish: quanto a amostra "vale" depois da ponderação.
   const somaQuad = brutos.reduce((s, b) => s + b.pesoBruto * b.pesoBruto, 0);
@@ -219,16 +219,16 @@ export function ponderarPrecos(
 
   // Dispersão ponderada das observações (não da média) — ver cabeçalho.
   const variancia = composicao.reduce(
-    (s, c) => s + c.peso * Math.pow(c.precoUsdKg - precoUsdKg, 2),
+    (s, c) => s + c.peso * Math.pow(c.precoUsdCanonico - precoUsdCanonico, 2),
     0,
   );
   const desvio = Math.sqrt(variancia);
-  const dispersaoPct = precoUsdKg > 0 ? (desvio / precoUsdKg) * 100 : null;
+  const dispersaoPct = precoUsdCanonico > 0 ? (desvio / precoUsdCanonico) * 100 : null;
 
   // Com uma observação só não há dispersão medível — faixa fica nula em vez de
   // virar zero, que leria como precisão absoluta.
-  const faixaUsdKg = composicao.length >= 2 && desvio > 0
-    ? { min: Math.max(0, precoUsdKg - 1.28 * desvio), max: precoUsdKg + 1.28 * desvio }
+  const faixaUsdCanonico = composicao.length >= 2 && desvio > 0
+    ? { min: Math.max(0, precoUsdCanonico - 1.28 * desvio), max: precoUsdCanonico + 1.28 * desvio }
     : null;
 
   const avisos: string[] = [];
@@ -253,5 +253,5 @@ export function ponderarPrecos(
     avisos.push("Uma única observação domina o resultado — as demais são antigas ou de menor confiabilidade.");
   }
 
-  return { precoUsdKg, faixaUsdKg, nEfetivo, dispersaoPct, meiaVidaMeses: meiaVida, composicao, avisos };
+  return { precoUsdCanonico, faixaUsdCanonico, nEfetivo, dispersaoPct, meiaVidaMeses: meiaVida, composicao, avisos };
 }

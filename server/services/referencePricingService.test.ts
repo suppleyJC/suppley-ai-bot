@@ -129,7 +129,7 @@ describe("montarReferencia — conjunto de observações", () => {
     });
 
     expect(r.conjunto?.representativa?.obs.ref).toBe("recente-cara");
-    expect(r.conjunto?.representativa?.precoUsdKg).toBeCloseTo(0.59, 6);
+    expect(r.conjunto?.representativa?.precoUsdCanonico).toBeCloseTo(0.59, 6);
   });
 
   it("deriva a base do conjunto quando ela não é passada", () => {
@@ -161,8 +161,8 @@ describe("montarReferencia — conjunto de observações", () => {
     });
 
     expect(r.conjunto?.consideradas).toHaveLength(3);
-    expect(r.conjunto?.minUsdKg).toBeCloseTo(0.59, 6);
-    expect(r.conjunto?.maxUsdKg).toBeCloseTo(0.62, 6);
+    expect(r.conjunto?.minUsdCanonico).toBeCloseTo(0.59, 6);
+    expect(r.conjunto?.maxUsdCanonico).toBeCloseTo(0.62, 6);
     expect(r.conjunto?.fornecedoresDistintos).toBe(3);
   });
 
@@ -295,7 +295,7 @@ describe("montarReferencia — base vem da PONDERAÇÃO, não de uma cotação i
     // pesos 1 e 0,5 → (0,60·2 + 0,80)/3 = 0,6667
     expect(r.base?.precoUnit).toBeCloseTo(0.6667, 3);
     expect(r.conjunto?.representativa?.obs.fornecedor).toBe("A"); // âncora continua a recente
-    expect(r.conjunto?.ponderado?.precoUsdKg).toBeCloseTo(0.6667, 3);
+    expect(r.conjunto?.ponderado?.precoUsdCanonico).toBeCloseTo(0.6667, 3);
   });
 
   it("não atribui a média a um fornecedor específico", () => {
@@ -354,7 +354,76 @@ describe("montarReferencia — base vem da PONDERAÇÃO, não de uma cotação i
       opcoesNormalizacao: { hoje },
     });
 
-    expect(r.conjunto?.ponderado?.faixaUsdKg).not.toBeNull();
+    expect(r.conjunto?.ponderado?.faixaUsdCanonico).not.toBeNull();
     expect(r.leitura).toMatch(/2 cotações normalizadas a FOB US\$\/kg de 2 fornecedores/);
+  });
+});
+
+describe("montarReferencia — família canônica do conjunto", () => {
+  const hoje = new Date("2026-10-14T00:00:00Z");
+  const milheiro = {
+    fonte: "proforma" as const, produto: "Prego 17x27", ncm: "73170020",
+    moeda: "USD", unidade: "milheiro", incoterm: "FOB", dataCotacao: "2026-09-01",
+  };
+
+  it("conjunto em milheiro fica em UNIDADE — não é forçado a kg", () => {
+    const r = montarReferencia({
+      termo: "prego 17x27",
+      cambioHojeUsdBrl: 5.0,
+      observacoes: [
+        { ...milheiro, fornecedor: "A", precoUnit: 85 },
+        { ...milheiro, fornecedor: "B", unidade: "cento", precoUnit: 9 },
+      ],
+      opcoesNormalizacao: { hoje },
+    });
+
+    expect(r.conjunto?.familia).toBe("contagem");
+    expect(r.conjunto?.unidadeCanonica).toBe("un");
+    expect(r.base?.unidade).toBe("un");
+  });
+
+  it("com referência oficial e peso conhecido, prefere massa para poder comparar", () => {
+    const r = montarReferencia({
+      termo: "prego 17x27",
+      externo,
+      cambioHojeUsdBrl: 5.0,
+      observacoes: [{ ...milheiro, fornecedor: "A", precoUnit: 85, pesoUnitarioKg: 0.05 }],
+      opcoesNormalizacao: { hoje },
+    });
+
+    expect(r.conjunto?.familia).toBe("massa");
+    expect(r.comparavel).toBe(true);
+    expect(r.base?.precoUnit).toBeCloseTo(1.7, 6); // 85/1000/0,05
+  });
+
+  it("se alguma observação não chega a massa, NÃO força — perder cotação é pior que perder a comparação", () => {
+    const r = montarReferencia({
+      termo: "prego 17x27",
+      externo,
+      cambioHojeUsdBrl: 5.0,
+      observacoes: [
+        { ...milheiro, fornecedor: "A", precoUnit: 85, pesoUnitarioKg: 0.05 },
+        { ...milheiro, fornecedor: "B", precoUnit: 90 }, // sem peso
+      ],
+      opcoesNormalizacao: { hoje },
+    });
+
+    expect(r.conjunto?.familia).toBe("contagem");
+    expect(r.conjunto?.consideradas).toHaveLength(2); // ninguém foi excluído
+  });
+
+  it("unidade ambígua não derruba o conjunto — sai com motivo", () => {
+    const r = montarReferencia({
+      termo: "prego 17x27",
+      cambioHojeUsdBrl: 5.0,
+      observacoes: [
+        { ...milheiro, fornecedor: "A", precoUnit: 85 },
+        { ...milheiro, fornecedor: "B", precoUnit: 90, unidade: "caixa" },
+      ],
+      opcoesNormalizacao: { hoje },
+    });
+
+    expect(r.conjunto?.consideradas).toHaveLength(1);
+    expect(r.conjunto?.excluidas[0].motivo).toBe("unidade_ambigua");
   });
 });

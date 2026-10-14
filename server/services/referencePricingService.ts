@@ -25,6 +25,8 @@ import {
   type ExclusaoPreco,
   type OpcoesNormalizacao,
   type FontePreco,
+  type FamiliaUnidade,
+  interpretarUnidade,
 } from "./precoNormalizacao";
 import {
   ponderarPrecos,
@@ -83,9 +85,13 @@ export interface ConjuntoObservacoes {
    * observação sobrevive à normalização.
    */
   ponderado: PrecoPonderado | null;
-  /** Faixa observada em US$/kg FOB entre as consideradas. */
-  minUsdKg: number | null;
-  maxUsdKg: number | null;
+  /** Faixa observada em US$ por unidade canônica, FOB, entre as consideradas. */
+  minUsdCanonico: number | null;
+  maxUsdCanonico: number | null;
+  /** Família eleita para o conjunto (massa, contagem, comprimento…). */
+  familia: FamiliaUnidade | null;
+  /** Rótulo da unidade canônica: "kg", "un", "m", "m²", "L". */
+  unidadeCanonica: string | null;
 }
 
 export interface ReferenciaPreco {
@@ -158,7 +164,15 @@ export function montarReferencia(input: {
 
   // ----- Conjunto normalizado (FOB US$/kg) e ponderado -----
   const conjunto = observacoes?.length
-    ? montarConjunto(observacoes, opcoesNormalizacao ?? {}, opcoesPonderacao ?? {})
+    ? montarConjunto(
+        observacoes,
+        {
+          ...(opcoesNormalizacao ?? {}),
+          familia: opcoesNormalizacao?.familia
+            ?? familiaPreferida(observacoes, Boolean(externo?.disponivel)),
+        },
+        opcoesPonderacao ?? {},
+      )
     : null;
 
   // A base explícita tem precedência (contrato original). Sem ela, o preço
@@ -223,6 +237,30 @@ export function montarReferencia(input: {
 }
 
 /**
+ * A referência oficial (Comex Stat) é publicada em US$/kg. Quando ela está
+ * disponível E todas as observações conseguem chegar a massa sem perda — já
+ * são de massa, ou são de contagem com peso unitário conhecido — vale fixar a
+ * família em massa: ganha-se a comparação com o preço oficial sem excluir
+ * ninguém. Se alguma observação não chegaria lá, deixa a detecção automática
+ * decidir; forçar massa custaria exclusões, e perder cotação é pior que perder
+ * a comparação.
+ */
+function familiaPreferida(
+  observacoes: ObservacaoPreco[],
+  externoDisponivel: boolean,
+): FamiliaUnidade | undefined {
+  if (!externoDisponivel) return undefined;
+  const todasChegam = observacoes.every((o) => {
+    const i = interpretarUnidade(o.unidade);
+    if (!i || i === "ambigua") return false;
+    if (i.familia === "massa") return true;
+    if (i.familia === "contagem") return typeof o.pesoUnitarioKg === "number" && o.pesoUnitarioKg > 0;
+    return false;
+  });
+  return todasChegam ? "massa" : undefined;
+}
+
+/**
  * Normaliza o conjunto e elege a representativa.
  *
  * A eleição é por RECÊNCIA (quem não tem data vai para o fim), não por preço.
@@ -234,7 +272,7 @@ function montarConjunto(
   opts: OpcoesNormalizacao,
   optsPonderacao: OpcoesPonderacao,
 ): ConjuntoObservacoes {
-  const { consideradas, excluidas } = normalizarObservacoes(observacoes, opts);
+  const { consideradas, excluidas, familia, unidadeCanonica } = normalizarObservacoes(observacoes, opts);
 
   const porFonte: Partial<Record<FontePreco, number>> = {};
   const fornecedores = new Set<string>();
@@ -252,7 +290,7 @@ function montarConjunto(
       )[0]
     : null;
 
-  const precos = consideradas.map((c) => c.precoUsdKg);
+  const precos = consideradas.map((c) => c.precoUsdCanonico);
 
   return {
     consideradas,
@@ -261,8 +299,10 @@ function montarConjunto(
     fornecedoresDistintos: fornecedores.size,
     representativa,
     ponderado: ponderarPrecos(consideradas, optsPonderacao),
-    minUsdKg: precos.length ? Math.min(...precos) : null,
-    maxUsdKg: precos.length ? Math.max(...precos) : null,
+    minUsdCanonico: precos.length ? Math.min(...precos) : null,
+    maxUsdCanonico: precos.length ? Math.max(...precos) : null,
+    familia,
+    unidadeCanonica,
   };
 }
 
@@ -282,8 +322,8 @@ function baseDoConjunto(c: ConjuntoObservacoes, termo: string): BaseRef | null {
     ncm: rep.obs.ncm ?? null,
     fornecedor: c.fornecedoresDistintos === 1 ? (rep.obs.fornecedor ?? null) : null,
     moeda: "USD",
-    precoUnit: c.ponderado.precoUsdKg,
-    unidade: "kg",
+    precoUnit: c.ponderado.precoUsdCanonico,
+    unidade: c.unidadeCanonica ?? "un",
     dataCotacao: rep.obs.dataCotacao ?? null,
     cambioNaData: rep.obs.cambioUsdBrl ?? null,
   };
@@ -341,12 +381,12 @@ function montarLeitura(p: {
     const forn = conjunto.fornecedoresDistintos;
     // A faixa preditiva (onde cai uma nova cotação) diz mais que o intervalo
     // observado; sem ela, cai para min–max das próprias observações.
-    const faixa = conjunto.ponderado?.faixaUsdKg
-      ?? (conjunto.minUsdKg != null && conjunto.maxUsdKg != null
-        ? { min: conjunto.minUsdKg, max: conjunto.maxUsdKg }
+    const faixa = conjunto.ponderado?.faixaUsdCanonico
+      ?? (conjunto.minUsdCanonico != null && conjunto.maxUsdCanonico != null
+        ? { min: conjunto.minUsdCanonico, max: conjunto.maxUsdCanonico }
         : null);
     partes.push(
-      `Base com ${n} cotações normalizadas a FOB US$/kg` +
+      `Base com ${n} cotações normalizadas a FOB US$/${conjunto.unidadeCanonica ?? "un"}` +
       (forn > 1 ? ` de ${forn} fornecedores` : "") +
       (faixa ? `: US$ ${faixa.min.toFixed(2)}–${faixa.max.toFixed(2)}/kg.` : "."),
     );
