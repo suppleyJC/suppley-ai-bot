@@ -95,3 +95,177 @@ describe("montarReferencia", () => {
     expect(r.leitura).not.toMatch(/global/i);
   });
 });
+
+/**
+ * CONJUNTO DE OBSERVAÇÕES — a `base` única passa a ser o caso particular de
+ * uma lista de um elemento.
+ *
+ * O defeito que esta parte existe para impedir está em produção hoje, em
+ * `precificarReferencia.ts:102-104`: a cotação exibida é escolhida por
+ * `sort((x,y) => x.brlPresente - y.brlPresente)[0]` — a MAIS BARATA. Isso
+ * enviesa a base própria para baixo, na mesma direção do viés de
+ * subdeclaração da fonte pública: os dois erros se somam em vez de se
+ * cancelarem.
+ */
+describe("montarReferencia — conjunto de observações", () => {
+  const obsBase = {
+    fonte: "proforma" as const,
+    produto: "Percarbonato de sódio",
+    ncm: "28369920",
+    moeda: "USD",
+    unidade: "ton",
+    incoterm: "FOB",
+  };
+
+  it("escolhe a representativa pela RECÊNCIA, não pelo menor preço", () => {
+    const r = montarReferencia({
+      termo: "percarbonato",
+      cambioHojeUsdBrl: 5.0096,
+      observacoes: [
+        { ...obsBase, ref: "antiga-barata", fornecedor: "A", precoUnit: 480, dataCotacao: "2024-02-01" },
+        { ...obsBase, ref: "recente-cara", fornecedor: "B", precoUnit: 590, dataCotacao: "2026-09-14" },
+      ],
+      opcoesNormalizacao: { hoje: new Date("2026-10-14T00:00:00Z") },
+    });
+
+    expect(r.conjunto?.representativa?.obs.ref).toBe("recente-cara");
+    expect(r.conjunto?.representativa?.precoUsdKg).toBeCloseTo(0.59, 6);
+  });
+
+  it("deriva a base do conjunto quando ela não é passada", () => {
+    const r = montarReferencia({
+      termo: "percarbonato",
+      externo,
+      cambioHojeUsdBrl: 5.0096,
+      observacoes: [{ ...obsBase, fornecedor: "B", precoUnit: 590, dataCotacao: "2026-09-14" }],
+      opcoesNormalizacao: { hoje: new Date("2026-10-14T00:00:00Z") },
+    });
+
+    expect(r.encontrouBase).toBe(true);
+    expect(r.base?.unidade).toBe("kg");
+    expect(r.base?.moeda).toBe("USD");
+    expect(r.base?.precoUnit).toBeCloseTo(0.59, 6);
+  });
+
+  it("normaliza unidades e Incoterms diferentes antes de formar a faixa", () => {
+    const r = montarReferencia({
+      termo: "percarbonato",
+      cambioHojeUsdBrl: 5.0096,
+      observacoes: [
+        { ...obsBase, fornecedor: "A", precoUnit: 590, unidade: "ton", dataCotacao: "2026-09-01" },
+        { ...obsBase, fornecedor: "B", precoUnit: 0.62, unidade: "kg", dataCotacao: "2026-08-01" },
+        { ...obsBase, fornecedor: "C", precoUnit: 700, unidade: "ton", incoterm: "CIF",
+          freteUnit: 100, seguroUnit: 10, dataCotacao: "2026-07-01" },
+      ],
+      opcoesNormalizacao: { hoje: new Date("2026-10-14T00:00:00Z") },
+    });
+
+    expect(r.conjunto?.consideradas).toHaveLength(3);
+    expect(r.conjunto?.minUsdKg).toBeCloseTo(0.59, 6);
+    expect(r.conjunto?.maxUsdKg).toBeCloseTo(0.62, 6);
+    expect(r.conjunto?.fornecedoresDistintos).toBe(3);
+  });
+
+  it("não conta o mesmo fornecedor como várias fontes", () => {
+    const r = montarReferencia({
+      termo: "percarbonato",
+      cambioHojeUsdBrl: 5.0096,
+      observacoes: [
+        { ...obsBase, fornecedorId: 7, fornecedor: "Acme", precoUnit: 590, dataCotacao: "2026-09-01" },
+        { ...obsBase, fornecedorId: 7, fornecedor: "Acme", precoUnit: 600, dataCotacao: "2026-06-01" },
+        { ...obsBase, fornecedorId: 9, fornecedor: "Outra", precoUnit: 610, dataCotacao: "2026-05-01" },
+      ],
+      opcoesNormalizacao: { hoje: new Date("2026-10-14T00:00:00Z") },
+    });
+
+    expect(r.conjunto?.consideradas).toHaveLength(3);
+    expect(r.conjunto?.fornecedoresDistintos).toBe(2);
+  });
+
+  it("guarda o que não deu para normalizar, com motivo — não descarta em silêncio", () => {
+    const r = montarReferencia({
+      termo: "percarbonato",
+      cambioHojeUsdBrl: 5.0096,
+      observacoes: [
+        { ...obsBase, fornecedor: "A", precoUnit: 590, dataCotacao: "2026-09-01" },
+        { ...obsBase, fornecedor: "B", precoUnit: 700, incoterm: "CIF", dataCotacao: "2026-08-01" },
+        { ...obsBase, fornecedor: "C", precoUnit: 25, unidade: "un", dataCotacao: "2026-07-01" },
+      ],
+      opcoesNormalizacao: { hoje: new Date("2026-10-14T00:00:00Z") },
+    });
+
+    expect(r.conjunto?.consideradas).toHaveLength(1);
+    expect(r.conjunto?.excluidas.map((e) => e.motivo).sort()).toEqual(
+      ["incoterm_sem_componentes", "sem_peso_unitario"],
+    );
+  });
+
+  it("conta por fonte — invoice e cotação não são a mesma evidência", () => {
+    const r = montarReferencia({
+      termo: "percarbonato",
+      cambioHojeUsdBrl: 5.0096,
+      observacoes: [
+        { ...obsBase, fonte: "invoice", fornecedor: "A", precoUnit: 580, dataCotacao: "2026-03-01" },
+        { ...obsBase, fonte: "cotacao", fornecedor: "B", precoUnit: 590, dataCotacao: "2026-09-01" },
+        { ...obsBase, fonte: "cotacao", fornecedor: "C", precoUnit: 600, dataCotacao: "2026-08-01" },
+      ],
+      opcoesNormalizacao: { hoje: new Date("2026-10-14T00:00:00Z") },
+    });
+
+    expect(r.conjunto?.porFonte).toEqual({ invoice: 1, cotacao: 2 });
+  });
+
+  it("cotação por peça com peso passa a ser comparável com a média oficial", () => {
+    // Antes, base em "un" bloqueava a comparação (`comparavel: false`).
+    const r = montarReferencia({
+      termo: "item por peça",
+      externo,
+      cambioHojeUsdBrl: 5.0,
+      observacoes: [{
+        fonte: "cotacao", produto: "Peça", ncm: "73170020", fornecedor: "A",
+        precoUnit: 2.5, moeda: "USD", unidade: "un", pesoUnitarioKg: 2.5,
+        incoterm: "FOB", dataCotacao: "2026-09-01",
+      }],
+      opcoesNormalizacao: { hoje: new Date("2026-10-14T00:00:00Z") },
+    });
+
+    expect(r.comparavel).toBe(true);
+    expect(r.base?.precoUnit).toBeCloseTo(1.0, 6); // US$ 2,50 / 2,5 kg
+  });
+
+  it("mantém o contrato original: sem `observacoes`, conjunto é null", () => {
+    const r = montarReferencia({
+      termo: "prego", base: baseKg, externo,
+      cambioHojeUsdBrl: 5.5, cambioHojeMoedaBrl: 5.5,
+    });
+
+    expect(r.conjunto).toBeNull();
+    expect(r.base?.precoUnit).toBe(1.0);
+  });
+
+  it("a base explícita tem precedência sobre o conjunto", () => {
+    const r = montarReferencia({
+      termo: "prego", base: baseKg,
+      cambioHojeUsdBrl: 5.5, cambioHojeMoedaBrl: 5.5,
+      observacoes: [{ ...obsBase, fornecedor: "Z", precoUnit: 999, dataCotacao: "2026-10-01" }],
+      opcoesNormalizacao: { hoje: new Date("2026-10-14T00:00:00Z") },
+    });
+
+    expect(r.base?.fornecedor).toBe("Acme Ltd");
+    expect(r.conjunto?.consideradas).toHaveLength(1); // o conjunto continua disponível
+  });
+
+  it("conjunto sem nenhuma observação normalizável não quebra a leitura", () => {
+    const r = montarReferencia({
+      termo: "percarbonato",
+      cambioHojeUsdBrl: 5.0096,
+      observacoes: [{ ...obsBase, fornecedor: "A", precoUnit: 590, incoterm: null }],
+      opcoesNormalizacao: { hoje: new Date("2026-10-14T00:00:00Z") },
+    });
+
+    expect(r.conjunto?.consideradas).toHaveLength(0);
+    expect(r.conjunto?.representativa).toBeNull();
+    expect(r.encontrouBase).toBe(false);
+    expect(r.leitura).toContain("Sem preço na base");
+  });
+});
