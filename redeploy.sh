@@ -52,6 +52,10 @@ IDEMPOTENT_MIGRATIONS=(
   "drizzle/0046_marcos_granulares.sql"
   "drizzle/0047_operacao_rota.sql"
   "drizzle/0048_drop_openai_key.sql"
+  # Índice FULLTEXT da busca de NCM. Sem ele a busca degrada em silêncio para
+  # LIKE — não quebra, mas a classificação volta a errar. Idempotente: tem
+  # guarda em information_schema e não falha se o índice já existir.
+  "drizzle/0049_ncm_fulltext.sql"
 )
 
 echo "╔════════════════════════════════════════════════════════════╗"
