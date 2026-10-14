@@ -269,3 +269,92 @@ describe("montarReferencia — conjunto de observações", () => {
     expect(r.leitura).toContain("Sem preço na base");
   });
 });
+
+describe("montarReferencia — base vem da PONDERAÇÃO, não de uma cotação isolada", () => {
+  const obsBase = {
+    fonte: "cotacao" as const,
+    produto: "Percarbonato de sódio",
+    ncm: "28369920",
+    moeda: "USD",
+    unidade: "ton",
+    incoterm: "FOB",
+  };
+  const hoje = new Date("2026-10-14T00:00:00Z");
+
+  it("o preço da base é a média ponderada, não a observação mais recente", () => {
+    const r = montarReferencia({
+      termo: "percarbonato",
+      cambioHojeUsdBrl: 5.0096,
+      observacoes: [
+        { ...obsBase, fornecedor: "A", precoUnit: 600, dataCotacao: "2026-10-14" }, // hoje
+        { ...obsBase, fornecedor: "B", precoUnit: 800, dataCotacao: "2025-10-14" }, // 1 meia-vida
+      ],
+      opcoesNormalizacao: { hoje },
+    });
+
+    // pesos 1 e 0,5 → (0,60·2 + 0,80)/3 = 0,6667
+    expect(r.base?.precoUnit).toBeCloseTo(0.6667, 3);
+    expect(r.conjunto?.representativa?.obs.fornecedor).toBe("A"); // âncora continua a recente
+    expect(r.conjunto?.ponderado?.precoUsdKg).toBeCloseTo(0.6667, 3);
+  });
+
+  it("não atribui a média a um fornecedor específico", () => {
+    const r = montarReferencia({
+      termo: "percarbonato",
+      cambioHojeUsdBrl: 5.0096,
+      observacoes: [
+        { ...obsBase, fornecedor: "A", precoUnit: 590, dataCotacao: "2026-09-01" },
+        { ...obsBase, fornecedor: "B", precoUnit: 610, dataCotacao: "2026-08-01" },
+      ],
+      opcoesNormalizacao: { hoje },
+    });
+
+    expect(r.conjunto?.fornecedoresDistintos).toBe(2);
+    expect(r.base?.fornecedor).toBeNull();
+    expect(r.leitura).toContain("referência ponderada da base");
+  });
+
+  it("com um fornecedor só, mantém a atribuição", () => {
+    const r = montarReferencia({
+      termo: "percarbonato",
+      cambioHojeUsdBrl: 5.0096,
+      observacoes: [{ ...obsBase, fornecedorId: 1, fornecedor: "Acme", precoUnit: 590, dataCotacao: "2026-09-01" }],
+      opcoesNormalizacao: { hoje },
+    });
+
+    expect(r.base?.fornecedor).toBe("Acme");
+  });
+
+  it("repassa volatilidade e faixa alvo para a ponderação", () => {
+    const r = montarReferencia({
+      termo: "percarbonato",
+      cambioHojeUsdBrl: 5.0096,
+      observacoes: [
+        { ...obsBase, fornecedor: "A", precoUnit: 590, quantidade: 27, dataCotacao: "2026-09-01" },
+        { ...obsBase, fornecedor: "B", precoUnit: 900, quantidade: 0.05, dataCotacao: "2026-09-01" },
+      ],
+      opcoesNormalizacao: { hoje },
+      opcoesPonderacao: { volatilidadePct: 40, faixaAlvo: "conteiner" },
+    });
+
+    expect(r.conjunto?.ponderado?.meiaVidaMeses).toBeCloseTo(3, 6);
+    // a cotação de amostra (50 kg) entra com aderência menor que a de contêiner
+    const amostra = r.conjunto!.ponderado!.composicao.find((c) => c.fornecedor === "B")!;
+    expect(amostra.pesoAderencia).toBeLessThan(1);
+  });
+
+  it("a leitura usa a faixa preditiva quando há dispersão", () => {
+    const r = montarReferencia({
+      termo: "percarbonato",
+      cambioHojeUsdBrl: 5.0096,
+      observacoes: [
+        { ...obsBase, fornecedor: "A", precoUnit: 500, dataCotacao: "2026-09-01" },
+        { ...obsBase, fornecedor: "B", precoUnit: 700, dataCotacao: "2026-09-01" },
+      ],
+      opcoesNormalizacao: { hoje },
+    });
+
+    expect(r.conjunto?.ponderado?.faixaUsdKg).not.toBeNull();
+    expect(r.leitura).toMatch(/2 cotações normalizadas a FOB US\$\/kg de 2 fornecedores/);
+  });
+});

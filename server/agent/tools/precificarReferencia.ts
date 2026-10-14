@@ -16,11 +16,16 @@ import { buscarCatalogo } from "./agentesFase5";
 import { consultarComexPorNcm } from "../../services/comexStatService";
 import { consultarComtradeGlobal } from "../../services/comtradeService";
 import { getPtaxAtual } from "../../services/marketIntelligenceService";
-import { montarReferencia, valorPresente, type BaseRef, type ExternoRef } from "../../services/referencePricingService";
+import {
+  montarReferencia, valorPresente,
+  type BaseRef, type ExternoRef, type ObservacaoPreco,
+} from "../../services/referencePricingService";
 import { getLatestExchangeRate, getExchangeRateAtDate } from "../../db/exchangeDb";
 import { precosDoAtivo } from "../../db/fase5Db";
 
 const MAX_FORNECEDORES = 4;
+/** Defasagem de consolidação do Comex Stat — o dado publicado não é de hoje. */
+const DEFASAGEM_COMEX_MESES = 2;
 const fmtBRL = (n: number | null) =>
   n == null ? "n/d" : "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -67,6 +72,17 @@ export const precificarReferenciaTool: AgentTool = {
 
     type Candidato = BaseRef & { brlPresente: number | null };
     const candidatos: Candidato[] = [];
+    /**
+     * Mesmas cotações, no formato do conjunto ponderado. `ProformaHit` não
+     * carrega Incoterm nem peso unitário, então:
+     *  - o Incoterm é assumido FOB por opção EXPLÍCITA na normalização, e a
+     *    suposição fica registrada em `ajustes` (auditável), em vez de
+     *    silenciosa como era antes;
+     *  - item cotado por peça sem peso não converte para US$/kg e é excluído
+     *    COM MOTIVO — aparece em `conjunto.excluidas`, não some.
+     * Capturar Incoterm e peso na ingestão da proforma é o conserto de raiz.
+     */
+    const observacoes: ObservacaoPreco[] = [];
 
     for (const p of proformas.slice(0, MAX_FORNECEDORES)) {
       const data = p.quotationDate ? new Date(p.quotationDate) : null;
@@ -79,6 +95,20 @@ export const precificarReferenciaTool: AgentTool = {
         fonte: "proforma", produto: p.productName, ncm: p.ncm, fornecedor: p.supplierName,
         moeda, precoUnit, unidade: p.unit || "UN",
         dataCotacao: data ? data.toISOString().slice(0, 10) : null, cambioNaData, brlPresente,
+      });
+      observacoes.push({
+        ref: `proforma:${p.proformaId}`,
+        fonte: "proforma",
+        fornecedor: p.supplierName,
+        produto: p.productName,
+        ncm: p.ncm,
+        precoUnit,
+        moeda,
+        unidade: p.unit || "UN",
+        quantidade: p.quantity ?? null,
+        dataCotacao: data ? data.toISOString().slice(0, 10) : null,
+        cambioMoedaBrl: cambioNaData,
+        cambioUsdBrl: data ? await getExchangeRateAtDate("USD", "BRL", data) : ptaxUsd,
       });
     }
     if (candidatos.length === 0) {
@@ -96,11 +126,36 @@ export const precificarReferenciaTool: AgentTool = {
           moeda, precoUnit, unidade: "UN",
           dataCotacao: data ? data.toISOString().slice(0, 10) : null, cambioNaData, brlPresente,
         });
+        observacoes.push({
+          ref: `ativo:${a.id}`,
+          // `ativo_precos` guarda a fonte real (invoice pesa mais que cotação)
+          // e o Incoterm — melhor evidência que a proforma achatada.
+          fonte: (ult?.fonte as ObservacaoPreco["fonte"]) ?? "cotacao",
+          fornecedorId: ult?.fornecedorId ?? null,
+          fornecedor: null,
+          produto: a.nome,
+          ncm: a.ncm,
+          precoUnit,
+          moeda,
+          unidade: "UN",
+          incoterm: ult?.incoterm ?? null,
+          dataCotacao: data ? data.toISOString().slice(0, 10) : null,
+          cambioMoedaBrl: cambioNaData,
+          cambioUsdBrl: ptaxUsd,
+        });
       }
     }
 
-    // Ordena pela mais competitiva (menor valor presente; sem valor vai pro fim).
-    candidatos.sort((x, y) => (x.brlPresente ?? Infinity) - (y.brlPresente ?? Infinity));
+    // Ordena por RECÊNCIA (mais nova primeiro; sem data vai pro fim).
+    //
+    // Antes era pela MAIS BARATA (`brlPresente` asc). Escolher o menor preço
+    // como vitrine enviesa a base própria para baixo — na MESMA direção do
+    // viés de subdeclaração da fonte pública, de modo que os dois erros se
+    // somam em vez de se cancelarem. O preço de referência agora sai da
+    // ponderação (fonte × recência × aderência); esta lista é só o fallback
+    // e a exibição por fornecedor.
+    const tempoDe = (c: Candidato) => (c.dataCotacao ? new Date(c.dataCotacao).getTime() : -Infinity);
+    candidatos.sort((x, y) => tempoDe(y) - tempoDe(x));
     const base: BaseRef | null = candidatos[0] ?? null;
 
     // 2) Externo em cascata: Brasil (Comex Stat) → global (UN Comtrade).
@@ -150,22 +205,59 @@ export const precificarReferenciaTool: AgentTool = {
 
     const cambioHojeMoedaBrl = base ? await cambioMoedaHoje(base.moeda, ptaxUsd) : null;
 
+    // A referência pública entra no CONJUNTO como fonte "mercado" — é o modelo
+    // pedido: média ponderada entre base própria e fontes externas. O peso dela
+    // é menor (PESO_FONTE.mercado) e o viés de subdeclaração ainda NÃO é
+    // corrigido, então a ponderação emite aviso quando ela domina.
+    if (externo?.disponivel && externo.precoMedioUsdKg != null) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - DEFASAGEM_COMEX_MESES);
+      observacoes.push({
+        ref: `mercado:${externo.ncm}`,
+        fonte: "mercado",
+        fornecedor: null,
+        produto: termo,
+        ncm: externo.ncm,
+        precoUnit: externo.precoMedioUsdKg,
+        moeda: "USD",
+        unidade: "kg",
+        incoterm: "FOB", // Comex Stat publica valor FOB
+        dataCotacao: d.toISOString().slice(0, 10),
+        cambioUsdBrl: ptaxUsd,
+      });
+    }
+
     const ref = montarReferencia({
       termo,
       base,
       externo,
       cambioHojeUsdBrl: ptaxUsd,
       cambioHojeMoedaBrl,
+      observacoes,
+      // Proforma não registra Incoterm; sem isto a base inteira seria excluída.
+      // A suposição fica gravada em `ajustes`, não some.
+      opcoesNormalizacao: { assumirFobQuandoDesconhecido: true },
     });
 
-    // CONSOLIDAÇÃO EM SEGUNDO PLANO — média PONDERADA pela atualidade
-    // (meia-vida de 12 meses: cotação de hoje pesa 1, de 12 meses pesa 0,5,
-    // de 24 meses pesa 0,25). A idade do dado é tratada AQUI, como peso —
-    // nunca exposta ao usuário como justificativa/vulnerabilidade.
+    // FALLBACK — consolidação antiga, só por recência e sobre `brlPresente`.
+    // DEFEITO CONHECIDO: soma valores em UNIDADES e INCOTERMS diferentes
+    // (R$/kg com R$/unidade), o que produz média sem significado. Fica como
+    // rede de segurança para quando nada normaliza — item cotado por peça sem
+    // peso, por exemplo — e sai de cena assim que a ingestão da proforma
+    // capturar peso e Incoterm.
     const agora = Date.now();
     const comParesValidos = candidatos.filter((c) => c.brlPresente != null);
     let referenciaConsolidadaBrl: number | null = null;
-    if (comParesValidos.length > 0) {
+
+    // CAMINHO NOVO: a ponderação opera sobre observações normalizadas a FOB
+    // US$/kg — fonte × recência × aderência, com cluster por fornecedor. Só
+    // vale quando houve o que normalizar.
+    const ponderado = ref.conjunto?.ponderado ?? null;
+    let unidadeConsolidada = "UN";
+    if (ponderado && ptaxUsd != null) {
+      referenciaConsolidadaBrl = ponderado.precoUsdKg * ptaxUsd;
+      unidadeConsolidada = "kg";
+    } else if (comParesValidos.length > 0) {
       let somaPeso = 0;
       let somaValor = 0;
       for (const c of comParesValidos) {
@@ -183,10 +275,19 @@ export const precificarReferenciaTool: AgentTool = {
     const partes: string[] = [];
 
     if (referenciaConsolidadaBrl != null) {
-      const unidade = comParesValidos[0]?.unidade ?? "UN";
+      const unidade = ponderado ? unidadeConsolidada : (comParesValidos[0]?.unidade ?? "UN");
       partes.push(
         `Preço de Referência de Mercado (consolidado, a valor presente): ${fmtBRL(referenciaConsolidadaBrl)}/${unidade}.`,
       );
+      // Faixa e composição vão para o AGENTE decidir como usar; a máscara de
+      // apresentação abaixo continua valendo para o texto ao usuário.
+      if (ponderado?.faixaUsdKg && ptaxUsd != null) {
+        partes.push(
+          `Faixa esperada: ${fmtBRL(ponderado.faixaUsdKg.min * ptaxUsd)}–${fmtBRL(ponderado.faixaUsdKg.max * ptaxUsd)}/kg ` +
+          `(${ponderado.composicao.length} observações, amostra efetiva ${ponderado.nEfetivo.toFixed(1)}).`,
+        );
+      }
+      for (const aviso of ponderado?.avisos ?? []) partes.push(`ATENÇÃO INTERNA: ${aviso}`);
     }
     if (comParesValidos.length > 1) {
       const linhas = comParesValidos.map((c) =>
@@ -247,7 +348,7 @@ export const precificarReferenciaTool: AgentTool = {
       ok: true,
       summary: partes.length ? partes.join("\n") : ref.leitura,
       data: {
-        ...ref, candidatos, referenciaConsolidadaBrl,
+        ...ref, candidatos, referenciaConsolidadaBrl, unidadeConsolidada,
         rotuloReferencia: "Preço de Referência de Mercado",
         fornecedorExibicao: base ? undefined : "Preço de Mercado",
       },

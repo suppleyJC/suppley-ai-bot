@@ -26,6 +26,11 @@ import {
   type OpcoesNormalizacao,
   type FontePreco,
 } from "./precoNormalizacao";
+import {
+  ponderarPrecos,
+  type OpcoesPonderacao,
+  type PrecoPonderado,
+} from "./precoPonderacao";
 
 export type { ObservacaoPreco } from "./precoNormalizacao";
 
@@ -63,16 +68,21 @@ export interface ConjuntoObservacoes {
   /** Fornecedores distintos — a mesma origem cotando N vezes não é N fontes. */
   fornecedoresDistintos: number;
   /**
-   * Observação eleita representante do conjunto.
+   * Observação MAIS RECENTE — serve de âncora de atribuição (quem cotou,
+   * quando). Não é mais o preço de referência: esse é `ponderado`.
    *
-   * PROVISÓRIO: hoje é a MAIS RECENTE entre as normalizadas. A média ponderada
-   * (fonte × recência com meia-vida pela volatilidade × aderência de faixa,
-   * com cluster por fornecedor) entra na etapa seguinte e substitui esta
-   * escolha. "Mais recente" é um representante defensável; "mais barata" — o
-   * critério hoje em `precificarReferencia.ts` — enviesa a base própria para
-   * baixo, na mesma direção do viés declaratório do Comex Stat.
+   * Nunca foi a mais barata. Eleger pelo menor preço, como
+   * `precificarReferencia.ts` faz hoje, enviesa a base própria para baixo, na
+   * mesma direção do viés declaratório da fonte pública — os dois erros se
+   * somam em vez de se cancelarem.
    */
   representativa: ObservacaoNormalizada | null;
+  /**
+   * O preço de referência: média ponderada por fonte × recência × aderência,
+   * com cluster por fornecedor, faixa preditiva e avisos. Null quando nenhuma
+   * observação sobrevive à normalização.
+   */
+  ponderado: PrecoPonderado | null;
   /** Faixa observada em US$/kg FOB entre as consideradas. */
   minUsdKg: number | null;
   maxUsdKg: number | null;
@@ -142,17 +152,18 @@ export function montarReferencia(input: {
    */
   observacoes?: ObservacaoPreco[];
   opcoesNormalizacao?: OpcoesNormalizacao;
+  opcoesPonderacao?: OpcoesPonderacao;
 }): ReferenciaPreco {
-  const { termo, externo, cambioHojeUsdBrl, observacoes, opcoesNormalizacao } = input;
+  const { termo, externo, cambioHojeUsdBrl, observacoes, opcoesNormalizacao, opcoesPonderacao } = input;
 
-  // ----- Conjunto normalizado (FOB US$/kg) -----
+  // ----- Conjunto normalizado (FOB US$/kg) e ponderado -----
   const conjunto = observacoes?.length
-    ? montarConjunto(observacoes, opcoesNormalizacao ?? {})
+    ? montarConjunto(observacoes, opcoesNormalizacao ?? {}, opcoesPonderacao ?? {})
     : null;
 
-  // A base explícita tem precedência (contrato original). Sem ela, a
-  // representativa do conjunto assume — já em base canônica.
-  const base = input.base ?? (conjunto?.representativa ? baseDaNormalizada(conjunto.representativa, termo) : null);
+  // A base explícita tem precedência (contrato original). Sem ela, o preço
+  // PONDERADO do conjunto assume — já em base canônica.
+  const base = input.base ?? (conjunto ? baseDoConjunto(conjunto, termo) : null);
   // Base derivada já está em USD: o câmbio de hoje dela é o próprio USD→BRL.
   const cambioHojeMoedaBrl = input.base
     ? (input.cambioHojeMoedaBrl ?? null)
@@ -202,7 +213,12 @@ export function montarReferencia(input: {
     maisCompetitivo,
     diffPct,
     conjunto,
-    leitura: montarLeitura({ baseOut, externoOut, comparavel, maisCompetitivo, diffPct, conjunto }),
+    leitura: montarLeitura({
+      baseOut, externoOut, comparavel, maisCompetitivo, diffPct, conjunto,
+      // A base é uma média só quando foi derivada do conjunto e há mais de uma
+      // observação sustentando-a — senão o rótulo mentiria sobre a origem.
+      baseEhPonderada: !input.base && (conjunto?.consideradas.length ?? 0) >= 2,
+    }),
   };
 }
 
@@ -216,6 +232,7 @@ export function montarReferencia(input: {
 function montarConjunto(
   observacoes: ObservacaoPreco[],
   opts: OpcoesNormalizacao,
+  optsPonderacao: OpcoesPonderacao,
 ): ConjuntoObservacoes {
   const { consideradas, excluidas } = normalizarObservacoes(observacoes, opts);
 
@@ -243,23 +260,32 @@ function montarConjunto(
     porFonte,
     fornecedoresDistintos: fornecedores.size,
     representativa,
+    ponderado: ponderarPrecos(consideradas, optsPonderacao),
     minUsdKg: precos.length ? Math.min(...precos) : null,
     maxUsdKg: precos.length ? Math.max(...precos) : null,
   };
 }
 
-/** Converte uma observação normalizada no formato `BaseRef` (USD, kg). */
-function baseDaNormalizada(n: ObservacaoNormalizada, termo: string): BaseRef {
+/**
+ * Converte o conjunto no formato `BaseRef` (USD, kg).
+ *
+ * O preço é o PONDERADO, não o de uma observação isolada. A atribuição de
+ * fornecedor só é preenchida quando há um único fornecedor no conjunto —
+ * atribuir uma média a um fornecedor específico seria falso.
+ */
+function baseDoConjunto(c: ConjuntoObservacoes, termo: string): BaseRef | null {
+  const rep = c.representativa;
+  if (!rep || !c.ponderado) return null;
   return {
-    fonte: n.obs.fonte,
-    produto: n.obs.produto ?? termo,
-    ncm: n.obs.ncm ?? null,
-    fornecedor: n.obs.fornecedor ?? null,
+    fonte: rep.obs.fonte,
+    produto: rep.obs.produto ?? termo,
+    ncm: rep.obs.ncm ?? null,
+    fornecedor: c.fornecedoresDistintos === 1 ? (rep.obs.fornecedor ?? null) : null,
     moeda: "USD",
-    precoUnit: n.precoUsdKg,
+    precoUnit: c.ponderado.precoUsdKg,
     unidade: "kg",
-    dataCotacao: n.obs.dataCotacao ?? null,
-    cambioNaData: n.obs.cambioUsdBrl ?? null,
+    dataCotacao: rep.obs.dataCotacao ?? null,
+    cambioNaData: rep.obs.cambioUsdBrl ?? null,
   };
 }
 
@@ -284,8 +310,9 @@ function montarLeitura(p: {
   maisCompetitivo: ReferenciaPreco["maisCompetitivo"];
   diffPct: number | null;
   conjunto?: ConjuntoObservacoes | null;
+  baseEhPonderada?: boolean;
 }): string {
-  const { baseOut, externoOut, comparavel, maisCompetitivo, diffPct, conjunto } = p;
+  const { baseOut, externoOut, comparavel, maisCompetitivo, diffPct, conjunto, baseEhPonderada } = p;
 
   if (!baseOut && !externoOut?.disponivel) {
     return "Sem preço na base e sem dado externo para este item.";
@@ -294,7 +321,9 @@ function montarLeitura(p: {
   const partes: string[] = [];
 
   if (baseOut) {
-    const fnt = ROTULO_FONTE[baseOut.fonte] ?? "referência na base";
+    const fnt = baseEhPonderada
+      ? "referência ponderada da base"
+      : (ROTULO_FONTE[baseOut.fonte] ?? "referência na base");
     let l = `Pela ${fnt} (${baseOut.fornecedor || "fornecedor n/d"}): ${baseOut.moeda} ${baseOut.precoUnit.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/${baseOut.unidade}`;
     if (baseOut.brlPresente != null) l += ` → a valor presente ${brl(baseOut.brlPresente)}/${baseOut.unidade}`;
     if (baseOut.variacaoCambialPct != null && Math.abs(baseOut.variacaoCambialPct) >= 1) {
@@ -307,13 +336,19 @@ function montarLeitura(p: {
   // decisão de produto de não expor a idade do dado ao usuário continua
   // valendo; aqui só se diz quantas cotações sustentam o número e em que
   // faixa elas caem, o que é argumento de negociação, não confissão.
-  if (conjunto && conjunto.consideradas.length >= 2 && conjunto.minUsdKg != null && conjunto.maxUsdKg != null) {
+  if (conjunto && conjunto.consideradas.length >= 2) {
     const n = conjunto.consideradas.length;
     const forn = conjunto.fornecedoresDistintos;
+    // A faixa preditiva (onde cai uma nova cotação) diz mais que o intervalo
+    // observado; sem ela, cai para min–max das próprias observações.
+    const faixa = conjunto.ponderado?.faixaUsdKg
+      ?? (conjunto.minUsdKg != null && conjunto.maxUsdKg != null
+        ? { min: conjunto.minUsdKg, max: conjunto.maxUsdKg }
+        : null);
     partes.push(
       `Base com ${n} cotações normalizadas a FOB US$/kg` +
       (forn > 1 ? ` de ${forn} fornecedores` : "") +
-      `: US$ ${conjunto.minUsdKg.toFixed(2)}–${conjunto.maxUsdKg.toFixed(2)}/kg.`,
+      (faixa ? `: US$ ${faixa.min.toFixed(2)}–${faixa.max.toFixed(2)}/kg.` : "."),
     );
   }
 
