@@ -18,12 +18,42 @@
  * Docs: https://docs.portalunico.siscomex.gov.br/api/ttce/
  */
 
+import { cabecalhosPortal, invalidarToken, portalUnicoConfigurado } from "./portalUnicoAuth";
+
 const TTCE_BASE_URL = process.env.TTCE_BASE_URL || "https://portalunico.siscomex.gov.br";
 const TTCE_TIMEOUT_MS = 8000;
 const CACHE_TTL_MS = 12 * 3600 * 1000; // tarifa muda raramente; 12h de cache
 
+/**
+ * POST ao TTCE com os cabeçalhos de sessão do Portal Único.
+ *
+ * O endpoint é `/ext/` mas NÃO é público: a visão é PRIV e exige token
+ * (`"Acesso não autenticado"`, PUCX-ER0201). A barra final é obrigatória — o
+ * servidor é Spring Boot e, sem ela, devolve 404.
+ */
+async function postTtce(corpo: string, forcarNovaSessao: boolean): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TTCE_TIMEOUT_MS);
+  try {
+    const auth = await cabecalhosPortal(forcarNovaSessao);
+    return await fetch(`${TTCE_BASE_URL}/ttce/api/ext/tratamentos-tributarios/importacao/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(auth ?? {}),
+      },
+      body: corpo,
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function ttceEnabled(): boolean {
-  return process.env.TTCE_ENABLED === "true";
+  // Sem par de chaves a consulta so gastaria rede para tomar 401 — a API e PRIV.
+  return process.env.TTCE_ENABLED === "true" && portalUnicoConfigurado();
 }
 
 /** Códigos de país SISCOMEX (numéricos) das origens mais comuns da plataforma. */
@@ -162,23 +192,20 @@ export async function consultarTtce(params: {
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.val;
 
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), TTCE_TIMEOUT_MS);
-    const resp = await fetch(
-      `${TTCE_BASE_URL}/ttce/api/ext/tratamentos-tributarios/importacao`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          listaNcm: [{ ncm }],
-          codigoPais,
-          dataFatoGerador: dataFato,
-          tipoOperacao: "I",
-        }),
-        signal: ctrl.signal,
-      },
-    );
-    clearTimeout(timer);
+    const corpo = JSON.stringify({
+      listaNcm: [{ ncm }],
+      codigoPais,
+      dataFatoGerador: dataFato,
+      tipoOperacao: "I",
+    });
+
+    // Uma tentativa; no 401 reautentica e repete UMA vez. O spec não declara a
+    // validade do token, então o 401 é o sinal confiável de expiração.
+    let resp = await postTtce(corpo, false);
+    if (resp.status === 401) {
+      invalidarToken();
+      resp = await postTtce(corpo, true);
+    }
     if (!resp.ok) throw new Error(`TTCE HTTP ${resp.status}`);
     const json = await resp.json();
     const parsed = parseTtceResponse(json);

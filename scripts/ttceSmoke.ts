@@ -13,6 +13,7 @@
  * Se (2) fizer sentido com (1), ative a integração com TTCE_ENABLED=true no .env.
  */
 import { consultarTtce, paisParaCodigoSiscomex } from "../server/services/ttceService";
+import { cabecalhosPortal, portalUnicoConfigurado } from "../server/services/portalUnicoAuth";
 
 const [, , ncmArg, ...paisParts] = process.argv;
 const ncm = (ncmArg ?? "84798999").replace(/\D/g, "");
@@ -24,6 +25,18 @@ async function main() {
 
   // 1) chamada bruta — mostra o formato real da resposta
   const base = process.env.TTCE_BASE_URL || "https://portalunico.siscomex.gov.br";
+
+  // A API do TTCE e PRIVADA (visao PRIV). Sem par de chaves a resposta e 401,
+  // e sem este aviso o diagnostico vira adivinhacao.
+  if (!portalUnicoConfigurado()) {
+    console.log(
+      "AVISO: PORTAL_UNICO_CLIENT_ID / CLIENT_SECRET / ROLE_TYPE nao estao no .env.\n" +
+      "       A chamada abaixo vai responder 401. Gere o par de chaves em\n" +
+      "       https://portalunico.siscomex.gov.br/portal/ -> Perfil do usuario.\n",
+    );
+  }
+  const auth = await cabecalhosPortal();
+  console.log("Autenticacao:", auth ? "sessao obtida" : "SEM sessao");
   const body = {
     listaNcm: [{ ncm }],
     codigoPais,
@@ -32,9 +45,10 @@ async function main() {
   };
   console.log("Request:", JSON.stringify(body));
   try {
-    const resp = await fetch(`${base}/ttce/api/ext/tratamentos-tributarios/importacao`, {
+    // A barra final e obrigatoria: o servidor e Spring Boot e sem ela da 404.
+    const resp = await fetch(`${base}/ttce/api/ext/tratamentos-tributarios/importacao/`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "application/json", ...(auth ?? {}) },
       body: JSON.stringify(body),
     });
     console.log(`\nHTTP ${resp.status} ${resp.statusText}`);
