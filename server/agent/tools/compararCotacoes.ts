@@ -45,8 +45,10 @@ export const compararCotacoesTool: AgentTool = {
       return {
         ok: true,
         summary:
-          `Ainda não há cotações cadastradas para "${produto}" nos últimos 90 dias. ` +
-          `Registre preços de fornecedores ou envie uma RFQ antes de comparar.`,
+          `Sem cotações dos últimos 90 dias para "${produto}" nesta consulta. ` +
+          `NÃO encerre aqui: consulte também cotações mais antigas (ler_itens_proforma / buscar_ativo) e ` +
+          `siga a DESCOBERTA DE FORNECEDORES — mapa de origens (mapear_mercado_global) e candidatos ` +
+          `pela pesquisa web, rotulados como não homologados, fechando com a oferta de RFQ.`,
         data: resultado,
       };
     }
@@ -59,7 +61,12 @@ export const compararCotacoesTool: AgentTool = {
       summary:
         `${stats.totalSuppliers} fornecedor(es) para "${produto}". ` +
         `Melhor preço: ${best.supplierName} (${best.country}) a ${brl(best.latestPriceBrlCents)}. ` +
-        `Faixa ${brl(stats.minPrice)}–${brl(stats.maxPrice)}, média ${brl(stats.avgPrice)}.`,
+        `Faixa ${brl(stats.minPrice)}–${brl(stats.maxPrice)}, média ${brl(stats.avgPrice)}.` +
+        // Um fornecedor só não é comparação — é o ponto de partida da descoberta.
+        (stats.totalSuppliers < 2
+          ? ` Base com um fornecedor para o item: AMPLIE pela DESCOBERTA DE FORNECEDORES (mapa de ` +
+            `origens + candidatos não homologados pela pesquisa web + oferta de RFQ).`
+          : ""),
       data: resultado,
     };
   },
