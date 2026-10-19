@@ -526,13 +526,19 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
     const result = await invokeLLM({
       messages: conversation,
       // As ferramentas continuam declaradas mesmo no fechamento: o histórico tem
-      // blocos tool_use, e a API os exige. Quem impede nova chamada é o "none".
+      // blocos tool_use, e a API os exige. Quem impede nova chamada é o "none"
+      // — que também cobre a ferramenta nativa de busca web.
       tools: toolSchemas.length > 0 ? toolSchemas : undefined,
       tool_choice: toolSchemas.length > 0 ? (fecharAgora ? "none" : "auto") : undefined,
       // Pesquisa web nativa (legislação, fiscal, logística, mercado, commodities).
-      // Desligada no fechamento: é a parte mais lenta e o objetivo é responder.
-      webSearch: !fecharAgora,
-      thinking: profundo && !fecharAgora,
+      //
+      // Continua DECLARADA no fechamento, assim como o raciocínio: o histórico
+      // já tem blocos de busca e de pensamento, e a API recusa (400) histórico
+      // com esses blocos quando a ferramenta ou o modo somem no meio do turno —
+      // foi a falha "instabilidade" do teste. Quem impede novas buscas e
+      // ferramentas é o tool_choice "none".
+      webSearch: true,
+      thinking: profundo,
       effort,
       // Teto de saída alto: catalogar uma cotação grande gera argumentos de
       // tool com dezenas de itens — com o default (4096) o JSON era cortado.
@@ -665,14 +671,16 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
       // blocos tool_use, e a API os exige. Quem impede nova chamada é o "none".
       tools: toolSchemas.length > 0 ? toolSchemas : undefined,
       tool_choice: toolSchemas.length > 0 ? (fecharAgora ? "none" : "auto") : undefined,
-      // Pesquisa web nativa (legislação, fiscal, logística, mercado, commodities).
-      // Desligada no fechamento: é a parte mais lenta e o objetivo é responder.
-      webSearch: !fecharAgora,
-      thinking: profundo && !fecharAgora,
+      // Pesquisa web e raciocínio continuam DECLARADOS no fechamento: o
+      // histórico já tem esses blocos e a API recusa (400) quando somem no meio
+      // do turno. Quem impede novas buscas e ferramentas é o tool_choice "none".
+      webSearch: true,
+      thinking: profundo,
       effort,
       // Teto de saída alto: catalogar uma cotação grande gera argumentos de
       // tool com dezenas de itens — com o default (4096) o JSON era cortado.
-      maxTokens: 16000,
+      // No fechamento não há argumento de tool, só texto: teto menor, mais rápido.
+      maxTokens: fecharAgora ? 4000 : 16000,
       model,
     });
 

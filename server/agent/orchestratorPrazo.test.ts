@@ -49,7 +49,7 @@ afterEach(() => {
 });
 
 describe("prazo da rodada", () => {
-  it("passado o prazo, fecha sem novas ferramentas e sem busca web", async () => {
+  it("passado o prazo, fecha sem novas ferramentas — busca e raciocínio continuam DECLARADOS", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.mocked(invokeLLM)
       .mockResolvedValueOnce(pedeFerramenta("precificar_referencia") as any)
@@ -63,7 +63,11 @@ describe("prazo da rodada", () => {
 
     const fechamento = vi.mocked(invokeLLM).mock.calls[1][0];
     expect(fechamento.tool_choice).toBe("none");
-    expect(fechamento.webSearch).toBe(false);
+    // Desligar a busca no meio do turno fez a API recusar o histórico (400) —
+    // o histórico já tinha blocos de busca. O "none" é que impede novas buscas.
+    expect(fechamento.webSearch).toBe(true);
+    expect(fechamento.thinking).toBe(vi.mocked(invokeLLM).mock.calls[0][0].thinking);
+    expect(fechamento.maxTokens).toBe(4000);
     expect(JSON.stringify(fechamento.messages)).toContain("PRAZO DE RESPOSTA ATINGIDO");
     expect(chunks.at(-1)).toMatchObject({ type: "reply", reply: "Aqui está a análise." });
   });
@@ -127,5 +131,26 @@ describe("teto por ferramenta", () => {
 
     expect(chunks.find((c) => c.type === "tool_result")).toMatchObject({ ok: false });
     expect(chunks.at(-1)).toMatchObject({ type: "reply", reply: "ok" });
+  });
+});
+
+describe("raciocínio profundo no fechamento", () => {
+  it("não desliga o raciocínio no meio do turno — a API recusaria o histórico", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const longa = { userId: 1, messages: [{ role: "user" as const, content: "x".repeat(700) }] };
+    vi.mocked(invokeLLM)
+      .mockResolvedValueOnce(pedeFerramenta("classificar_ncm") as any)
+      .mockResolvedValueOnce(responde("ok") as any);
+    vi.mocked(runTool).mockImplementation(async () => {
+      vi.setSystemTime(Date.now() + 45_000);
+      return { ok: true, summary: "ok" };
+    });
+
+    await coletar(runExcambiaStream(longa));
+
+    const [primeira, fechamento] = vi.mocked(invokeLLM).mock.calls.map((c) => c[0]);
+    expect(primeira.thinking).toBe(true);
+    expect(fechamento.thinking).toBe(true);
+    expect(fechamento.tool_choice).toBe("none");
   });
 });

@@ -17,9 +17,11 @@ const schema = defineSchema(
   "sincronizar_barreiras",
   "Atualiza a BASE VIVA de defesa comercial para uma NCM: pesquisa as Resoluções " +
   "GECEX/CAMEX vigentes (fontes oficiais), extrai tipo/mecanismo/valor/vigência e grava " +
-  "na base estruturada — o cálculo passa a evidenciar a medida com o valor ATUAL. Use " +
-  "quando o cálculo apontar 'valor a confirmar', quando pedirem para confirmar " +
-  "antidumping/salvaguarda de um item, ou ao analisar origem nova em NCM sensível.",
+  "na base estruturada — o cálculo passa a evidenciar a medida com o valor ATUAL. " +
+  "É LENTA (pesquisa + extração, dezenas de segundos) e serve para ATUALIZAR A BASE, não para " +
+  "responder no chat. Use SOMENTE quando a pessoa pedir explicitamente para atualizar/sincronizar " +
+  "as barreiras de uma NCM. Para RESPONDER se há antidumping/salvaguarda, use a pesquisa web " +
+  "(resoluções GECEX/CAMEX) e cite a resolução.",
   {
     type: "object",
     properties: {

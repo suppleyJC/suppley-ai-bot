@@ -133,9 +133,16 @@ export const montarCalculoTool: AgentTool = {
     // BARREIRAS COMERCIAIS detectadas (antidumping/CIDE/compensatórias) — o
     // agente DEVE evidenciá-las na resposta, com impacto e postura afirmativa.
     const linhasBarreira = (resultado?.ncmWarnings ?? []).filter((w) => w.startsWith("🛑"));
+    // Sem detecção, o silêncio era lido pelo modelo como "não há antidumping" —
+    // e a base de barreiras é PARCIAL (mantida sob demanda). Foi assim que a
+    // Excambia afirmou ausência de antidumping no porcelanato chinês e teve de
+    // se corrigir na mensagem seguinte (Res. GECEX 152/2021, US$ 2,01/m²).
     const barreirasTxt = linhasBarreira.length
       ? `BARREIRAS COMERCIAIS DETECTADAS (OBRIGATÓRIO evidenciar na resposta, de forma afirmativa e consultiva): ${linhasBarreira.join(" | ")} `
-      : "";
+      : `DEFESA COMERCIAL: nenhuma medida registrada na base interna para estas NCMs/origem — a base é PARCIAL. ` +
+        `NÃO afirme que não há antidumping, salvaguarda ou medida compensatória. Se o tema surgir, ou se a ` +
+        `origem for China ou outra origem sensível para o setor, confirme pela pesquisa web nas resoluções ` +
+        `GECEX/CAMEX antes de responder, e cite a resolução. `;
 
     // BENCHMARK DE MERCADO (Pilar 4): FOB cotado × média oficial de importação
     // (Comex Stat, US$/kg) por item com peso — automático, best-effort com
