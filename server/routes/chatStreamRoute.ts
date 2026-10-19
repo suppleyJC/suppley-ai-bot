@@ -160,8 +160,22 @@ router.post("/api/chat/stream", chatStreamRateLimit, async (req: Request, res: R
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
+    // nginx bufferiza respostas por padrão — e um SSE bufferizado chega todo
+    // de uma vez no fim, ou não chega.
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders?.();
     const perfHeadersAt = performance.now();
+
+    // SINAL DE VIDA. Enquanto uma ferramenta trabalha, o stream fica em
+    // silêncio, e proxies (nginx, Cloudflare) derrubam conexões ociosas por
+    // volta de 60–100 s. O navegador então mostra falha mesmo com o servidor
+    // ainda processando — foi o caso do "porcelanato 80x80". Um comentário SSE
+    // a cada 15 s mantém a conexão aberta; os leitores do cliente ignoram
+    // qualquer linha que não comece com "data: ".
+    const sinalDeVida = setInterval(() => {
+      if (!res.writableEnded) res.write(": ping\n\n");
+    }, 15_000);
+    res.on("close", () => clearInterval(sinalDeVida));
 
     let fullReply = "";
     let toolsUsed: string[] = [];

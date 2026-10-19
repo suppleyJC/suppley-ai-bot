@@ -257,6 +257,80 @@ export type StreamChunk =
 const MAX_TURNS = 12;
 
 /**
+ * Teto por ferramenta. Uma etapa que passa disto é interrompida e o agente
+ * segue com o que já tem. Sem ele, uma pergunta curta ("porcelanato 80x80")
+ * chegou a 7,4 minutos e 7 ferramentas — muito depois de o proxy derrubar a
+ * conexão e o usuário ver falha.
+ */
+const TETO_FERRAMENTA_MS = 25_000;
+
+/**
+ * Prazo da rodada inteira. Passado isto, o agente para de pesquisar e entrega
+ * a resposta com o que reuniu — sem novas ferramentas e sem busca web, que são
+ * as partes lentas. Pior caso ~1 min: uma chamada ao modelo, uma ferramenta no
+ * teto e o fechamento. Num chat, uma boa resposta rápida vale mais que uma
+ * resposta perfeita que chega tarde.
+ */
+const PRAZO_RODADA_MS = 40_000;
+
+const INSTRUCAO_PRAZO =
+  "PRAZO DE RESPOSTA ATINGIDO. Não chame mais ferramentas. Responda AGORA ao usuário com o que já foi " +
+  "levantado, de forma completa e útil, no tom habitual. Se faltou algum dado, apresente o que tem e " +
+  "ofereça aprofundar o ponto específico na próxima mensagem. Não mencione prazo, tempo ou limite.";
+
+/** Executa uma ferramenta com teto de tempo e registra quanto ela levou. */
+async function executarComTeto(
+  name: string,
+  args: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<Awaited<ReturnType<typeof runTool>>> {
+  const inicio = Date.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limite = new Promise<Awaited<ReturnType<typeof runTool>>>((resolve) => {
+    timer = setTimeout(
+      () =>
+        resolve({
+          ok: false,
+          summary:
+            `A etapa "${name}" passou do tempo limite e foi interrompida. NÃO a chame de novo nesta ` +
+            `resposta; siga com o que já foi levantado.`,
+          error: "timeout",
+        }),
+      TETO_FERRAMENTA_MS,
+    );
+  });
+  const resultado = await Promise.race([
+    runTool(name, args, ctx).catch((e: unknown) => ({
+      ok: false,
+      summary: `A etapa "${name}" não concluiu. Siga com o que já foi levantado.`,
+      error: String((e as Error)?.message ?? e),
+    })),
+    limite,
+  ]);
+  clearTimeout(timer);
+  console.info("[perf:tool]", {
+    name,
+    ms: Date.now() - inicio,
+    ok: resultado.ok,
+    timeout: resultado.error === "timeout",
+  });
+  return resultado;
+}
+
+/** Acrescenta a instrução de fechamento ao último resultado de ferramenta. */
+function anexarInstrucaoPrazo(conversation: Message[]): void {
+  const ultimo = conversation[conversation.length - 1] as Message & { content?: unknown };
+  if (!ultimo || (ultimo as any).role !== "tool" || typeof ultimo.content !== "string") return;
+  try {
+    const obj = JSON.parse(ultimo.content);
+    obj.instrucao_sistema = INSTRUCAO_PRAZO;
+    (ultimo as any).content = JSON.stringify(obj);
+  } catch {
+    /* conteúdo não-JSON: segue sem a instrução; o tool_choice none já fecha */
+  }
+}
+
+/**
  * Sanitiza o histórico para a API da Anthropic, que rejeita blocos de texto
  * VAZIOS (ex.: um turno legado que gravou resposta vazia faria a próxima chamada
  * falhar — e a Excambia ficava muda). IMPORTANTE: não REMOVEMOS a mensagem
@@ -436,6 +510,8 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
 
   let turns = 0;
   let llmCalls = 0;
+  const inicioRodada = Date.now();
+  let fecharAgora = false;
 
   while (turns < MAX_TURNS) {
     turns++;
@@ -449,15 +525,19 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
 
     const result = await invokeLLM({
       messages: conversation,
+      // As ferramentas continuam declaradas mesmo no fechamento: o histórico tem
+      // blocos tool_use, e a API os exige. Quem impede nova chamada é o "none".
       tools: toolSchemas.length > 0 ? toolSchemas : undefined,
-      tool_choice: toolSchemas.length > 0 ? "auto" : undefined,
+      tool_choice: toolSchemas.length > 0 ? (fecharAgora ? "none" : "auto") : undefined,
       // Pesquisa web nativa (legislação, fiscal, logística, mercado, commodities).
-      webSearch: true,
-      thinking: profundo,
+      // Desligada no fechamento: é a parte mais lenta e o objetivo é responder.
+      webSearch: !fecharAgora,
+      thinking: profundo && !fecharAgora,
       effort,
       // Teto de saída alto: catalogar uma cotação grande gera argumentos de
       // tool com dezenas de itens — com o default (4096) o JSON era cortado.
-      maxTokens: 16000,
+      // No fechamento não há argumento de tool, só texto: teto menor, mais rápido.
+      maxTokens: fecharAgora ? 4000 : 16000,
       model,
     });
 
@@ -492,7 +572,7 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
         args = {};
       }
 
-      const toolResult = await runTool(name, args, ctx);
+      const toolResult = await executarComTeto(name, args, ctx);
       toolsUsed.push(name);
       toolResults.push({ name, ok: toolResult.ok, data: toolResult.data });
 
@@ -549,6 +629,8 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
 
   let turns = 0;
   let llmCalls = 0;
+  const inicioRodada = Date.now();
+  let fecharAgora = false;
 
   while (turns < MAX_TURNS) {
     turns++;
@@ -567,7 +649,9 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
 
     yield {
       type: "thinking",
-      content: profundo ? "Analisando em profundidade..." : "Pensando...",
+      content: fecharAgora
+        ? "Consolidando a resposta..."
+        : profundo ? "Analisando em profundidade..." : "Pensando...",
     };
 
     // A Excambia CONCLUI o raciocínio em segundo plano (só o indicador de
@@ -577,11 +661,14 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
     // entrega".
     const result = await invokeLLM({
       messages: conversation,
+      // As ferramentas continuam declaradas mesmo no fechamento: o histórico tem
+      // blocos tool_use, e a API os exige. Quem impede nova chamada é o "none".
       tools: toolSchemas.length > 0 ? toolSchemas : undefined,
-      tool_choice: toolSchemas.length > 0 ? "auto" : undefined,
+      tool_choice: toolSchemas.length > 0 ? (fecharAgora ? "none" : "auto") : undefined,
       // Pesquisa web nativa (legislação, fiscal, logística, mercado, commodities).
-      webSearch: true,
-      thinking: profundo,
+      // Desligada no fechamento: é a parte mais lenta e o objetivo é responder.
+      webSearch: !fecharAgora,
+      thinking: profundo && !fecharAgora,
       effort,
       // Teto de saída alto: catalogar uma cotação grande gera argumentos de
       // tool com dezenas de itens — com o default (4096) o JSON era cortado.
@@ -624,7 +711,11 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
 
       yield { type: "tool_call", name, args };
 
-      const toolResult = await runTool(name, args, ctx);
+      // Prazo já estourado no meio do lote: não executa o resto, mas responde a
+      // cada tool_use (a API exige um tool_result para cada um).
+      const toolResult = Date.now() - inicioRodada > PRAZO_RODADA_MS
+        ? { ok: false, summary: `Etapa "${name}" não executada — siga com o que já foi levantado.`, error: "prazo" }
+        : await executarComTeto(name, args, ctx);
       toolsUsed.push(name);
       toolResults.push({ name, ok: toolResult.ok, data: toolResult.data });
 
@@ -645,6 +736,16 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
           error: toolResult.error ?? null,
         }),
       } as Message);
+    }
+
+    // Prazo da rodada: a próxima chamada ao modelo é de FECHAMENTO.
+    if (!fecharAgora && Date.now() - inicioRodada > PRAZO_RODADA_MS) {
+      fecharAgora = true;
+      anexarInstrucaoPrazo(conversation);
+      console.info("[perf:chat] prazo atingido — fechando com o que há", {
+        ms: Date.now() - inicioRodada,
+        ferramentas: toolsUsed.length,
+      });
     }
   }
 
