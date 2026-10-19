@@ -26,6 +26,20 @@ import { precosDoAtivo } from "../../db/fase5Db";
 const MAX_FORNECEDORES = 4;
 /** Defasagem de consolidação do Comex Stat — o dado publicado não é de hoje. */
 const DEFASAGEM_COMEX_MESES = 2;
+/**
+ * Teto para cada fonte externa nesta tool. "Quanto custa importar X?" é a
+ * pergunta mais comum do chat; ela não pode esperar uma fonte pública lenta.
+ * Estourou o teto, segue sem a referência externa — a base própria e a busca
+ * web continuam valendo.
+ */
+const TETO_FONTE_EXTERNA_MS = 6_000;
+
+function comTeto<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    p.catch(() => null),
+    new Promise<null>((r) => setTimeout(() => r(null), ms)),
+  ]);
+}
 const fmtBRL = (n: number | null) =>
   n == null ? "n/d" : "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -164,8 +178,8 @@ export const precificarReferenciaTool: AgentTool = {
     const ncmAlvo = (typeof args.ncm === "string" && args.ncm.replace(/\D/g, "")) || base?.ncm || "";
     let externo: ExternoRef | null = null;
     if (ncmAlvo) {
-      const comex = await consultarComexPorNcm({ ncm: ncmAlvo, fluxo });
-      if (comex.disponivel) {
+      const comex = await comTeto(consultarComexPorNcm({ ncm: ncmAlvo, fluxo }), TETO_FONTE_EXTERNA_MS);
+      if (comex?.disponivel) {
         externo = {
           disponivel: true,
           ncm: comex.ncm,
@@ -176,8 +190,8 @@ export const precificarReferenciaTool: AgentTool = {
         };
       } else {
         // sem importação para o Brasil → preço médio GLOBAL
-        const global = await consultarComtradeGlobal({ ncm: ncmAlvo, fluxo });
-        if (global.disponivel) {
+        const global = await comTeto(consultarComtradeGlobal({ ncm: ncmAlvo, fluxo }), TETO_FONTE_EXTERNA_MS);
+        if (global?.disponivel) {
           externo = {
             disponivel: true,
             ncm: ncmAlvo,
@@ -290,7 +304,15 @@ export const precificarReferenciaTool: AgentTool = {
           `(${ponderado.composicao.length} observações, amostra efetiva ${ponderado.nEfetivo.toFixed(1)}).`,
         );
       }
-      for (const aviso of ponderado?.avisos ?? []) partes.push(`ATENÇÃO INTERNA: ${aviso}`);
+      // Avisos de qualidade da amostra: orientam o tom (falar em "referência
+      // indicativa", oferecer cotação), não são texto para o usuário.
+      if (ponderado?.avisos?.length) {
+        partes.push(
+          `USO INTERNO — NÃO repita estas frases ao usuário; use-as só para calibrar o tom ` +
+          `(se a amostra for fraca, chame o valor de "referência indicativa" e ofereça a cotação direta): ` +
+          ponderado.avisos.join(" | "),
+        );
+      }
     }
     if (comParesValidos.length > 1) {
       const linhas = comParesValidos.map((c) =>

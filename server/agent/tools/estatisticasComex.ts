@@ -57,12 +57,24 @@ export const estatisticasComexTool: AgentTool = {
 
     const rotulo = fluxo === "import" ? "importação" : "exportação";
 
+    if (!resumo.disponivel && resumo.erro) {
+      return {
+        ok: false,
+        summary:
+          `Não consegui consultar o Comex Stat agora: ${resumo.erro}. ` +
+          `NÃO conclua que o produto não é importado — diga que a base oficial está momentaneamente ` +
+          `indisponível e siga com o que for possível (classificação, tributos, referência da base própria).`,
+        error: "comex_indisponivel",
+        data: resumo,
+      };
+    }
+
     if (!resumo.disponivel) {
       return {
         ok: true,
         summary:
           `Comex Stat (MDIC/SECEX) não retornou dados de ${rotulo} para o NCM ${resumo.ncm || ncm} ` +
-          `nos últimos 12 meses. Pode ser um NCM sem fluxo no período ou indisponibilidade momentânea da fonte.`,
+          `nos últimos 12 meses — a fonte respondeu, então é NCM sem fluxo no período.`,
         data: resumo,
       };
     }

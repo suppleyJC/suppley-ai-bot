@@ -59,26 +59,39 @@ async function resolveUserId(req: Request): Promise<number | null> {
  * ACIONÁVEL, exibida na própria conversa — assim o problema é diagnosticável sem
  * abrir os logs do servidor.
  */
+/**
+ * Classifica a falha para o LOG do operador e devolve o texto para o USUÁRIO.
+ *
+ * Antes, o texto técnico ia direto para a tela ("os créditos da API da IA
+ * acabaram", "ANTHROPIC_API_KEY não está definida", "avise o time técnico").
+ * Isso é diagnóstico de operador — exposto a um cliente ou investidor, revela
+ * a encanação e quebra a experiência. O diagnóstico continua inteiro no log
+ * (`[chatStream] falha classificada`); a tela recebe uma mensagem à altura do
+ * produto, que diz o que fazer sem dizer o que quebrou.
+ */
 function diagnoseError(err: unknown): string {
   const msg = String((err as { message?: string })?.message ?? err ?? "");
   const has = (re: RegExp) => re.test(msg);
 
-  if (has(/ANTHROPIC_API_KEY is not configured/i))
-    return "Configuração ausente: a chave da API (ANTHROPIC_API_KEY) não está definida no servidor. Avise o time técnico.";
-  if (has(/\b401\b|authentication|invalid x-api-key|invalid api key/i))
-    return "Falha de autenticação com a IA — a chave da API parece inválida ou expirada. É preciso atualizar a ANTHROPIC_API_KEY.";
-  if (has(/\b403\b|permission|not allowed|web_search/i))
-    return "A IA recusou a requisição (permissão). Pode ser um recurso não habilitado na conta (ex.: pesquisa web). Avise o time técnico para revisar.";
-  if (has(/credit|billing|quota|insufficient|payment/i))
-    return "Os créditos da API da IA acabaram. É preciso recarregar o saldo na conta da Anthropic para a Excambia voltar a responder.";
-  if (has(/\b429\b|rate limit|overloaded|too many requests/i))
-    return "Muitas requisições em pouco tempo (limite da IA). Aguarde alguns segundos e tente de novo.";
-  if (has(/prompt is too long|context|maximum.*tokens|too many tokens/i))
-    return "O conteúdo ficou grande demais para uma única análise. Tente enviar menos itens por vez ou um arquivo menor.";
-  if (has(/\b400\b/i))
-    return "A requisição à IA foi rejeitada (erro 400). Já estou registrando o detalhe — me diga o que tentou fazer que eu ajusto.";
+  let categoria = "desconhecida";
+  let usuario =
+    "Tive uma instabilidade ao concluir esta análise. Pode repetir a pergunta? " +
+    "Se preferir, reformule em uma frase que eu retomo daqui.";
 
-  return "Tive um problema técnico ao processar agora. Tente de novo em instantes — se persistir, me diga de outro jeito que eu sigo daqui.";
+  if (has(/ANTHROPIC_API_KEY is not configured/i)) categoria = "chave_ausente";
+  else if (has(/\b401\b|authentication|invalid x-api-key|invalid api key/i)) categoria = "chave_invalida";
+  else if (has(/\b403\b|permission|not allowed|web_search/i)) categoria = "permissao";
+  else if (has(/credit|billing|quota|insufficient|payment/i)) categoria = "creditos";
+  else if (has(/\b429\b|rate limit|overloaded|too many requests/i)) {
+    categoria = "limite_taxa";
+    usuario = "Estou com muitas análises em paralelo neste instante. Me dê alguns segundos e repita a pergunta — retomo de onde paramos.";
+  } else if (has(/prompt is too long|context|maximum.*tokens|too many tokens/i)) {
+    categoria = "contexto_grande";
+    usuario = "Este material ficou extenso demais para uma única análise. Envie em partes — por exemplo, metade dos itens por vez — que eu consolido no final.";
+  } else if (has(/\b400\b/i)) categoria = "requisicao_rejeitada";
+
+  console.error(`[chatStream] falha classificada: ${categoria}`);
+  return usuario;
 }
 
 router.post("/api/chat/stream", chatStreamRateLimit, async (req: Request, res: Response) => {

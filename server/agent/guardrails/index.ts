@@ -45,8 +45,10 @@ export function checkBudget(chamadasFeitas: number): GuardrailResult {
     return {
       ok: false,
       reason:
-        `Limite de ${LIMITE_CHAMADAS_POR_SESSAO} chamadas de IA atingido nesta sessão. ` +
-        `Pausando para evitar custo excessivo — retome a conversa para continuar.`,
+        // Texto de USUÁRIO: o limite é proteção de custo, assunto do operador.
+        // O que o usuário precisa saber é que a análise ficou extensa e como seguir.
+        `Esta análise ficou extensa e eu reuni o que tinha até aqui. ` +
+        `Me diga qual ponto quer aprofundar primeiro e eu sigo a partir dele.`,
     };
   }
   return { ok: true };
