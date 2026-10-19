@@ -22,6 +22,7 @@
 import { defineSchema, type AgentTool, type ToolContext, type ToolResult } from "./types";
 import { dimensionarMercadoComex, type MercadoLinha, type Fluxo } from "../../services/comexStatService";
 import { expandNcmPrefixes } from "../../services/ncmService";
+import { consultarComtradeBrasil, type MercadoComtradeBrasil } from "../../services/comtradeService";
 
 const schema = defineSchema(
   "dimensionar_mercado",
@@ -150,15 +151,22 @@ export const dimensionarMercadoTool: AgentTool = {
       };
     }
 
+    // Comex Stat não conseguiu CONSULTAR (429/rede) — não é ausência de fluxo.
+    // A resposta não pode parar aqui: cai para o Comtrade, Brasil como
+    // declarante, e depois para pesquisa web com fonte citada.
+    if (!dados.disponivel && dados.erro) {
+      return await alternativaAoComex(ncms, anos, fluxo, topN, dados.erro);
+    }
+
     if (!dados.disponivel) {
-      // Falha HONESTA: número de mercado não se estima. Melhor dizer que a fonte
-      // não respondeu do que publicar um valor inventado numa análise de decisão.
+      // A fonte RESPONDEU e não há fluxo: isso é um resultado, não uma falha.
       return {
         ok: false,
         summary:
-          `A consulta ao Comex Stat não retornou dados para ${ncms.length} NCM(s) ` +
-          `nos anos ${anos.join(", ")} (${dados.erro ?? "sem detalhe"}). ` +
-          `NÃO estime os números — informe que a fonte oficial não respondeu e ofereça tentar de novo.`,
+          `O Comex Stat não registra ${fluxo === "import" ? "importação" : "exportação"} brasileira ` +
+          `para ${ncms.length} NCM(s) nos anos ${anos.join(", ")}. Apresente isso como resultado ` +
+          `(mercado inexistente ou incipiente no Brasil — oportunidade ou sinal de barreira) e confira ` +
+          `se a classificação está correta antes de concluir.`,
         error: dados.erro ?? "fonte_indisponivel",
         data: dados,
       };
@@ -219,3 +227,71 @@ export const dimensionarMercadoTool: AgentTool = {
     return { ok: true, summary: partes.join("\n\n"), data: dados };
   },
 };
+
+
+/**
+ * Caminho alternativo quando o Comex Stat não responde. Sempre termina numa
+ * resposta: Comtrade (Brasil como declarante, SH6) ou, se também falhar,
+ * pesquisa web com fonte citada — nunca número sem fonte.
+ */
+async function alternativaAoComex(
+  ncms: string[],
+  anos: number[],
+  fluxo: Fluxo,
+  topN: number,
+  motivo: string,
+): Promise<ToolResult> {
+  // NCMs que compartilham o SH6 viram uma consulta só; limite de 2 para não
+  // repetir no Comtrade o leque que estrangulou o Comex Stat.
+  const hs6s = Array.from(new Set(ncms.map((n) => n.replace(/\D/g, "").slice(0, 6)))).slice(0, 2);
+  const mercados: MercadoComtradeBrasil[] = [];
+  for (const hs6 of hs6s) {
+    mercados.push(await consultarComtradeBrasil({ ncm: hs6, anos, fluxo, topN }));
+  }
+  const comDado = mercados.filter((m) => m.disponivel);
+
+  if (!comDado.length) {
+    return {
+      ok: true,
+      summary:
+        `A base oficial do Comex Stat está momentaneamente indisponível e o UN Comtrade não retornou ` +
+        `dados para o SH6 ${hs6s.join(", ")}. ENTREGUE UMA RESPOSTA mesmo assim: use a pesquisa web para ` +
+        `trazer referências de mercado (relatórios setoriais, associações, notícias de comércio exterior), ` +
+        `CITE cada fonte e rotule os números como estimativa de mercado externa. Nunca apresente número ` +
+        `sem fonte. Ofereça refazer a consulta oficial mais tarde para confirmar.`,
+      data: { motivo, mercados },
+    };
+  }
+
+  const rotulo = fluxo === "import" ? "Importação brasileira" : "Exportação brasileira";
+  const partes: string[] = [
+    `${rotulo} — fonte: UN Comtrade (declaração oficial do Brasil à ONU). ` +
+    `Usada porque o Comex Stat está momentaneamente indisponível.`,
+  ];
+  for (const m of comDado) {
+    partes.push(`\nSH6 ${m.hs6}:`);
+    for (const a of m.anos) {
+      partes.push(`- ${a.ano}: ${usd(a.valorUsd)} · ${ton(a.kg / 1000)} · preço médio ${usdT(a.precoMedioUsdKg != null ? a.precoMedioUsdKg * 1000 : null)}`);
+      if (a.topOrigens.length) {
+        partes.push(
+          "  Principais origens: " +
+          a.topOrigens.slice(0, 5)
+            .map((o) => `${o.pais} ${o.participacaoPct.toFixed(0)}%`)
+            .join(", "),
+        );
+      }
+    }
+    if (m.anosSemDado.length) partes.push(`  (sem dado no Comtrade para ${m.anosSemDado.join(", ")})`);
+  }
+  partes.push(
+    `\nAPRESENTAÇÃO: entregue a análise normalmente com estes números. Mencione de forma natural, uma vez, ` +
+    `que o recorte é por SH6 (agrupa produtos da mesma subposição) e sem corte por UF. ` +
+    `Não trate como falha nem peça desculpas.`,
+  );
+
+  return {
+    ok: true,
+    summary: partes.join("\n"),
+    data: { motivo, fonteAlternativa: "comtrade", mercados: comDado },
+  };
+}

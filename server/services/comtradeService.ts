@@ -231,3 +231,130 @@ export async function consultarComtradeGlobal(input: {
   }
   return resumoComtrade(hs6, fluxo, null, []);
 }
+
+// ---------------------------------------------------------------------------
+// MERCADO BRASILEIRO PELO COMTRADE — fonte ALTERNATIVA ao Comex Stat.
+//
+// Existe para quando o Comex Stat não responde (429/rede): o dimensionamento
+// não pode terminar sem número. Brasil como país declarante (reporter 76),
+// todos os parceiros, um pedido por ano.
+//
+// LIMITES que o agente precisa declarar: nível SH6 (mais agregado que a NCM de
+// 8 dígitos — pode somar produtos vizinhos), sem corte por UF, e é a declaração
+// do Brasil à ONU (mesma origem estatística do Comex Stat, outro caminho).
+// ---------------------------------------------------------------------------
+
+const REPORTER_BRASIL = "76";
+const TETO_COMTRADE_MS = 8_000;
+
+export interface OrigemComtrade {
+  pais: string;
+  valorUsd: number;
+  kg: number;
+  precoMedioUsdKg: number | null;
+  participacaoPct: number;
+}
+
+export interface AnoComtradeBrasil {
+  ano: number;
+  valorUsd: number;
+  kg: number;
+  precoMedioUsdKg: number | null;
+  topOrigens: OrigemComtrade[];
+}
+
+export interface MercadoComtradeBrasil {
+  hs6: string;
+  fluxo: FluxoComtrade;
+  anos: AnoComtradeBrasil[];
+  anosSemDado: number[];
+  disponivel: boolean;
+  fonte: string;
+}
+
+/** Agregação pura (testável): total pelo parceiro "Mundo", origens pelos demais. */
+export function agregarComtradeBrasil(ano: number, rows: ComtradeRow[], topN = 10): AnoComtradeBrasil | null {
+  if (!rows.length) return null;
+  const parceiro = (r: ComtradeRow) => String((r as any).partnerCode ?? "");
+  const mundo = rows.find((r) => parceiro(r) === "0");
+  const demais = rows.filter((r) => parceiro(r) !== "0");
+
+  const somaValor = demais.reduce((s, r) => s + num(r.primaryValue), 0);
+  const somaKg = demais.reduce((s, r) => s + num(r.netWgt), 0);
+  const valorUsd = mundo ? num(mundo.primaryValue) : somaValor;
+  const kg = mundo ? num(mundo.netWgt) : somaKg;
+  if (!(valorUsd > 0)) return null;
+
+  const topOrigens = demais
+    .map((r) => {
+      const v = num(r.primaryValue);
+      const k = num(r.netWgt);
+      return {
+        pais: String((r as any).partnerDesc ?? (r as any).partnerISO ?? parceiro(r)),
+        valorUsd: v,
+        kg: k,
+        precoMedioUsdKg: k > 0 ? v / k : null,
+        participacaoPct: (v / valorUsd) * 100,
+      };
+    })
+    .filter((o) => o.valorUsd > 0)
+    .sort((a, b) => b.valorUsd - a.valorUsd)
+    .slice(0, topN);
+
+  return { ano, valorUsd, kg, precoMedioUsdKg: kg > 0 ? valorUsd / kg : null, topOrigens };
+}
+
+async function getComtradeBrasil(hs6: string, fluxo: FluxoComtrade, ano: number): Promise<ComtradeRow[]> {
+  const params = new URLSearchParams({
+    reporterCode: REPORTER_BRASIL,
+    period: String(ano),
+    cmdCode: hs6,
+    flowCode: fluxo === "import" ? "M" : "X",
+    motCode: "0",
+    customsCode: "C00",
+    partner2Code: "0",
+    includeDesc: "true",
+  });
+  const key = process.env.COMTRADE_API_KEY;
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (key) headers["Ocp-Apim-Subscription-Key"] = key;
+
+  const resp = await fetch(`${COMTRADE_URL}?${params.toString()}`, {
+    headers,
+    signal: AbortSignal.timeout(TETO_COMTRADE_MS),
+  });
+  if (!resp.ok) throw new Error(`Comtrade HTTP ${resp.status}`);
+  const json: any = await resp.json();
+  const data = json?.data ?? json?.dataset ?? [];
+  return Array.isArray(data) ? (data as ComtradeRow[]) : [];
+}
+
+/** Mercado brasileiro por ano, via Comtrade. Falha graciosa: `disponivel: false`. */
+export async function consultarComtradeBrasil(input: {
+  ncm: string;
+  anos: number[];
+  fluxo?: FluxoComtrade;
+  topN?: number;
+}): Promise<MercadoComtradeBrasil> {
+  const fluxo: FluxoComtrade = input.fluxo ?? "import";
+  const hs6 = (input.ncm || "").replace(/\D/g, "").slice(0, 6);
+  const base: MercadoComtradeBrasil = {
+    hs6, fluxo, anos: [], anosSemDado: [], disponivel: false,
+    fonte: "UN Comtrade (declaração do Brasil à ONU, nível SH6)",
+  };
+  if (hs6.length < 6) return base;
+
+  // Serializado e limitado: a fonte também tem limite de taxa.
+  const anos = Array.from(new Set(input.anos)).sort((a, b) => a - b).slice(-4);
+  for (const ano of anos) {
+    try {
+      const r = agregarComtradeBrasil(ano, await getComtradeBrasil(hs6, fluxo, ano), input.topN ?? 10);
+      if (r) base.anos.push(r);
+      else base.anosSemDado.push(ano);
+    } catch {
+      base.anosSemDado.push(ano);
+    }
+  }
+  base.disponivel = base.anos.length > 0;
+  return base;
+}
