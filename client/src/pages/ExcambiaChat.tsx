@@ -13,6 +13,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
 import ParameterExtractionModal from "@/components/excambia/ParameterExtractionModal";
@@ -245,9 +246,9 @@ export default function ExcambiaChat() {
     return { id: res.id, operacaoId: undefined };
   }
 
-  async function handleSend() {
+  async function handleSend(textoPronto?: string) {
     if (sendLockRef.current || streaming || uploading) return;
-    const text = draft.trim();
+    const text = (textoPronto ?? draft).trim();
     if (!text) return;
     sendLockRef.current = true;
     setDraft("");
@@ -517,7 +518,11 @@ export default function ExcambiaChat() {
             estado vazio/home; com mensagens o fundo fica liso (--paper) */}
         <div ref={scrollRef} className={`flex flex-1 flex-col items-center overflow-y-auto scrollbar-custom min-h-0 ${vazio ? "chat-stage" : ""}`}>
           {vazio ? (
-            <Welcome onPick={(t) => setDraft(t)} />
+            <Welcome
+              onPick={(t) => { setDraft(t); taRef.current?.focus(); }}
+              onSend={(t) => void handleSend(t)}
+              onAttach={() => fileInputRef.current?.click()}
+            />
           ) : (
             <div className="flex w-full max-w-full sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl shrink-0 flex-col gap-4 sm:gap-6 px-3 sm:px-6 pt-4 sm:pt-6 pb-2">
               {mensagens.map((m: any, i: number) => {
@@ -594,7 +599,7 @@ export default function ExcambiaChat() {
                 rows={1} placeholder="Escreva para a Excambia…"
                 className="flex-1 resize-none bg-transparent py-1.5 text-base sm:text-[14px] leading-relaxed text-(--ink) outline-none placeholder:text-(--ink-2) max-h-[200px] overflow-y-auto scrollbar-custom"
               />
-              <button onClick={handleSend}
+              <button onClick={() => handleSend()}
                 disabled={streaming || uploading || !draft.trim()}
                 className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-[10px] bg-violet-600 text-white hover:bg-violet-700 flex-shrink-0 disabled:opacity-40 disabled:hover:bg-violet-600">
                 {streaming ? (
@@ -668,24 +673,56 @@ function OperacaoContextBar({ operacaoId }: { operacaoId: number }) {
   );
 }
 
-function Welcome({ onPick }: { onPick: (t: string) => void }) {
+// Casos prontos que ENVIAM na hora: quem chega pela primeira vez (ex.: um
+// investidor testando) não sabe o que perguntar e sai sem digitar nada.
+// Cada caso exercita uma capacidade diferente: custo + defesa comercial por
+// origem, custo de carga pesada, comparação de fornecedores da base.
+const CASOS_PRONTOS = [
+  {
+    title: "Porcelanato 80x80: China ou Índia?",
+    sub: "custo posto, antidumping e a melhor origem",
+    texto: "Quanto custa trazer um contêiner de porcelanato 80x80 para vender em loja de construção? Compare China e Índia.",
+  },
+  {
+    title: "Escora metálica da China",
+    sub: "custo por peça e NCM correta",
+    texto: "Quanto custa importar um contêiner de escora metálica da China?",
+  },
+  {
+    title: "Abraçadeira de nylon",
+    sub: "fornecedores da base e o que negociar",
+    texto: "Compare os fornecedores de abraçadeira de nylon e me diga o que negociar.",
+  },
+];
+
+function Welcome({ onPick, onSend, onAttach }: {
+  onPick: (t: string) => void;
+  onSend: (t: string) => void;
+  onAttach: () => void;
+}) {
+  const { user } = useAuth();
+  const primeiroNome = user?.name?.trim().split(/\s+/)[0];
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-3 sm:px-6 py-8 sm:py-12 text-center min-h-0">
       <span className="mb-4 sm:mb-5 flex-shrink-0">
         <ExcambiaOrb size={48} />
       </span>
       <h1 className="mb-2 sm:mb-2.5 text-xl sm:text-2xl md:text-[26px] font-semibold tracking-tight text-(--ink)">
-        Olá, Jean. O que vamos{" "}
+        {primeiroNome ? `Olá, ${primeiroNome}. ` : "Olá. "}O que vamos{" "}
         <span className="bg-gradient-to-r from-violet-600 to-teal-600 bg-clip-text text-transparent">importar</span> hoje?
       </h1>
       <p className="mb-6 sm:mb-7 max-w-xs sm:max-w-sm text-sm sm:text-[14px] leading-relaxed text-(--ink-2)">
-        Descreva o que precisa, suba uma cotação ou abra uma operação na lista ao lado.
+        Diga o produto e eu entrego custo posto no Brasil, impostos, riscos e o preço-alvo para negociar. Ou comece por um caso:
       </p>
       <div className="flex w-full max-w-xs sm:max-w-sm flex-col gap-2 sm:gap-2.5">
-        <Suggestion icon={<Plus />} title="Nova importação" sub="descrever um produto ou subir um PDF"
-          onClick={() => onPick("Quero iniciar uma nova importação: ")} />
-        <Suggestion icon={<TrendingUp />} title="Ver o mercado" sub="preço médio e tendência de um NCM"
-          onClick={() => onPick("Me mostre o preço médio de mercado do NCM ")} />
+        {CASOS_PRONTOS.map((c) => (
+          <Suggestion key={c.title} icon={<ArrowRightCircle />} title={c.title} sub={c.sub}
+            onClick={() => onSend(c.texto)} />
+        ))}
+        <Suggestion icon={<Paperclip />} title="Tenho uma proforma ou cotação" sub="anexe o PDF ou a planilha"
+          onClick={onAttach} />
+        <Suggestion icon={<Plus />} title="Outro produto" sub="descreva com suas palavras"
+          onClick={() => onPick("Quero importar ")} />
       </div>
     </div>
   );
