@@ -17,7 +17,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
 import ParameterExtractionModal from "@/components/excambia/ParameterExtractionModal";
-import { Paperclip, SendHorizontal, BarChart3, TrendingUp, Copy, Check, Loader2, Settings2, FileSpreadsheet, ArrowRightCircle, Eye, Download, Clock, FileText, X as XIcon, Route, ExternalLink } from "lucide-react";
+import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2, Settings2, FileSpreadsheet, ArrowRightCircle, Eye, Download, Clock, FileText, X as XIcon, Route, ExternalLink } from "lucide-react";
 import { MessageContent } from "@/components/MessageContent";
 import ExcambiaOrb from "@/components/ExcambiaOrb";
 import { STAGE_ORDER, STAGE_LABELS } from "@/lib/stageLabels";
@@ -519,8 +519,7 @@ export default function ExcambiaChat() {
         <div ref={scrollRef} className={`flex flex-1 flex-col items-center overflow-y-auto scrollbar-custom min-h-0 ${vazio ? "chat-stage" : ""}`}>
           {vazio ? (
             <Welcome
-              onSend={(t) => void handleSend(t)}
-              onAttach={() => fileInputRef.current?.click()}
+              onPick={(t) => { setDraft(t); taRef.current?.focus(); }}
             />
           ) : (
             <div className="flex w-full max-w-full sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl shrink-0 flex-col gap-4 sm:gap-6 px-3 sm:px-6 pt-4 sm:pt-6 pb-2">
@@ -676,25 +675,7 @@ function OperacaoContextBar({ operacaoId }: { operacaoId: number }) {
 // investidor testando) não sabe o que perguntar e sai sem digitar nada.
 // Cada caso exercita uma capacidade diferente: custo + defesa comercial por
 // origem, custo de carga pesada, comparação de fornecedores da base.
-const CASOS_PRONTOS = [
-  {
-    title: "Porcelanato 80x80: China ou Índia?",
-    texto: "Quanto custa trazer um contêiner de porcelanato 80x80 para vender em loja de construção? Compare China e Índia.",
-  },
-  {
-    title: "Escora metálica da China",
-    texto: "Quanto custa importar um contêiner de escora metálica da China?",
-  },
-  {
-    title: "Abraçadeira de nylon: o que negociar",
-    texto: "Compare os fornecedores de abraçadeira de nylon e me diga o que negociar.",
-  },
-];
-
-function Welcome({ onSend, onAttach }: {
-  onSend: (t: string) => void;
-  onAttach: () => void;
-}) {
+function Welcome({ onPick }: { onPick: (t: string) => void }) {
   const { user } = useAuth();
   const primeiroNome = user?.name?.trim().split(/\s+/)[0];
   return (
@@ -709,19 +690,29 @@ function Welcome({ onSend, onAttach }: {
       <p className="mb-6 sm:mb-7 max-w-md text-sm sm:text-[14px] leading-relaxed text-(--ink-2)">
         Diga o produto. Eu entrego custo posto no Brasil, impostos, riscos e o preço-alvo para negociar.
       </p>
-      <div className="flex max-w-xl flex-wrap justify-center gap-2">
-        {CASOS_PRONTOS.map((c) => (
-          <button key={c.title} onClick={() => onSend(c.texto)}
-            className="rounded-full border border-(--hair) bg-(--exc-card) px-3.5 py-1.5 text-[12.5px] sm:text-[13px] text-(--ink) transition hover:border-violet-300 hover:text-violet-700">
-            {c.title}
-          </button>
-        ))}
+      <div className="flex w-full max-w-xs sm:max-w-sm flex-col gap-2 sm:gap-2.5">
+        <Suggestion icon={<Plus />} title="Nova importação" sub="descrever um produto ou subir um PDF"
+          onClick={() => onPick("Quero iniciar uma nova importação: ")} />
+        <Suggestion icon={<TrendingUp />} title="Ver o mercado" sub="preço médio e tendência de um NCM"
+          onClick={() => onPick("Me mostre o preço médio de mercado do NCM ")} />
       </div>
-      <button onClick={onAttach}
-        className="mt-4 inline-flex items-center gap-1.5 text-[12px] text-(--ink-2) transition hover:text-violet-700">
-        <Paperclip className="h-3.5 w-3.5" /> Tem uma proforma ou cotação? Anexe aqui
-      </button>
     </div>
+  );
+}
+
+function Suggestion({ icon, title, sub, onClick }: any) {
+  return (
+    <button onClick={onClick}
+      className="flex items-center gap-2.5 sm:gap-3.5 rounded-[13px] border border-(--hair) bg-(--exc-card) px-3 sm:px-4 py-2.5 sm:py-3.5 text-left transition hover:-translate-y-px hover:border-violet-200 hover:shadow-[0_4px_14px_rgba(104,42,186,0.06)]">
+      <span className="flex h-8 w-8 sm:h-[33px] sm:w-[33px] flex-shrink-0 items-center justify-center rounded-[9px] bg-violet-50 text-violet-600 [&_svg]:h-4 sm:[&_svg]:h-[18px] [&_svg]:w-4 sm:[&_svg]:w-[18px]">
+        {icon}
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-xs sm:text-[13px] font-semibold text-(--ink)">{title}</span>
+        <span className="text-[10px] sm:text-[11.5px] text-(--ink-2)">{sub}</span>
+      </span>
+      <ChevronRight className="h-4 w-4 text-(--idle) flex-shrink-0" />
+    </button>
   );
 }
 
