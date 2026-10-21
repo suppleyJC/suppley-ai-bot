@@ -17,7 +17,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import ConversationPanel from "@/components/excambia/ConversationPanel";
 import ParameterExtractionModal from "@/components/excambia/ParameterExtractionModal";
-import { Paperclip, SendHorizontal, Plus, BarChart3, TrendingUp, ChevronRight, Copy, Check, Loader2, Settings2, FileSpreadsheet, ArrowRightCircle, Eye, Download, Clock, FileText, X as XIcon, Route, ExternalLink } from "lucide-react";
+import { Paperclip, SendHorizontal, BarChart3, TrendingUp, Copy, Check, Loader2, Settings2, FileSpreadsheet, ArrowRightCircle, Eye, Download, Clock, FileText, X as XIcon, Route, ExternalLink } from "lucide-react";
 import { MessageContent } from "@/components/MessageContent";
 import ExcambiaOrb from "@/components/ExcambiaOrb";
 import { STAGE_ORDER, STAGE_LABELS } from "@/lib/stageLabels";
@@ -519,7 +519,6 @@ export default function ExcambiaChat() {
         <div ref={scrollRef} className={`flex flex-1 flex-col items-center overflow-y-auto scrollbar-custom min-h-0 ${vazio ? "chat-stage" : ""}`}>
           {vazio ? (
             <Welcome
-              onPick={(t) => { setDraft(t); taRef.current?.focus(); }}
               onSend={(t) => void handleSend(t)}
               onAttach={() => fileInputRef.current?.click()}
             />
@@ -680,30 +679,26 @@ function OperacaoContextBar({ operacaoId }: { operacaoId: number }) {
 const CASOS_PRONTOS = [
   {
     title: "Porcelanato 80x80: China ou Índia?",
-    sub: "custo posto, antidumping e a melhor origem",
     texto: "Quanto custa trazer um contêiner de porcelanato 80x80 para vender em loja de construção? Compare China e Índia.",
   },
   {
     title: "Escora metálica da China",
-    sub: "custo por peça e NCM correta",
     texto: "Quanto custa importar um contêiner de escora metálica da China?",
   },
   {
-    title: "Abraçadeira de nylon",
-    sub: "fornecedores da base e o que negociar",
+    title: "Abraçadeira de nylon: o que negociar",
     texto: "Compare os fornecedores de abraçadeira de nylon e me diga o que negociar.",
   },
 ];
 
-function Welcome({ onPick, onSend, onAttach }: {
-  onPick: (t: string) => void;
+function Welcome({ onSend, onAttach }: {
   onSend: (t: string) => void;
   onAttach: () => void;
 }) {
   const { user } = useAuth();
   const primeiroNome = user?.name?.trim().split(/\s+/)[0];
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-3 sm:px-6 py-8 sm:py-12 text-center min-h-0">
+    <div className="flex flex-1 flex-col items-center justify-center px-4 sm:px-6 py-8 sm:py-12 text-center min-h-0">
       <span className="mb-4 sm:mb-5 flex-shrink-0">
         <ExcambiaOrb size={48} />
       </span>
@@ -711,36 +706,22 @@ function Welcome({ onPick, onSend, onAttach }: {
         {primeiroNome ? `Olá, ${primeiroNome}. ` : "Olá. "}O que vamos{" "}
         <span className="bg-gradient-to-r from-violet-600 to-teal-600 bg-clip-text text-transparent">importar</span> hoje?
       </h1>
-      <p className="mb-6 sm:mb-7 max-w-xs sm:max-w-sm text-sm sm:text-[14px] leading-relaxed text-(--ink-2)">
-        Diga o produto e eu entrego custo posto no Brasil, impostos, riscos e o preço-alvo para negociar. Ou comece por um caso:
+      <p className="mb-6 sm:mb-7 max-w-md text-sm sm:text-[14px] leading-relaxed text-(--ink-2)">
+        Diga o produto. Eu entrego custo posto no Brasil, impostos, riscos e o preço-alvo para negociar.
       </p>
-      <div className="flex w-full max-w-xs sm:max-w-sm flex-col gap-2 sm:gap-2.5">
+      <div className="flex max-w-xl flex-wrap justify-center gap-2">
         {CASOS_PRONTOS.map((c) => (
-          <Suggestion key={c.title} icon={<ArrowRightCircle />} title={c.title} sub={c.sub}
-            onClick={() => onSend(c.texto)} />
+          <button key={c.title} onClick={() => onSend(c.texto)}
+            className="rounded-full border border-(--hair) bg-(--exc-card) px-3.5 py-1.5 text-[12.5px] sm:text-[13px] text-(--ink) transition hover:border-violet-300 hover:text-violet-700">
+            {c.title}
+          </button>
         ))}
-        <Suggestion icon={<Paperclip />} title="Tenho uma proforma ou cotação" sub="anexe o PDF ou a planilha"
-          onClick={onAttach} />
-        <Suggestion icon={<Plus />} title="Outro produto" sub="descreva com suas palavras"
-          onClick={() => onPick("Quero importar ")} />
       </div>
+      <button onClick={onAttach}
+        className="mt-4 inline-flex items-center gap-1.5 text-[12px] text-(--ink-2) transition hover:text-violet-700">
+        <Paperclip className="h-3.5 w-3.5" /> Tem uma proforma ou cotação? Anexe aqui
+      </button>
     </div>
-  );
-}
-
-function Suggestion({ icon, title, sub, onClick }: any) {
-  return (
-    <button onClick={onClick}
-      className="flex items-center gap-2.5 sm:gap-3.5 rounded-[13px] border border-(--hair) bg-(--exc-card) px-3 sm:px-4 py-2.5 sm:py-3.5 text-left transition hover:-translate-y-px hover:border-violet-200 hover:shadow-[0_4px_14px_rgba(104,42,186,0.06)]">
-      <span className="flex h-8 w-8 sm:h-[33px] sm:w-[33px] flex-shrink-0 items-center justify-center rounded-[9px] bg-violet-50 text-violet-600 [&_svg]:h-4 sm:[&_svg]:h-[18px] [&_svg]:w-4 sm:[&_svg]:w-[18px]">
-        {icon}
-      </span>
-      <span className="flex-1 min-w-0">
-        <span className="block text-xs sm:text-[13px] font-semibold text-(--ink)">{title}</span>
-        <span className="text-[10px] sm:text-[11.5px] text-(--ink-2)">{sub}</span>
-      </span>
-      <ChevronRight className="h-4 w-4 text-(--idle) flex-shrink-0" />
-    </button>
   );
 }
 
