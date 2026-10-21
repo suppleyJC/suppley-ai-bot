@@ -32,6 +32,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
+  // Em produção há um proxy reverso na frente: sem isso o rate limit vê o IP
+  // do proxy e todos os usuários dividem o mesmo limite.
+  app.set("trust proxy", 1);
   const server = createServer(app);
   // Liveness only: does not query the database or disclose configuration.
   app.get("/health", (_req, res) => {
