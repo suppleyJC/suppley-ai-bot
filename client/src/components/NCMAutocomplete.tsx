@@ -280,12 +280,19 @@ export function NCMAutocomplete({
 
                 <p className="text-sm mb-3">{aiSuggestion.suggestedNCM.description}</p>
 
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">II: {formatRate(aiSuggestion.suggestedNCM.iiRate)}</Badge>
-                  <Badge variant="outline">IPI: {formatRate(aiSuggestion.suggestedNCM.ipiRate || 0)}</Badge>
-                  <Badge variant="outline">PIS: {formatRate(aiSuggestion.suggestedNCM.pisRate || 211)}</Badge>
-                  <Badge variant="outline">COFINS: {formatRate(aiSuggestion.suggestedNCM.cofinsRate || 972)}</Badge>
-                </div>
+                {aiSuggestion.suggestedNCM.aliquotaFonte === "nao_confirmada" ? (
+                  <Badge variant="outline">Alíquotas não confirmadas: NCM fora da tabela oficial</Badge>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline">
+                      II: {formatRate(aiSuggestion.suggestedNCM.iiRate)}
+                      {aiSuggestion.suggestedNCM.aliquotaFonte === "estimada" ? " (estimado)" : ""}
+                    </Badge>
+                    <Badge variant="outline">IPI: {formatRate(aiSuggestion.suggestedNCM.ipiRate || 0)}</Badge>
+                    <Badge variant="outline">PIS: {formatRate(aiSuggestion.suggestedNCM.pisRate || 211)}</Badge>
+                    <Badge variant="outline">COFINS: {formatRate(aiSuggestion.suggestedNCM.cofinsRate || 972)}</Badge>
+                  </div>
+                )}
 
                 <p className="mt-3 text-sm text-muted-foreground">
                   <Info className="inline h-4 w-4 mr-1" />

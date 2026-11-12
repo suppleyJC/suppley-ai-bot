@@ -111,6 +111,15 @@ export interface NCMSuggestion {
   reason: string;
   taxSavingsPotential?: number;
   alternativeClassification?: string;
+  /**
+   * De onde vieram as alíquotas: "base" = tabela oficial (ncm_tax_rates);
+   * "estimada" = a linha existe, mas o II é estimativa por capítulo (a TEC
+   * oficial não cobriu o código); "nao_confirmada" = o código não está na base e
+   * NENHUMA alíquota deve ser apresentada como fato.
+   */
+  aliquotaFonte?: "base" | "estimada" | "nao_confirmada";
+  /** Texto de origem gravado na tabela (ex.: "II 18% TEC (Anexo I) | MDIC 2026-07-28"). */
+  aliquotaOrigem?: string;
 }
 
 export interface NCMOptimizationResult {
@@ -572,6 +581,31 @@ export async function getNCMByCode(ncmCode: string): Promise<any | null> {
 // ============================================================
 
 /**
+ * Substitui TODAS as alíquotas da sugestão pelas da tabela oficial. Sem o código
+ * na base, zera e marca "nao_confirmada": quem apresenta o resultado diz que a
+ * alíquota não foi confirmada, em vez de repetir um número do modelo.
+ */
+export function aplicarAliquotasDaBase(s: NCMSuggestion, db: any | null | undefined): void {
+  if (db) {
+    s.iiRate = Number(db.iiRate ?? 0);
+    s.ipiRate = Number(db.ipiRate ?? 0);
+    s.pisRate = Number(db.pisRate ?? 0);
+    s.cofinsRate = Number(db.cofinsRate ?? 0);
+    const notes = String(db.notes ?? "");
+    // Mesma regra do motor (estimativaService): linhas criadas por importação de
+    // nomenclatura recebem II padrão do capítulo, não o da TEC.
+    s.aliquotaFonte = /estimad|Importado do Siscomex|Importado via upload/i.test(notes) ? "estimada" : "base";
+    if (notes) s.aliquotaOrigem = notes;
+  } else {
+    s.iiRate = 0;
+    s.ipiRate = 0;
+    s.pisRate = 210;
+    s.cofinsRate = 1025;
+    s.aliquotaFonte = "nao_confirmada";
+  }
+}
+
+/**
  * Sugere NCM com base no nome do produto usando IA
  * Usa cache de 24h e fallback robusto
  */
@@ -759,20 +793,14 @@ Responda em JSON com o formato especificado.`;
       ];
       const dbResults = await Promise.all(allCodes.map(code => getNCMByCode(code)));
 
-      // Enriquecer sugestão principal
+      // ALÍQUOTAS SÓ DA BASE — inclusive o II. Antes o II ficava com o valor que
+      // o modelo escreveu (e em unidade ambígua: 16 = 16%? 0,16%?) e a Excambia
+      // apresentou II de 16% para 3926.90.90, que na TEC é 18%.
       const mainDb = dbResults[0];
-      if (mainDb) {
-        result.suggestedNCM.ipiRate = mainDb.ipiRate;
-        result.suggestedNCM.pisRate = mainDb.pisRate;
-        result.suggestedNCM.cofinsRate = mainDb.cofinsRate;
-        // A descrição OFICIAL da NCM vence a que o modelo escreveu — é o que a
-        // pessoa vai conferir na TEC.
-        if (mainDb.description) result.suggestedNCM.description = mainDb.description;
-      } else {
-        result.suggestedNCM.ipiRate = 0;
-        result.suggestedNCM.pisRate = 210;
-        result.suggestedNCM.cofinsRate = 1025;
-      }
+      aplicarAliquotasDaBase(result.suggestedNCM, mainDb);
+      // A descrição OFICIAL da NCM vence a que o modelo escreveu — é o que a
+      // pessoa vai conferir na TEC.
+      if (mainDb?.description) result.suggestedNCM.description = mainDb.description;
 
       // VALIDAÇÃO DE EXISTÊNCIA — um código que não existe na nomenclatura vigente
       // não pode sair com confiança alta: ele contamina alíquota, barreira e todo
@@ -797,16 +825,7 @@ Responda em JSON com o formato especificado.`;
 
       // Enriquecer alternativas
       for (let i = 0; i < result.alternatives.length; i++) {
-        const altDb = dbResults[i + 1];
-        if (altDb) {
-          result.alternatives[i].ipiRate = altDb.ipiRate;
-          result.alternatives[i].pisRate = altDb.pisRate;
-          result.alternatives[i].cofinsRate = altDb.cofinsRate;
-        } else {
-          result.alternatives[i].ipiRate = 0;
-          result.alternatives[i].pisRate = 210;
-          result.alternatives[i].cofinsRate = 1025;
-        }
+        aplicarAliquotasDaBase(result.alternatives[i], dbResults[i + 1]);
       }
 
       // Cache resultado
@@ -965,29 +984,29 @@ export function clearNCMCaches(): void {
 
 function buildFallbackResult(similarNCMs: any[]): NCMOptimizationResult {
   const bestMatch = similarNCMs[0];
+  const suggestedNCM: NCMSuggestion = {
+    ncmCode: bestMatch?.ncmCode || "00000000",
+    description: bestMatch?.description || "NCM não encontrado",
+    iiRate: 0, ipiRate: 0, pisRate: 0, cofinsRate: 0,
+    confidence: bestMatch ? 50 : 0,
+    reason: bestMatch
+      ? "Melhor correspondência encontrada no banco de dados"
+      : "Nenhuma correspondência encontrada. Consulte um despachante.",
+  };
+  aplicarAliquotasDaBase(suggestedNCM, bestMatch);
   return {
-    suggestedNCM: {
-      ncmCode: bestMatch?.ncmCode || "00000000",
-      description: bestMatch?.description || "NCM não encontrado",
-      iiRate: bestMatch?.iiRate || 1400,
-      ipiRate: bestMatch?.ipiRate || 0,
-      pisRate: bestMatch?.pisRate || 210,
-      cofinsRate: bestMatch?.cofinsRate || 1025,
-      confidence: bestMatch ? 50 : 0,
-      reason: bestMatch
-        ? "Melhor correspondência encontrada no banco de dados"
-        : "Nenhuma correspondência encontrada. Consulte um despachante.",
-    },
-    alternatives: similarNCMs.slice(1, 3).map(n => ({
-      ncmCode: n.ncmCode,
-      description: n.description,
-      iiRate: n.iiRate,
-      ipiRate: n.ipiRate,
-      pisRate: n.pisRate,
-      cofinsRate: n.cofinsRate,
-      confidence: 30,
-      reason: "Alternativa baseada em similaridade de descrição",
-    })),
+    suggestedNCM,
+    alternatives: similarNCMs.slice(1, 3).map(n => {
+      const alt: NCMSuggestion = {
+        ncmCode: n.ncmCode,
+        description: n.description,
+        iiRate: 0, ipiRate: 0, pisRate: 0, cofinsRate: 0,
+        confidence: 30,
+        reason: "Alternativa baseada em similaridade de descrição",
+      };
+      aplicarAliquotasDaBase(alt, n);
+      return alt;
+    }),
     optimizationTips: ["Consulte um despachante aduaneiro para validar a classificação"],
     legalBasis: [],
     riskLevel: "medium",

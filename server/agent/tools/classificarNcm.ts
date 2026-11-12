@@ -36,6 +36,21 @@ const schema = defineSchema(
   },
 );
 
+const pct = (bp: number) => `${(bp / 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
+
+/** Alíquotas com a FONTE explícita — o modelo repete o que está aqui, nunca um valor próprio. */
+function descreverAliquotas(s?: ncmService.NCMSuggestion): string {
+  if (!s) return "n/d";
+  if (s.aliquotaFonte === "nao_confirmada") {
+    return "alíquotas NÃO CONFIRMADAS — o código não está na tabela oficial da base; diga isso e não apresente II";
+  }
+  const taxas = `II ${pct(s.iiRate)}, IPI ${pct(s.ipiRate)}`;
+  if (s.aliquotaFonte === "estimada") {
+    return `${taxas} — II ESTIMADO por capítulo, não consta na TEC carregada; confirmar na TEC antes de fechar`;
+  }
+  return `${taxas} (fonte: tabela oficial${s.aliquotaOrigem ? ` — ${s.aliquotaOrigem}` : ""})`;
+}
+
 export const classificarNcmTool: AgentTool = {
   name: "classificar_ncm",
   estagios: ["demand", "analyze"],
@@ -53,19 +68,22 @@ export const classificarNcmTool: AgentTool = {
 
     const sug = resultado.suggestedNCM;
     const conf = typeof sug?.confidence === "number" ? `${Math.round(sug.confidence)}%` : "n/d";
-    const ii = typeof sug?.iiRate === "number" ? `${(sug.iiRate / 100).toFixed(1)}%` : "n/d";
     const alts = (resultado.alternatives ?? [])
-      .map((a) => `${a.ncmCode} (II ${(a.iiRate / 100).toFixed(1)}%)`)
       .slice(0, 2)
+      .map((a) => `${a.ncmCode} (${descreverAliquotas(a)})`)
       .join(", ");
 
     return {
       ok: true,
       summary:
         `NCM sugerida: ${sug?.ncmCode ?? "n/d"} — ${sug?.description ?? ""} ` +
-        `(confiança ${conf}, II ${ii}, risco ${resultado.riskLevel}). ` +
+        `(confiança ${conf}, risco ${resultado.riskLevel}). ` +
+        `Alíquotas: ${descreverAliquotas(sug)}. ` +
         (alts ? `Alternativas: ${alts}. ` : "") +
-        `Confirme na TEC/TIPI antes de fechar; o cálculo final usa montar_calculo.`,
+        `REGRA: apresente EXATAMENTE estas alíquotas e a fonte entre parênteses; não informe ` +
+        `nenhuma outra alíquota para estes códigos. A base legal é raciocínio do classificador — ` +
+        `não cite número de Solução de Consulta, parecer ou ato como fato (nenhum foi consultado). ` +
+        `O cálculo final usa montar_calculo.`,
       data: resultado,
     };
   },
