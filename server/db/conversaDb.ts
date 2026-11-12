@@ -213,6 +213,39 @@ export async function getConversaMessages(conversaId: number, userId: number) {
     .orderBy(conversaMensagens.criadaEm);
 }
 
+/**
+ * Arquivos enviados nesta conversa, mais recente primeiro. A referência é
+ * gravada junto da mensagem do usuário (toolResults = [{ name: "anexo", data }]).
+ */
+export async function anexosDaConversa(
+  conversaId: number,
+): Promise<Array<{ fileKey: string; name: string; mimeType?: string }>> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({ toolResults: conversaMensagens.toolResults })
+    .from(conversaMensagens)
+    .where(and(eq(conversaMensagens.conversaId, conversaId), eq(conversaMensagens.role, "user")))
+    .orderBy(desc(conversaMensagens.id))
+    .limit(60);
+  const out: Array<{ fileKey: string; name: string; mimeType?: string }> = [];
+  for (const r of rows) {
+    const lista = typeof r.toolResults === "string" ? safeJson(r.toolResults) : r.toolResults;
+    if (!Array.isArray(lista)) continue;
+    for (const item of lista as any[]) {
+      const d = item?.name === "anexo" ? item.data : null;
+      if (d && typeof d.fileKey === "string" && typeof d.name === "string") {
+        out.push({ fileKey: d.fileKey, name: d.name, mimeType: typeof d.mimeType === "string" ? d.mimeType : undefined });
+      }
+    }
+  }
+  return out;
+}
+
+function safeJson(s: string): unknown {
+  try { return JSON.parse(s); } catch { return null; }
+}
+
 export async function addMessage(
   conversaId: number,
   role: "user" | "assistant" | "system" | "tool",

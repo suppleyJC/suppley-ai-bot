@@ -28,6 +28,12 @@ export interface ToolContext {
    * sem depender de URL pré-assinada que expira.
    */
   anexo?: AnexoTurno;
+  /**
+   * Arquivos enviados em mensagens ANTERIORES desta conversa (mais recente
+   * primeiro). O conteúdo de um anexo só vai ao modelo no turno do envio; com
+   * isto as tools ainda acham o arquivo para vincular ou reler depois.
+   */
+  anexosConversa?: AnexoTurno[];
 }
 
 /** Resultado padronizado de uma tool. */

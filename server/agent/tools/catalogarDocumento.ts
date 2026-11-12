@@ -123,6 +123,10 @@ export const catalogarDocumentoTool: AgentTool = {
   schema,
   async run(args, ctx: ToolContext): Promise<ToolResult> {
     const tipo = args.tipo === "catalogo" ? "catalogo" : "cotacao";
+    // Arquivo do turno ou, se o cadastro veio numa mensagem seguinte (ex.: a
+    // pessoa respondeu "são dois cenários"), o último enviado na conversa.
+    // Antes a proforma ficava sem arquivo (arquivoVinculado: null).
+    const arquivo = ctx.anexo ?? ctx.anexosConversa?.[0];
     const supplierName = typeof args.supplierName === "string" ? args.supplierName.trim() : "";
     const itensArg = Array.isArray(args.items) ? (args.items as ItemArg[]) : [];
     if (!supplierName) return { ok: false, summary: "Informe o nome do fornecedor.", error: "fornecedor vazio" };
@@ -200,8 +204,8 @@ export const catalogarDocumentoTool: AgentTool = {
         // VÍNCULO DO ARQUIVO: o anexo do turno (chave permanente no storage)
         // fica gravado na proforma — o documento original é recuperável e a
         // URL é re-assinada a qualquer momento (nada de link que expira).
-        fileKey: ctx.anexo?.fileKey,
-        fileName: ctx.anexo?.name,
+        fileKey: arquivo?.fileKey,
+        fileName: arquivo?.name,
         extractionConfidence: 85, // extraída pela Excambia no chat
         status: "revisada",
       });
@@ -213,7 +217,7 @@ export const catalogarDocumentoTool: AgentTool = {
           `Cotação catalogada na base: proforma ${numero} de ${supplierName} com ${items.length} item(ns) — ` +
           `${comPreco} com preço${semPreco > 0 ? `, ${semPreco} SEM preço (entraram sinalizados; sem histórico de preço)` : ""} ` +
           `(fornecedor e histórico de preços atualizados).` +
-          `${ctx.anexo ? ` Arquivo original "${ctx.anexo.name}" vinculado à proforma.` : ""}\n` +
+          `${arquivo ? ` Arquivo original "${arquivo.name}" vinculado à proforma.` : ""}\n` +
           `${orientacao}\n` +
           `Informe à pessoa, em uma linha, que os dados foram catalogados (proforma ${numero}), citando quantos itens têm preço.`,
         data: {
@@ -224,7 +228,7 @@ export const catalogarDocumentoTool: AgentTool = {
           itensCatalogados: items.length,
           itensComPreco: comPreco,
           itensSemPreco: semPreco,
-          arquivoVinculado: ctx.anexo?.name ?? null,
+          arquivoVinculado: arquivo?.name ?? null,
           quotationDate: quotationDate?.toISOString().slice(0, 10) ?? null,
         },
       };

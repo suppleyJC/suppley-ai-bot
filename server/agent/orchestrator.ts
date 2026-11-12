@@ -273,6 +273,8 @@ export interface OrchestratorInput {
    * ToolContext — catalogar_documento vincula o arquivo à proforma criada.
    */
   anexo?: AnexoTurno;
+  /** Arquivos de mensagens anteriores da conversa (mais recente primeiro). */
+  anexosConversa?: AnexoTurno[];
 }
 
 export interface OrchestratorOutput {
@@ -530,6 +532,18 @@ function precisaRaciocinioProfundo(messages: Message[]): boolean {
   return texto.length > 600 || PADRAO_COMPLEXO.test(texto);
 }
 
+/** Lista os arquivos já enviados na conversa — o modelo só vê o conteúdo no turno do envio. */
+function notaAnexosConversa(input: OrchestratorInput): string {
+  const lista = input.anexosConversa ?? [];
+  if (!lista.length) return "";
+  const nomes = lista.slice(0, 8).map((a) => `"${a.name}"`).join(", ");
+  return (
+    `\n\nARQUIVOS JÁ ENVIADOS NESTA CONVERSA (mais recente primeiro): ${nomes}. ` +
+    `O conteúdo deles NÃO está no histórico: para usar números, itens ou condições de um deles, chame ` +
+    `reler_documento com o nome do arquivo antes de responder — nunca cite o conteúdo de memória.`
+  );
+}
+
 export async function runExcambia(input: OrchestratorInput): Promise<OrchestratorOutput> {
   const lightText = lightTurnText(input);
   if (lightText !== undefined) return runLightTurn(lightText);
@@ -538,6 +552,7 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
     operacaoId: input.operacaoId,
     estagio: input.estagio,
     anexo: input.anexo,
+    anexosConversa: input.anexosConversa,
   };
 
   const toolSchemas = getToolSchemas(input.estagio);
@@ -546,7 +561,7 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
 
   // monta a conversa com o system prompt da Excambia (histórico compactado se longo)
   const conversation: Message[] = [
-    { role: "system", content: await buildSystemContent(input.userId, input.operacaoId) },
+    { role: "system", content: (await buildSystemContent(input.userId, input.operacaoId)) + notaAnexosConversa(input) },
     ...(await compactarHistorico(sanitizeMessages(input.messages))),
   ];
 
@@ -664,6 +679,7 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
     operacaoId: input.operacaoId,
     estagio: input.estagio,
     anexo: input.anexo,
+    anexosConversa: input.anexosConversa,
   };
 
   const toolSchemas = getToolSchemas(input.estagio);
@@ -671,7 +687,7 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
   const toolResults: OrchestratorOutput["toolResults"] = [];
 
   const conversation: Message[] = [
-    { role: "system", content: await buildSystemContent(input.userId, input.operacaoId) },
+    { role: "system", content: (await buildSystemContent(input.userId, input.operacaoId)) + notaAnexosConversa(input) },
     ...(await compactarHistorico(sanitizeMessages(input.messages))),
   ];
 

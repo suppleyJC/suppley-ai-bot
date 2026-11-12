@@ -129,12 +129,20 @@ router.post("/api/chat/stream", chatStreamRateLimit, async (req: Request, res: R
     }
 
     // Adiciona mensagem do usuário ao histórico (com marcador do anexo, sem emoji)
+    // Arquivos de mensagens anteriores (lidos ANTES de gravar a atual).
+    const anexosConversa = await conversaDb.anexosDaConversa(payload.conversaId).catch(() => []);
+
     const userMsg = payload.messages[payload.messages.length - 1];
     if (userMsg?.role === "user") {
       const persisted = payload.attachment
         ? attachmentMarker(payload.attachment.name, userMsg.content)
         : userMsg.content;
-      await conversaDb.addMessage(payload.conversaId, "user", persisted);
+      // A referência do arquivo fica na mensagem: nas próximas, as tools ainda
+      // conseguem vincular e reler o documento. Só chaves do próprio usuário.
+      const ref = payload.attachment?.fileKey?.startsWith(`quotations/${user.id}/`)
+        ? [{ name: "anexo", ok: true, data: { fileKey: payload.attachment.fileKey, name: payload.attachment.name, mimeType: payload.attachment.mimeType } }]
+        : undefined;
+      await conversaDb.addMessage(payload.conversaId, "user", persisted, undefined, ref);
     }
 
     // Se houver anexo, transforma a última mensagem em conteúdo multimodal.
@@ -195,6 +203,7 @@ router.post("/api/chat/stream", chatStreamRateLimit, async (req: Request, res: R
               mimeType: payload.attachment.mimeType,
             }
           : undefined,
+        anexosConversa,
       })) {
         if (perfFirstEventAt == null) perfFirstEventAt = performance.now();
         if (chunk.type === "reply") {

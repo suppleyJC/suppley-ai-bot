@@ -32,7 +32,7 @@ const schema = defineSchema(
     properties: {
       numeroProforma: { type: "string", description: "Número da proforma cujo arquivo original deve ser relido (ex.: 'PF-2026-0011')" },
       proformaId: { type: "number", description: "ID da proforma (alternativa ao número)" },
-      nomeArquivo: { type: "string", description: "Parte do nome do arquivo (procura em proformas e nos anexos da operação do contexto)" },
+      nomeArquivo: { type: "string", description: "Parte do nome do arquivo (procura nos arquivos enviados nesta conversa, nas proformas e nos anexos da operação do contexto)" },
       operationId: { type: "number", description: "ID da operação onde procurar o anexo (opcional; usa o contexto se ausente)" },
     },
   },
@@ -82,6 +82,13 @@ export const relerDocumentoTool: AgentTool = {
         (nomeArquivo && x.fileName && normalizeForSearch(x.fileName).includes(nomeArquivo)),
       );
       if (p?.fileKey) achado = { fileKey: p.fileKey, nome: p.fileName ?? `proforma-${p.numero}`, mimeType: mimeFromName(p.fileName ?? ".pdf"), origem: `proforma ${p.numero ?? p.id}` };
+    }
+    if (!achado && ctx.anexosConversa?.length) {
+      // Arquivo enviado antes nesta conversa: por nome, ou o mais recente.
+      const a = nomeArquivo
+        ? ctx.anexosConversa.find((x) => normalizeForSearch(x.name).includes(nomeArquivo))
+        : ctx.anexosConversa[0];
+      if (a) achado = { fileKey: a.fileKey, nome: a.name, mimeType: a.mimeType || mimeFromName(a.name), origem: "esta conversa" };
     }
     if (!achado && opId) {
       try {
