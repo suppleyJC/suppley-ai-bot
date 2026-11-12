@@ -34,11 +34,15 @@ function cellToString(value: ExcelJS.CellValue): string {
     // ExcelJS retorna objetos para fórmulas, hyperlinks, rich text, datas.
     const anyVal = value as any;
     if (anyVal instanceof Date) return anyVal.toLocaleDateString("pt-BR");
-    if (typeof anyVal.result !== "undefined") return String(anyVal.result); // fórmula
+    if (typeof anyVal.result !== "undefined") return cellToString(anyVal.result); // fórmula
+    // Fórmula sem valor calculado salvo (ex.: TOTAL vazio): não há número a ler.
+    if (typeof anyVal.formula !== "undefined" || typeof anyVal.sharedFormula !== "undefined") return "";
     if (typeof anyVal.text !== "undefined") return String(anyVal.text); // hyperlink/rich
     if (Array.isArray(anyVal.richText)) return anyVal.richText.map((r: any) => r.text).join("");
     return JSON.stringify(value);
   }
+  // Ruído de ponto flutuante das fórmulas (12330.000000000002 → 12330).
+  if (typeof value === "number") return String(Number(value.toPrecision(12)));
   return String(value).trim();
 }
 
@@ -75,9 +79,17 @@ export async function spreadsheetBufferToText(
     sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       if (rowNumber > MAX_ROWS_PER_SHEET) return;
       const valores: string[] = [];
-      // row.values é 1-indexed (índice 0 é null); fatiamos a partir de 1.
-      const raw = Array.isArray(row.values) ? row.values.slice(1, MAX_COLS + 1) : [];
-      for (const v of raw) valores.push(cellToString(v as ExcelJS.CellValue));
+      const ultima = Math.min(row.cellCount, MAX_COLS);
+      for (let c = 1; c <= ultima; c++) {
+        const cell = row.getCell(c);
+        // Célula mesclada: o valor vale UMA vez (na célula-mestre). Repetir o
+        // cabeçalho do fornecedor em 11 colunas só confundia a leitura.
+        if (cell.isMerged && cell.master && cell.master.address !== cell.address) {
+          valores.push("");
+          continue;
+        }
+        valores.push(cellToString(cell.value));
+      }
       // remove células finais vazias
       while (valores.length && valores[valores.length - 1] === "") valores.pop();
       if (valores.some((c) => c !== "")) {
@@ -102,6 +114,16 @@ export async function spreadsheetBufferToText(
     partes.push(`| ${header.map(() => "---").join(" | ")} |`);
     for (let i = 1; i < linhas.length; i++) {
       partes.push(`| ${norm(linhas[i]).join(" | ")} |`);
+    }
+
+    // Imagens embutidas (foto do produto, carimbo, logo) não viram texto.
+    // Dizer isso evita que o modelo afirme ter "visto" a foto.
+    const imagens = sheet.getImages?.().length ?? 0;
+    if (imagens > 0) {
+      partes.push(
+        `\n> Esta aba tem ${imagens} imagem(ns) embutida(s) (ex.: foto do produto) que NÃO foram lidas — ` +
+        `só o texto das células. Se a imagem trouxer informação necessária, peça para enviá-la como arquivo de imagem.`,
+      );
     }
 
     if (sheet.rowCount > MAX_ROWS_PER_SHEET) {
