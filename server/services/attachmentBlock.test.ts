@@ -5,7 +5,7 @@ vi.mock("../storage", () => ({
 }));
 
 import { storageGet } from "../storage";
-import { buildAttachmentBlock } from "./attachmentBlock";
+import { applyAttachmentToMessages, buildAttachmentBlock } from "./attachmentBlock";
 
 const mockedStorageGet = vi.mocked(storageGet);
 
@@ -90,5 +90,22 @@ describe("attachmentBlock security", () => {
     expect(result).toBeNull();
     expect(mockedStorageGet).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("anexo que não pôde ser lido", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("avisa o modelo em vez de seguir como se o arquivo tivesse vindo", async () => {
+    // chave de OUTRO usuário: rejeitada antes de qualquer download
+    const out = await applyAttachmentToMessages(
+      [{ role: "user", content: "calcula essa cotação" }],
+      { url: "", fileKey: "quotations/99/x.png", mimeType: "image/png", name: "print.png" },
+      42,
+    );
+    expect(out[0].content).toContain("calcula essa cotação");
+    expect(out[0].content).toContain('"print.png" NÃO pôde ser lido');
   });
 });

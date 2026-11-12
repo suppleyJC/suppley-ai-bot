@@ -201,10 +201,18 @@ export async function applyAttachmentToMessages<T extends { role: string; conten
 ): Promise<T[]> {
   if (!attachment || messages.length === 0) return messages;
   const block = await buildAttachmentBlock(attachment, userId);
-  if (!block) return messages;
   const out = [...messages];
   const lastIdx = out.length - 1;
   const lastText = (typeof out[lastIdx].content === "string" ? out[lastIdx].content : "") || "";
+  if (!block) {
+    // Sem este aviso o modelo recebia "segue o arquivo" sem arquivo nenhum e
+    // respondia sobre um conteúdo que nunca leu.
+    const aviso =
+      `[O arquivo "${attachment.name}" NÃO pôde ser lido pelo sistema. Diga isso à pessoa em uma linha ` +
+      `e peça para reenviar (PDF, planilha ou imagem JPG/PNG). Não descreva nem presuma o conteúdo do arquivo.]`;
+    out[lastIdx] = { ...out[lastIdx], content: lastText.trim() ? `${lastText}\n\n${aviso}` : aviso } as T;
+    return out;
+  }
   const text = lastText.trim() || "Segue o arquivo em anexo. Leia o documento e conduza conforme a operação.";
   out[lastIdx] = { ...out[lastIdx], content: [{ type: "text", text }, block] } as T;
   return out;

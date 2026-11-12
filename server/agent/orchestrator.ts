@@ -94,6 +94,9 @@ ARQUIVO DE COTAÇÃO/PROFORMA/CATÁLOGO NO CHAT (catalogação + validade tempor
    • Cotação ANTIGA (mais de 3 meses): trate como REFERÊNCIA para cálculo/estudo apenas. Avise com naturalidade que a cotação tem X meses e os preços podem estar defasados, e ofereça disparar uma RFQ (enviar_rfq) para revalidar o preço antes de virar operação.
    • Sem data no documento: pergunte de quando é a cotação antes de propor a conversão.
    A mesma regra vale para preços vindos de buscar_ativo/precificar_referencia marcados como [COTAÇÃO ANTIGA].
+3. HISTÓRICO PRIMEIRO: na MESMA resposta em que ler a cotação, chame buscar_ativo com o produto (e confira o fornecedor). Se já houver cotação anterior do item ou do fornecedor, compare na resposta: preço anterior × atual, data e variação em %. Preço anterior zerado/vazio na base = dado inválido: diga em uma linha que o registro anterior está sem preço válido e não o use.
+4. LINHAS ALTERNATIVAS NÃO SE SOMAM: quando o MESMO item aparece em linhas que diferem só por contêiner (20GP/40HQ), faixa de quantidade/MOQ ou incoterm, são CENÁRIOS alternativos — calcule cada um separado e compare. Nunca some quantidades, pesos, totais ou sinal entre eles. Só trate como pedido único se o documento disser (total preenchido) ou a pessoa confirmar.
+5. FECHE NA MESMA RESPOSTA: com regime, UF e câmbio informados (ou premissas declaradas), rode montar_calculo para cada cenário AGORA. Proibido terminar com "na próxima mensagem eu rodo" — se o cálculo é o pedido, ele é o conteúdo da resposta.
 
 COTAÇÃO SEMI-AUTOMATIZADA COM FORNECEDORES (humano-no-loop — 2 portões de aprovação):
 - Fluxo: enviar_rfq (registra a RFQ com preço-alvo) → preparar_cotacao_fornecedor (rascunhos por fornecedor, com o alvo) → [PORTÃO 1: mostre a prévia e peça aprovação] → enviar_cotacao_fornecedor → a pessoa cola a resposta do fornecedor no chat → registrar_resposta_fornecedor (grava e compara vs alvo) → se vier acima do alvo, contraproposta_fornecedor (rascunho) → [PORTÃO 1 de novo: aprovação] → enviar_cotacao_fornecedor.
@@ -218,6 +221,8 @@ DESCOBERTA DE FORNECEDORES (vale para QUALQUER item — comparar fornecedores nu
 
 PRECISÃO FISCAL E BARREIRAS (regra dura — compliance é papel NATIVO do sistema, nunca dever de casa para o cliente):
 - NCM NUNCA sai da sua memória: use classificar_ncm (motor certificado) e ADOTE o resultado de forma AFIRMATIVA no cálculo ("Classificação adotada: 7308.40.00 — material para andaimes e escoramentos"). Não devolva a dúvida ao cliente ("confirme com o despachante", "há divergência na base") — a validação formal aparece, no máximo, como etapa padrão do fechamento. Dica de domínio: ANDAIMES, ARMAÇÕES e ESCORAMENTOS (escoras metálicas, torres, formas) = 7308.40.00 — NÃO 7308.90.00 (outros).
+- ALÍQUOTAS SÓ DA TABELA OFICIAL (regra dura): II, IPI, PIS e COFINS que você apresenta vêm de classificar_ncm ou de montar_calculo — exatamente como a ferramenta devolveu, com a fonte entre parênteses ("II 18% — TEC"). NUNCA de memória, nunca "na faixa de". Se a ferramenta marcar "ESTIMADO por capítulo" ou "NÃO CONFIRMADAS", diga isso na mesma frase. Se a pessoa contestar uma alíquota, recalcule com a tabela (classificar_ncm/montar_calculo) e corrija sem rodeio. Base legal citada pelo classificador é raciocínio, não consulta: não cite número de Solução de Consulta/parecer como fato.
+- FALHA DE FERRAMENTA (regra dura): se montar_calculo (ou outra ferramenta do entregável) voltar ok=false, NÃO apresente números "de cabeça" no lugar do motor. Leia o campo error: se for parâmetro (unidade, peso, câmbio, NCM), corrija e chame de novo na mesma resposta; se não der, diga em UMA linha que o cálculo não fechou e o que falta.
 - SILENT CHECK DE BARREIRAS (duas camadas): (1ª) o montar_calculo JÁ DETECTA automaticamente antidumping, medidas compensatórias, salvaguardas e CIDE na base estruturada (por NCM+origem) e devolve as linhas "🛑 BARREIRA" com impacto estimado — EVIDENCIE cada uma na resposta, com o valor quando houver; quando a base disser "valor a confirmar", confirme VOCÊ o valor vigente pela pesquisa web (Resolução GECEX/CAMEX) antes de fechar números. (2ª) Complete com a pesquisa web o que a base estruturada não cobre: norma técnica/INMETRO (ex.: NBR de escoramento) e anuências (Anvisa, Inmetro, Exército…). Apresente tudo de forma AFIRMATIVA e consultiva: "Esta NCM está sujeita a X para origem Y — já considerei/recomendo Z". NUNCA como dúvida terceirizada ("checar antidumping", "verificar com despachante"). O valor de antidumping NÃO está embutido no custo do motor — some-o explicitamente ao custo final apresentado quando existir.
 - ENCERRAMENTO CONSULTIVO: feche respostas de precificação/estimativa oferecendo o start da cotação formal (RFQ aos fornecedores homologados) — números de referência apoiam a decisão; o compromisso vem da cotação real.
 
@@ -273,7 +278,8 @@ export interface OrchestratorInput {
 export interface OrchestratorOutput {
   reply: string;
   toolsUsed: string[];
-  toolResults: Array<{ name: string; ok: boolean; data?: unknown }>;
+  /** `error` vai junto para o histórico: sem ele, "ok: false" não diz por que o cálculo não fechou. */
+  toolResults: Array<{ name: string; ok: boolean; data?: unknown; error?: string }>;
 }
 
 export type StreamChunk =
@@ -307,8 +313,17 @@ const PRAZO_RODADA_MS = 40_000;
 
 const INSTRUCAO_PRAZO =
   "PRAZO DE RESPOSTA ATINGIDO. Não chame mais ferramentas. Responda AGORA ao usuário com o que já foi " +
-  "levantado, de forma completa e útil, no tom habitual. Se faltou algum dado, apresente o que tem e " +
-  "ofereça aprofundar o ponto específico na próxima mensagem. Não mencione prazo, tempo ou limite.";
+  "levantado, de forma completa e útil, no tom habitual. Se uma etapa pedida (ex.: o cálculo no motor) " +
+  "não chegou a rodar, diga isso em UMA linha e ofereça rodar já na próxima mensagem — NÃO apresente " +
+  "conta feita à mão como se fosse resultado do motor. Não mencione prazo, tempo ou limite.";
+
+/**
+ * O entregável não é pulado pelo prazo da rodada. Foi assim que a cotação de
+ * abraçadeiras ficou sem cálculo: a pesquisa de frete consumiu a rodada e as
+ * duas chamadas de montar_calculo voltaram "não executada". O teto por
+ * ferramenta continua valendo para elas.
+ */
+const FERRAMENTAS_ENTREGAVEIS = new Set(["montar_calculo", "gerar_relatorio_calculo", "catalogar_documento"]);
 
 /** Executa uma ferramenta com teto de tempo e registra quanto ela levou. */
 async function executarComTeto(
@@ -612,7 +627,7 @@ export async function runExcambia(input: OrchestratorInput): Promise<Orchestrato
 
       const toolResult = await executarComTeto(name, args, ctx);
       toolsUsed.push(name);
-      toolResults.push({ name, ok: toolResult.ok, data: toolResult.data });
+      toolResults.push({ name, ok: toolResult.ok, data: toolResult.data, ...(toolResult.error ? { error: toolResult.error } : {}) });
 
       // devolve o resultado da tool como mensagem 'tool'
       conversation.push({
@@ -753,11 +768,11 @@ export async function* runExcambiaStream(input: OrchestratorInput): AsyncGenerat
 
       // Prazo já estourado no meio do lote: não executa o resto, mas responde a
       // cada tool_use (a API exige um tool_result para cada um).
-      const toolResult = Date.now() - inicioRodada > PRAZO_RODADA_MS
+      const toolResult = Date.now() - inicioRodada > PRAZO_RODADA_MS && !FERRAMENTAS_ENTREGAVEIS.has(name)
         ? { ok: false, summary: `Etapa "${name}" não executada — siga com o que já foi levantado.`, error: "prazo" }
         : await executarComTeto(name, args, ctx);
       toolsUsed.push(name);
-      toolResults.push({ name, ok: toolResult.ok, data: toolResult.data });
+      toolResults.push({ name, ok: toolResult.ok, data: toolResult.data, ...(toolResult.error ? { error: toolResult.error } : {}) });
 
       yield {
         type: "tool_result",

@@ -103,6 +103,34 @@ describe("prazo da rodada", () => {
   });
 });
 
+describe("entregável e transparência", () => {
+  it("montar_calculo roda mesmo com a rodada estourada — a pesquisa não pode comer o cálculo", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.mocked(invokeLLM)
+      .mockResolvedValueOnce(pedeFerramenta("pesquisa", "montar_calculo", "outra") as any)
+      .mockResolvedValueOnce(responde("fim") as any);
+    vi.mocked(runTool).mockImplementation(async () => {
+      vi.setSystemTime(Date.now() + 45_000);
+      return { ok: true, summary: "ok" };
+    });
+
+    await coletar(runExcambiaStream(pergunta));
+
+    expect(vi.mocked(runTool).mock.calls.map((c) => c[0])).toEqual(["pesquisa", "montar_calculo"]);
+  });
+
+  it("o erro da ferramenta vai para o histórico, não só ok:false", async () => {
+    vi.mocked(invokeLLM)
+      .mockResolvedValueOnce(pedeFerramenta("montar_calculo") as any)
+      .mockResolvedValueOnce(responde("ok") as any);
+    vi.mocked(runTool).mockResolvedValue({ ok: false, summary: "O motor retornou um erro.", error: "peso ausente" });
+
+    const chunks = await coletar(runExcambiaStream(pergunta));
+    const final = chunks.find((c) => c.type === "reply");
+    expect(final.toolResults).toEqual([{ name: "montar_calculo", ok: false, data: undefined, error: "peso ausente" }]);
+  });
+});
+
 describe("teto por ferramenta", () => {
   it("ferramenta que trava é interrompida e o agente segue", async () => {
     vi.useFakeTimers();
