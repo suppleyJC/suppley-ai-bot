@@ -1,0 +1,112 @@
+name: Test & Build
+
+on:
+  push:
+    branches: [main, development, claude/manus-migration-independent-*, security/**]
+  pull_request:
+    branches: [main, development, claude/manus-migration-independent-*, security/**]
+
+permissions:
+  contents: read
+
+jobs:
+  docker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build production Docker image
+        run: docker build --tag suppley-ci:${{ github.sha }} .
+      - name: Smoke test isolated application container
+        run: |
+          docker run -d --name suppley-ci --network none \
+            -e JWT_SECRET=0123456789abcdef0123456789abcdef \
+            suppley-ci:${{ github.sha }}
+          for attempt in $(seq 1 30); do
+            if docker exec suppley-ci node --input-type=module -e 'const r = await fetch("http://localhost:3000/health"); const b = await r.json(); if (!r.ok || b.status !== "ok") process.exit(1);'; then
+              docker exec suppley-ci sh -c 'test "$(id -u)" = 1337'
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs suppley-ci
+          exit 1
+      - name: Remove isolated CI container
+        if: always()
+        run: docker rm -f suppley-ci || true
+
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: mysql://root:root@localhost:3306/suppley_calc_test
+      JWT_SECRET: 0123456789abcdef0123456789abcdef
+      ANTHROPIC_API_KEY: dummy-for-ci
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: suppley_calc_test
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+        ports:
+          - 3306:3306
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare test database
+        run: pnpm exec drizzle-kit push --force
+
+      - name: Type check
+        run: pnpm check
+
+      - name: Run tests
+        run: pnpm test --run
+
+      - name: Build
+        run: pnpm build
+        env:
+          VITE_APP_ID: test-app
+          VITE_OAUTH_PORTAL_URL: ""
+          NODE_ENV: production
+
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ github.sha }}
+          path: dist/
+          retention-days: 5
+
+      - name: Record failure in job summary
+        if: failure()
+        run: |
+          echo "## ❌ Test & Build falhou" >> "$GITHUB_STEP_SUMMARY"
+          echo "Consulte os logs desta execução para identificar o passo que falhou." >> "$GITHUB_STEP_SUMMARY"

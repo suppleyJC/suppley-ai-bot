@@ -1,0 +1,1 @@
+ALTER TABLE `icms_rates` ADD `icmsAntecipadoRate` int DEFAULT 100 NOT NULL;
