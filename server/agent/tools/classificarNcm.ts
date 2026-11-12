@@ -24,6 +24,10 @@ const schema = defineSchema(
     properties: {
       produto: { type: "string", description: "Nome do produto a classificar" },
       descricao: { type: "string", description: "Descrição/detalhes do produto (opcional, melhora a precisão)" },
+      paisOrigem: {
+        type: "string",
+        description: "País de origem da mercadoria (ex.: China). Usado na conferência oficial da alíquota (TTCE), que considera acordos.",
+      },
       contextoDocumento: {
         type: "string",
         description:
@@ -45,6 +49,12 @@ function descreverAliquotas(s?: ncmService.NCMSuggestion): string {
     return "alíquotas NÃO CONFIRMADAS — o código não está na tabela oficial da base; diga isso e não apresente II";
   }
   const taxas = `II ${pct(s.iiRate)}, IPI ${pct(s.ipiRate)}`;
+  if (s.aliquotaFonte === "ttce") {
+    const divergiu = s.iiTabelaLocal != null
+      ? `; a tabela local tinha II ${pct(s.iiTabelaLocal)} — DESATUALIZADA, avise a pessoa que vale o oficial`
+      : "";
+    return `${taxas} (fonte oficial: ${s.aliquotaOrigem}${divergiu})`;
+  }
   if (s.aliquotaFonte === "estimada") {
     return `${taxas} — II ESTIMADO por capítulo, não consta na TEC carregada; confirmar na TEC antes de fechar`;
   }
@@ -64,7 +74,14 @@ export const classificarNcmTool: AgentTool = {
     const contextoDocumento =
       typeof args.contextoDocumento === "string" ? args.contextoDocumento : undefined;
 
-    const resultado = await ncmService.suggestNCMWithAI(produto, descricao, contextoDocumento);
+    // Cópia: o resultado da IA fica em cache e a conferência oficial é por consulta.
+    const resultado = structuredClone(await ncmService.suggestNCMWithAI(produto, descricao, contextoDocumento));
+    const paisOrigem = typeof args.paisOrigem === "string" ? args.paisOrigem : undefined;
+    await Promise.all(
+      [resultado.suggestedNCM, ...(resultado.alternatives ?? []).slice(0, 2)]
+        .filter(Boolean)
+        .map((s) => ncmService.conferirNaFonteOficial(s, paisOrigem)),
+    );
 
     const sug = resultado.suggestedNCM;
     const conf = typeof sug?.confidence === "number" ? `${Math.round(sug.confidence)}%` : "n/d";

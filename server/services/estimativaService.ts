@@ -257,23 +257,25 @@ export async function calculateEstimativa(input: EstimativaInput): Promise<Estim
 
         // TTCE (Portal Único Siscomex) — fonte oficial do tratamento aplicado
         // (ex-tarifário/GECEX, preferências). Opt-in via TTCE_ENABLED; fail-closed
-        // (null → segue com as tabelas locais). Só REDUZ alíquota, nunca eleva.
+        // (null → segue com as tabelas locais). Quando responde, VENCE a tabela
+        // local nos dois sentidos: uma elevação da CAMEX que a tabela ainda não
+        // tem deixaria o custo subestimado se o oficial só pudesse reduzir.
         if (ttceEnabled()) {
           const ttce = await consultarTtce({ ncm: ncmClean, paisOrigem: input.paisOrigem });
           if (ttce) {
             const antesIi = iiRate;
-            if (ttce.iiRate != null && iiRate !== undefined && ttce.iiRate < iiRate) {
-              iiRate = ttce.iiRate;
-            }
-            if (ttce.ipiRate != null && ipiRate !== undefined && ttce.ipiRate < ipiRate) {
-              ipiRate = ttce.ipiRate;
-            }
-            if (antesIi !== iiRate || ttce.exTarifario) {
+            // Override informado pela pessoa continua valendo (ex.: ex-tarifário já deferido).
+            if (ttce.iiRate != null && iiRate !== undefined && p.iiRateOverride === undefined) iiRate = ttce.iiRate;
+            if (ttce.ipiRate != null && ipiRate !== undefined && p.ipiRateOverride === undefined) ipiRate = ttce.ipiRate;
+            const mudouIi = antesIi !== undefined && iiRate !== undefined && Math.abs(antesIi - iiRate) > 1e-6;
+            if (mudouIi || ttce.exTarifario) {
               const fund = ttce.exTarifario?.fundamento ?? ttce.fundamentos[0] ?? "TTCE/Portal Único";
               ncmWarnings.push(
                 `NCM ${p.ncmCode}: tratamento oficial TTCE aplicado` +
                 (ttce.exTarifario?.codigo ? ` (Ex ${ttce.exTarifario.codigo})` : "") +
-                ` — II ${(iiRate! * 100).toFixed(1)}%. Fonte: ${fund}.`,
+                ` — II ${(iiRate! * 100).toFixed(1)}%` +
+                (mudouIi ? ` (a tabela local tinha ${(antesIi! * 100).toFixed(1)}% — está desatualizada para este código)` : "") +
+                `. Fonte: ${fund}.`,
               );
             }
           }

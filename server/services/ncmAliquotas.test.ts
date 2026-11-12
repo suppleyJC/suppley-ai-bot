@@ -43,3 +43,36 @@ describe("aplicarAliquotasDaBase", () => {
     expect(s.aliquotaFonte).toBe("nao_confirmada");
   });
 });
+
+describe("conferirNaFonteOficial (sem TTCE ligado)", () => {
+  it("mostra a data da carga e avisa quando a tabela está velha", async () => {
+    const { conferirNaFonteOficial } = await import("./ncmService");
+    const s = doModelo();
+    aplicarAliquotasDaBase(s, { iiRate: 1800, ipiRate: 0, pisRate: 210, cofinsRate: 965, notes: "II 18% TEC (Anexo I) | MDIC 2026-07-28" });
+    await conferirNaFonteOficial(s, "China", new Date("2026-11-12T12:00:00Z"));
+    expect(s.aliquotaFonte).toBe("base");
+    expect(s.aliquotaOrigem).toBe("TEC carregada em 28/07/2026");
+
+    const velha = doModelo();
+    aplicarAliquotasDaBase(velha, { iiRate: 1800, ipiRate: 0, pisRate: 210, cofinsRate: 965, notes: "II 18% TEC (Anexo I) | MDIC 2026-03-01" });
+    await conferirNaFonteOficial(velha, "China", new Date("2026-11-12T12:00:00Z"));
+    expect(velha.aliquotaOrigem).toMatch(/há \d+ dias — pode haver alteração/);
+  });
+});
+
+describe("conferirNaFonteOficial (TTCE ligado)", () => {
+  it("o oficial vence a tabela e a divergência fica registrada", async () => {
+    vi.resetModules();
+    vi.doMock("./ttceService", () => ({
+      ttceEnabled: () => true,
+      consultarTtce: vi.fn(async () => ({ iiRate: 0.2, ipiRate: 0.0325, exTarifario: null, preferencia: null, fundamentos: [] })),
+    }));
+    const mod = await import("./ncmService");
+    const s = doModelo();
+    mod.aplicarAliquotasDaBase(s, { iiRate: 1800, ipiRate: 0, pisRate: 210, cofinsRate: 965, notes: "II 18% TEC (Anexo I) | MDIC 2026-07-28" });
+    await mod.conferirNaFonteOficial(s, "China", new Date("2026-11-12T12:00:00Z"));
+    expect(s).toMatchObject({ iiRate: 2000, ipiRate: 325, iiTabelaLocal: 1800, aliquotaFonte: "ttce" });
+    expect(s.aliquotaOrigem).toContain("TTCE/Portal Único");
+    vi.doUnmock("./ttceService");
+  });
+});

@@ -9,6 +9,7 @@
  * - Fallback robusto quando IA não responde
  */
 
+import { consultarTtce, ttceEnabled } from "./ttceService";
 import { getDb } from "../db";
 import { ncmTaxRates } from "../../drizzle/schema";
 import { eq, like, sql, or } from "drizzle-orm";
@@ -113,11 +114,14 @@ export interface NCMSuggestion {
   alternativeClassification?: string;
   /**
    * De onde vieram as alíquotas: "base" = tabela oficial (ncm_tax_rates);
+   * "ttce" = conferida agora no Portal Único (fonte oficial, vence a tabela);
    * "estimada" = a linha existe, mas o II é estimativa por capítulo (a TEC
    * oficial não cobriu o código); "nao_confirmada" = o código não está na base e
    * NENHUMA alíquota deve ser apresentada como fato.
    */
-  aliquotaFonte?: "base" | "estimada" | "nao_confirmada";
+  aliquotaFonte?: "ttce" | "base" | "estimada" | "nao_confirmada";
+  /** II da tabela local quando o TTCE respondeu diferente (tabela defasada). */
+  iiTabelaLocal?: number;
   /** Texto de origem gravado na tabela (ex.: "II 18% TEC (Anexo I) | MDIC 2026-07-28"). */
   aliquotaOrigem?: string;
 }
@@ -602,6 +606,45 @@ export function aplicarAliquotasDaBase(s: NCMSuggestion, db: any | null | undefi
     s.pisRate = 210;
     s.cofinsRate = 1025;
     s.aliquotaFonte = "nao_confirmada";
+  }
+}
+
+const IDADE_MAX_TABELA_DIAS = 120;
+
+/**
+ * Confere as alíquotas da sugestão na FONTE OFICIAL (TTCE/Portal Único) quando
+ * a integração está ligada. A tabela local é uma carga do arquivo do MDIC e
+ * envelhece: uma alteração da CAMEX depois da carga deixaria a alíquota
+ * defasada. Sem TTCE, marca a idade da tabela para quem apresenta avisar.
+ */
+export async function conferirNaFonteOficial(
+  s: NCMSuggestion,
+  paisOrigem?: string | null,
+  hoje: Date = new Date(),
+): Promise<void> {
+  if (s.aliquotaFonte === "nao_confirmada") return;
+  if (ttceEnabled()) {
+    // II geral não depende da origem; sem país informado consulta como origem
+    // sem acordo preferencial (China), que devolve a alíquota cheia.
+    const ttce = await consultarTtce({ ncm: s.ncmCode, paisOrigem: paisOrigem || "china", data: hoje });
+    if (ttce?.iiRate != null) {
+      const iiOficial = Math.round(ttce.iiRate * 10000);
+      if (iiOficial !== s.iiRate) s.iiTabelaLocal = s.iiRate;
+      s.iiRate = iiOficial;
+      if (ttce.ipiRate != null) s.ipiRate = Math.round(ttce.ipiRate * 10000);
+      s.aliquotaFonte = "ttce";
+      s.aliquotaOrigem =
+        `TTCE/Portal Único, consulta de ${hoje.toLocaleDateString("pt-BR")}` +
+        (ttce.exTarifario?.codigo ? ` — Ex-tarifário ${ttce.exTarifario.codigo}` : "");
+      return;
+    }
+  }
+  const carga = /MDIC (\d{4}-\d{2}-\d{2})/.exec(s.aliquotaOrigem ?? "")?.[1];
+  if (carga) {
+    const dias = Math.floor((hoje.getTime() - new Date(`${carga}T00:00:00Z`).getTime()) / 86_400_000);
+    const quando = new Date(`${carga}T12:00:00Z`).toLocaleDateString("pt-BR");
+    s.aliquotaOrigem = `TEC carregada em ${quando}` +
+      (dias > IDADE_MAX_TABELA_DIAS ? ` (há ${dias} dias — pode haver alteração posterior; conferir no simulador da Receita)` : "");
   }
 }
 

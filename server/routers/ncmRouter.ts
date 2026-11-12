@@ -42,7 +42,9 @@ suggestWithAI: publicProcedure
     productDescription: z.string().optional(),
   }))
   .query(async ({ input }) => {
-    return ncmService.suggestNCMWithAI(input.productName, input.productDescription);
+    const r = structuredClone(await ncmService.suggestNCMWithAI(input.productName, input.productDescription));
+    await ncmService.conferirNaFonteOficial(r.suggestedNCM);
+    return r;
   }),
 
 // Compare tax rates between NCMs
