@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 Suppley AI Telegram Bot - Versão Final
-Bot do Telegram integrado com o Suppley AI Agent usando API Manus
+Bot do Telegram integrado com o Suppley AI Agent (DeepSeek)
 
 Autor: Manus AI
 Data: Outubro 2025
-Versão: 2.0 (Manus API)
+Versão: 2.1 (DeepSeek)
 """
 
 import os
@@ -31,8 +31,9 @@ logger = logging.getLogger(__name__)
 # Instância global do agente
 agent = SupplyAIAgent()
 
-# Token do bot (via variável de ambiente)
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN', '8336628777:AAHNjR3uuQ-iB-Q1brgF_hM7to1bj9xcoxk')
+# Token do bot (via variável de ambiente).
+# O valor NÃO deve ficar no código: um token commitado é público no histórico.
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 
 # Mensagem de boas-vindas personalizada
 WELCOME_MESSAGE = """🤖 *Suppley AI Assistant*
@@ -447,24 +448,25 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if update and update.message:
         await update.message.reply_text(
-            "❌ Desculpe, ocorreu um erro inesperado. "
-            "Tente novamente ou use /ajuda para ver os comandos disponíveis."
+            "❌ Ocorreu um erro inesperado. Tente novamente em instantes."
         )
 
 
 def main():
-    """Função principal"""
-    logger.info("🤖 Iniciando Suppley AI Telegram Bot...")
-    
-    # Verificar token
-    if not TELEGRAM_TOKEN or TELEGRAM_TOKEN == 'SEU_TOKEN_AQUI':
-        logger.error("❌ TELEGRAM_TOKEN não configurado!")
+    """Função principal para iniciar o bot"""
+    if not TELEGRAM_TOKEN:
+        logger.error(
+            "TELEGRAM_TOKEN não configurado. Defina a variável de ambiente "
+            "com o token gerado no @BotFather."
+        )
         return
+    
+    logger.info("Iniciando Suppley AI Telegram Bot (DeepSeek)...")
     
     # Criar aplicação
     application = Application.builder().token(TELEGRAM_TOKEN).build()
     
-    # Registrar handlers
+    # Adicionar handlers de comandos
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("proximos", proximos_passos))
     application.add_handler(CommandHandler("relatorio", relatorio))
@@ -475,21 +477,20 @@ def main():
     application.add_handler(CommandHandler("insight", insight))
     application.add_handler(CommandHandler("ajuda", ajuda))
     
-    # Handler para botões
+    # Handler de botões
     application.add_handler(CallbackQueryHandler(button_callback))
     
-    # Handler para mensagens de texto
+    # Handler de mensagens de texto
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Handler de erros
     application.add_error_handler(error_handler)
     
-    # Iniciar bot
-    logger.info("✅ Suppley AI Telegram Bot iniciado com sucesso!")
-    logger.info(f"📱 Bot disponível em: t.me/suppley_ai_bot")
+    logger.info("Bot iniciado. Aguardando mensagens...")
+    
+    # Iniciar o bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-
