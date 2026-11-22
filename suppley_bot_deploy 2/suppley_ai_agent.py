@@ -5,13 +5,22 @@ Agente estratégico de IA para auxiliar na transformação digital da Suppley
 
 Autor: Manus AI
 Data: Outubro 2025
-Versão: 1.0
+Versão: 1.1 (DeepSeek)
 """
 
 import os
 import json
 from datetime import datetime
 from openai import OpenAI
+
+# ============================================================
+# INTEGRAÇÃO COM O DEEPSEEK
+# ============================================================
+# O DeepSeek expõe uma API COMPATÍVEL com a da OpenAI, então o mesmo SDK
+# (`openai`) funciona — só o `base_url` e a chave mudam. Assim, toda a lógica
+# do agente (chat, histórico, análises) continua igual.
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 
 class SupplyAIAgent:
     """
@@ -21,8 +30,16 @@ class SupplyAIAgent:
     """
     
     def __init__(self):
-        self.client = OpenAI()  # API key já configurada no ambiente
-        self.model = "gpt-4.1-mini"  # Modelo otimizado para raciocínio estratégico
+        # DeepSeek via SDK da OpenAI (API compatível). A chave vem do ambiente.
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "DEEPSEEK_API_KEY não configurada. Defina essa variável de "
+                "ambiente com a chave da plataforma DeepSeek "
+                "(https://platform.deepseek.com)."
+            )
+        self.client = OpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL)
+        self.model = DEEPSEEK_MODEL  # deepseek-chat (ou deepseek-reasoner)
         
         # Base de conhecimento do agente
         self.knowledge_base = {
@@ -379,7 +396,7 @@ Seja encorajador mas realista."""
     def reset_conversation(self):
         """Limpa o histórico de conversação (mas mantém os aprendizados)"""
         self.conversation_history = []
-        return "✅ Histórico de conversação limpo. Aprendizados mantidos."
+        return "✅ Histórico de conversação limpo. Aprendizados mantidos.\n"
 
 
 def main():
@@ -431,46 +448,39 @@ def main():
         elif comando == "projeto":
             nome = input("Nome do projeto: ")
             descricao = input("Descrição (opcional): ")
-            print("\n🤖 Analisando projeto...\n")
             resposta = agent.analisar_projeto(nome, descricao)
-            print(resposta)
+            print(f"\n🤖 Análise:\n{resposta}")
             
         elif comando == "roadmap":
-            objetivo = input("Qual objetivo? ")
+            objetivo = input("Objetivo: ")
             prazo = input("Prazo em meses (padrão 12): ")
-            prazo = int(prazo) if prazo else 12
-            print("\n🤖 Criando roadmap...\n")
+            prazo = int(prazo) if prazo.isdigit() else 12
             resposta = agent.criar_roadmap(objetivo, prazo)
-            print(resposta)
+            print(f"\n🤖 Roadmap:\n{resposta}")
             
         elif comando == "proximos":
-            print("\n🤖 Analisando prioridades...\n")
             resposta = agent.sugerir_proximos_passos()
-            print(resposta)
+            print(f"\n🤖 Próximos Passos:\n{resposta}")
             
         elif comando == "explicar":
-            conceito = input("Qual conceito? ")
-            print(f"\n🤖 Explicando '{conceito}'...\n")
+            conceito = input("Conceito a explicar: ")
             resposta = agent.explicar_conceito(conceito)
-            print(resposta)
+            print(f"\n🤖 Explicação:\n{resposta}")
             
         elif comando == "fornecedor":
             nome = input("Nome do fornecedor: ")
             servico = input("Serviço oferecido: ")
-            proposta = input("Detalhes da proposta (opcional): ")
-            print("\n🤖 Avaliando fornecedor...\n")
+            proposta = input("Proposta (opcional): ")
             resposta = agent.avaliar_fornecedor(nome, servico, proposta)
-            print(resposta)
+            print(f"\n🤖 Avaliação:\n{resposta}")
             
         elif comando == "relatorio":
-            print("\n🤖 Gerando relatório de progresso...\n")
             resposta = agent.gerar_relatorio_progresso()
-            print(resposta)
+            print(f"\n🤖 Relatório:\n{resposta}")
             
         else:
-            print("❌ Comando não reconhecido. Digite um comando válido.")
+            print("Comando não reconhecido. Use um dos comandos listados acima.")
 
 
 if __name__ == "__main__":
     main()
-
