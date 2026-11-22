@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 Suppley AI Telegram Bot - Versão Final
-Bot do Telegram integrado com o Suppley AI Agent (DeepSeek)
+Bot do Telegram integrado com o Suppley AI Agent usando API Manus
 
 Autor: Manus AI
 Data: Outubro 2025
-Versão: 2.1 (DeepSeek)
+Versão: 2.0 (Manus API)
 """
 
 import os
@@ -31,9 +31,8 @@ logger = logging.getLogger(__name__)
 # Instância global do agente
 agent = SupplyAIAgent()
 
-# Token do bot (via variável de ambiente).
-# O valor NÃO deve ficar no código: um token commitado é público no histórico.
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+# Token do bot (via variável de ambiente)
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN', '8336628777:AAHNjR3uuQ-iB-Q1brgF_hM7to1bj9xcoxk')
 
 # Mensagem de boas-vindas personalizada
 WELCOME_MESSAGE = """🤖 *Suppley AI Assistant*
@@ -454,14 +453,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     """Função principal para iniciar o bot"""
-    if not TELEGRAM_TOKEN:
-        logger.error(
-            "TELEGRAM_TOKEN não configurado. Defina a variável de ambiente "
-            "com o token gerado no @BotFather."
-        )
-        return
-    
-    logger.info("Iniciando Suppley AI Telegram Bot (DeepSeek)...")
+    logger.info("Iniciando Suppley AI Telegram Bot...")
     
     # Criar aplicação
     application = Application.builder().token(TELEGRAM_TOKEN).build()

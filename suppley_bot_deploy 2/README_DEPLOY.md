@@ -1,7 +1,6 @@
 # Suppley AI Telegram Bot
 
-Bot de Telegram integrado com Suppley AI Agent — seu Head of AI Virtual.
-O agente usa a API do **DeepSeek** (compatível com a OpenAI).
+Bot de Telegram integrado com Suppley AI Agent - Seu Head of AI Virtual
 
 ## Deploy no Railway
 
@@ -18,7 +17,7 @@ Faça upload destes arquivos para o repositório:
 
 - `suppley_ai_agent.py`
 - `suppley_telegram_bot_final.py`
-- `requirements.txt`
+- `requirements_final.txt` (renomear para `requirements.txt`)
 - `Procfile`
 - `runtime.txt`
 - `README_DEPLOY.md` (este arquivo)
@@ -37,22 +36,15 @@ Faça upload destes arquivos para o repositório:
 No Railway, vá em "Variables" e adicione:
 
 ```
-TELEGRAM_TOKEN=seu_token_do_botfather
+TELEGRAM_TOKEN=8336628777:AAHNjR3uuQ-iB-Q1brgF_hM7to1bj9xcoxk
+OPENAI_API_KEY=sua_chave_aqui
+```
+
+Opcionais (para usar o DeepSeek nas tarefas fáceis):
+
+```
 DEEPSEEK_API_KEY=sua_chave_aqui
 ```
-
-Opcionais (têm valores padrão no código):
-
-```
-DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
-DEEPSEEK_MODEL=deepseek-chat
-```
-
-**Importante:** o token do Telegram e a chave do DeepSeek **nunca** devem ser
-commitados no repositório. Configure-os apenas como variáveis de ambiente.
-
-Sobre o modelo: `deepseek-chat` é a escolha para conversa e análises gerais.
-`deepseek-reasoner` raciocina mais em troca de respostas mais lentas.
 
 ### Passo 5: Aguardar Deploy
 
@@ -89,4 +81,5 @@ Dashboard > Deployments > View Logs
 ## Custo
 
 - Railway: ~$5-10/mês (R$ 25-50)
-- DeepSeek: conforme o uso (tabela em https://api-docs.deepseek.com/quick_start/pricing)
+- OpenAI: ~$10-30/mês (R$ 50-150)
+- Total: R$ 75-200/mês
