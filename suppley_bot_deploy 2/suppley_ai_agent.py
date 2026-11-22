@@ -5,7 +5,7 @@ Agente estratégico de IA para auxiliar na transformação digital da Suppley
 
 Autor: Manus AI
 Data: Outubro 2025
-Versão: 1.1 (DeepSeek)
+Versão: 1.0
 """
 
 import os
@@ -14,11 +14,12 @@ from datetime import datetime
 from openai import OpenAI
 
 # ============================================================
-# INTEGRAÇÃO COM O DEEPSEEK
+# PROVEDORES DE IA
 # ============================================================
-# O DeepSeek expõe uma API COMPATÍVEL com a da OpenAI, então o mesmo SDK
-# (`openai`) funciona — só o `base_url` e a chave mudam. Assim, toda a lógica
-# do agente (chat, histórico, análises) continua igual.
+# O Claude continua sendo o provedor PRINCIPAL do agente. O DeepSeek é usado
+# apenas nas tarefas FÁCEIS (registrar decisão, insight, contexto), que são
+# determinísticas e não precisam de raciocínio estratégico.
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "gpt-4.1-mini")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 
@@ -30,16 +31,20 @@ class SupplyAIAgent:
     """
     
     def __init__(self):
-        # DeepSeek via SDK da OpenAI (API compatível). A chave vem do ambiente.
-        api_key = os.getenv("DEEPSEEK_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "DEEPSEEK_API_KEY não configurada. Defina essa variável de "
-                "ambiente com a chave da plataforma DeepSeek "
-                "(https://platform.deepseek.com)."
-            )
-        self.client = OpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL)
-        self.model = DEEPSEEK_MODEL  # deepseek-chat (ou deepseek-reasoner)
+        # Provedor PRINCIPAL: Claude (via OPENAI_API_KEY no ambiente).
+        # Mantido como está: é ele que responde o trabalho estratégico.
+        self.client = OpenAI()  # API key já configurada no ambiente
+        self.model = CLAUDE_MODEL  # Modelo otimizado para raciocínio estratégico
+
+        # Provedor AUXILIAR: DeepSeek, só para as tarefas fáceis.
+        # Se a chave não estiver configurada, o agente segue funcionando
+        # normalmente no Claude (as tarefas fáceis caem nele).
+        deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+        self.deepseek_client = (
+            OpenAI(api_key=deepseek_key, base_url=DEEPSEEK_BASE_URL)
+            if deepseek_key else None
+        )
+        self.deepseek_model = DEEPSEEK_MODEL
         
         # Base de conhecimento do agente
         self.knowledge_base = {
@@ -162,6 +167,47 @@ LEMBRE-SE:
 - Foco: Construção civil, indústria e datacenters
 - Objetivo final: Transformar Suppley em líder de inovação"""
 
+    def _invoke(self, messages, model=None, client=None):
+        """
+        Executa a chamada ao provedor de IA.
+
+        Args:
+            messages: Lista de mensagens no formato OpenAI
+            model: Modelo a usar (padrão: o principal/Claude)
+            client: Cliente a usar (padrão: o principal/Claude)
+
+        Returns:
+            Texto da resposta
+        """
+        response = (client or self.client).chat.completions.create(
+            model=model or self.model,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=2000
+        )
+        return response.choices[0].message.content
+
+    def _tarefa_facil(self, user_message, prompt_curto):
+        """
+        Executa uma tarefa FÁCIL no DeepSeek, com o Claude como reserva.
+
+        "Fácil" aqui significa trabalho curto e determinístico (registrar uma
+        decisão, guardar um insight) — o tipo de coisa que não precisa do
+        raciocínio estratégico do Claude. Sem chave do DeepSeek, ou se a
+        chamada falhar, a tarefa roda no Claude e nada quebra.
+        """
+        if self.deepseek_client is None:
+            return None
+        try:
+            return self._invoke(
+                [{"role": "user", "content": prompt_curto}],
+                model=self.deepseek_model,
+                client=self.deepseek_client,
+            )
+        except Exception:
+            # Qualquer falha do provedor auxiliar volta para o Claude.
+            return None
+
     def chat(self, user_message, save_to_history=True):
         """
         Conversa com o agente e obtém resposta estratégica
@@ -185,15 +231,7 @@ LEMBRE-SE:
         ] + self.conversation_history
         
         # Chamar a API
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=0.7,
-            max_tokens=2000
-        )
-        
-        # Extrair resposta
-        assistant_message = response.choices[0].message.content
+        assistant_message = self._invoke(messages)
         
         # Adicionar resposta ao histórico
         self.conversation_history.append({
@@ -396,7 +434,7 @@ Seja encorajador mas realista."""
     def reset_conversation(self):
         """Limpa o histórico de conversação (mas mantém os aprendizados)"""
         self.conversation_history = []
-        return "✅ Histórico de conversação limpo. Aprendizados mantidos.\n"
+        return "✅ Histórico de conversação limpo. Aprendizados mantidos."
 
 
 def main():
